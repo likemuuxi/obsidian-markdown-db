@@ -1,99 +1,416 @@
-import {App, Editor, MarkdownView, Modal, Notice, Plugin} from 'obsidian';
-import {DEFAULT_SETTINGS, MyPluginSettings, SampleSettingTab} from "./settings";
+import { Plugin, WorkspaceLeaf, TFile, TFolder, debounce, FileView } from "obsidian";
+import { MarkdownDBView, VIEW_TYPE_MARKDOWN_DB } from "./view";
+import { RecordEditView, VIEW_TYPE_RECORD_EDIT } from "./views/RecordEditView";
+import { MarkdownDBSettings, DEFAULT_SETTINGS, MarkdownDBSettingTab } from "./settings";
+import { parseFile } from "./database/parser";
 
-// Remember to rename these classes and interfaces!
+import { DashboardModal } from "./modals/DashboardModal";
 
-export default class MyPlugin extends Plugin {
-	settings: MyPluginSettings;
+export default class MarkdownDBPlugin extends Plugin {
+    settings: MarkdownDBSettings;
+    isToggling = false;
 
-	async onload() {
-		await this.loadSettings();
+    async onload() {
+        await this.loadSettings();
 
-		// This creates an icon in the left ribbon.
-		this.addRibbonIcon('dice', 'Sample', (evt: MouseEvent) => {
-			// Called when the user clicks the icon.
-			new Notice('This is a notice!');
-		});
+        this.registerView(
+            VIEW_TYPE_MARKDOWN_DB,
+            (leaf) => new MarkdownDBView(leaf, this)
+        );
 
-		// This adds a status bar item to the bottom of the app. Does not work on mobile apps.
-		const statusBarItemEl = this.addStatusBarItem();
-		statusBarItemEl.setText('Status bar text');
+        this.registerView(
+            VIEW_TYPE_RECORD_EDIT,
+            (leaf) => new RecordEditView(leaf)
+        );
 
-		// This adds a simple command that can be triggered anywhere
-		this.addCommand({
-			id: 'open-modal-simple',
-			name: 'Open modal (simple)',
-			callback: () => {
-				new SampleModal(this.app).open();
-			}
-		});
-		// This adds an editor command that can perform some operation on the current editor instance
-		this.addCommand({
-			id: 'replace-selected',
-			name: 'Replace selected content',
-			editorCallback: (editor: Editor, view: MarkdownView) => {
-				editor.replaceSelection('Sample editor command');
-			}
-		});
-		// This adds a complex command that can check whether the current state of the app allows execution of the command
-		this.addCommand({
-			id: 'open-modal-complex',
-			name: 'Open modal (complex)',
-			checkCallback: (checking: boolean) => {
-				// Conditions to check
-				const markdownView = this.app.workspace.getActiveViewOfType(MarkdownView);
-				if (markdownView) {
-					// If checking is true, we're simply "checking" if the command can be run.
-					// If checking is false, then we want to actually perform the operation.
-					if (!checking) {
-						new SampleModal(this.app).open();
-					}
+        this.addSettingTab(new MarkdownDBSettingTab(this.app, this));
 
-					// This command will only show up in Command Palette when the check function returns true
-					return true;
-				}
-				return false;
-			}
-		});
+        // Monkey patch WorkspaceLeaf.openFile to support seamless DB view opening
+        this.monkeyPatchOpenFile();
 
-		// This adds a settings tab so the user can configure various aspects of the plugin
-		this.addSettingTab(new SampleSettingTab(this.app, this));
+        // Register Dashboard Command
+        this.addCommand({
+            id: "open-dashboard",
+            name: "Open Database Dashboard",
+            callback: () => {
+                new DashboardModal(this.app, this).open();
+            }
+        });
 
-		// If the plugin hooks up any global DOM events (on parts of the app that doesn't belong to this plugin)
-		// Using this function will automatically remove the event listener when this plugin is disabled.
-		this.registerDomEvent(document, 'click', (evt: MouseEvent) => {
-			new Notice("Click");
-		});
+        this.registerEvent(
+            this.app.workspace.on("file-menu", (menu, file) => {
+                menu.addItem((item) => {
+                    item
+                        .setTitle("New DB File")
+                        .setIcon("table")
+                        .onClick(async () => {
+                            let folderPath = "";
+                            if (file instanceof TFolder) {
+                                folderPath = file.path;
+                            } else if (file instanceof TFile && file.parent) {
+                                folderPath = file.parent.path;
+                            }
 
-		// When registering intervals, this function will automatically clear the interval when the plugin is disabled.
-		this.registerInterval(window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000));
+                            // Normalize path (remove trailing slash if any, though usually not present)
+                            if (folderPath === "/") folderPath = "";
 
-	}
+                            let filename = "Untitled DB.md";
+                            let filePath = folderPath ? `${folderPath}/${filename}` : filename;
 
-	onunload() {
-	}
+                            let i = 1;
+                            while (await this.app.vault.adapter.exists(filePath)) {
+                                filename = `Untitled DB ${i}.md`;
+                                filePath = folderPath ? `${folderPath}/${filename}` : filename;
+                                i++;
+                            }
 
-	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData() as Partial<MyPluginSettings>);
-	}
+                            const initialContent = "---\nmarkdown-db: true\ndb-open-mode: modal\ndb-layout: table\n---\n\n# Database\n";
+                            const newFile = await this.app.vault.create(filePath, initialContent);
 
-	async saveSettings() {
-		await this.saveData(this.settings);
-	}
-}
+                            const leaf = this.app.workspace.getLeaf(false);
+                            await leaf.openFile(newFile);
+                            
+                            // Explicitly switch to DB view for new files
+                            await leaf.setViewState({
+                                type: VIEW_TYPE_MARKDOWN_DB,
+                                state: { file: newFile.path }
+                            });
+                        });
+                });
+            })
+        );
 
-class SampleModal extends Modal {
-	constructor(app: App) {
-		super(app);
-	}
+        this.registerHoverLinkSource(VIEW_TYPE_MARKDOWN_DB, {
+            display: 'Markdown DB',
+            defaultMod: true
+        });
 
-	onOpen() {
-		let {contentEl} = this;
-		contentEl.setText('Woah!');
-	}
+        this.addCommand({
+            id: "toggle-markdown-db-view",
+            name: "Toggle Database Table View",
+            checkCallback: (checking: boolean) => {
+                const file = this.app.workspace.getActiveFile();
+                if (file) {
+                    if (!checking) {
+                        this.toggleView(file);
+                    }
+                    return true;
+                }
+                return false;
+            }
+        });
 
-	onClose() {
-		const {contentEl} = this;
-		contentEl.empty();
-	}
+        this.addCommand({
+            id: "scan-markdown-db-values",
+            name: "Scan Database Files for Property Values",
+            callback: () => {
+                this.scanAllDatabaseFiles();
+            }
+        });
+
+        // this.addCommand({
+        //     id: "refresh-markdown-db-badges",
+        //     name: "Force Refresh DB Badges",
+        //     callback: () => {
+        //         this.updateFileExplorerBadges();
+        //     }
+        // });
+
+        this.addRibbonIcon("table", "Toggle Markdown DB", () => {
+            const file = this.app.workspace.getActiveFile();
+            if (file) {
+                this.toggleView(file);
+            }
+        });
+
+        // Scan files on startup (debounced to let cache warm up)
+        this.app.workspace.onLayoutReady(() => {
+            this.scanAllDatabaseFiles();
+            this.updateFileExplorerBadges();
+            this.registerFileExplorerObserver();
+            // Check current file on startup
+            const file = this.app.workspace.getActiveFile();
+            if (file) {
+                // 插件启动时自动切换到 DB 视图（如果当前文件是 DB 文件）
+                const leaf = this.app.workspace.getLeaf(false);
+                const cache = this.app.metadataCache.getFileCache(file);
+                if (cache?.frontmatter?.["markdown-db"]) {
+                    leaf.setViewState({
+                        type: VIEW_TYPE_MARKDOWN_DB,
+                        state: { file: file.path }
+                    });
+                }
+            }
+        });
+
+        // Listen for file changes to update values
+        const debouncedScan = debounce(this.scanFile.bind(this), 1000, true);
+        this.registerEvent(this.app.vault.on("modify", (file) => {
+            if (file instanceof TFile && file.extension === "md") {
+                debouncedScan(file);
+            }
+        }));
+
+        // Listen for metadata changes to update badges
+        this.registerEvent(this.app.metadataCache.on('changed', (file) => {
+            this.updateFileExplorerBadges();
+        }));
+        this.registerEvent(this.app.vault.on('rename', () => this.updateFileExplorerBadges()));
+        this.registerEvent(this.app.vault.on('create', () => this.updateFileExplorerBadges()));
+        this.registerEvent(this.app.vault.on('delete', () => this.updateFileExplorerBadges()));
+    }
+
+    async loadSettings() {
+        this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    }
+
+    async saveSettings() {
+        await this.saveData(this.settings);
+    }
+
+    async scanFile(file: TFile) {
+        const cache = this.app.metadataCache.getFileCache(file);
+        if (cache?.frontmatter?.["markdown-db"]) {
+            const content = await this.app.vault.read(file);
+            const data = parseFile(content);
+            let updated = false;
+
+            data.records.forEach(record => {
+                Object.entries(record.properties).forEach(([key, values]) => {
+                    if (this.settings.knownProperties.includes(key)) {
+                        // values is string[] (from parser)
+                        // parser splits multiple [Key::Val1] [Key::Val2], but we also want to split comma separated strings
+                        
+                        values.forEach(rawVal => {
+                            const splitVals = rawVal.split(",").map(v => v.trim()).filter(v => v);
+                            
+                            if (!this.settings.propertyValues[key]) {
+                                this.settings.propertyValues[key] = [];
+                            }
+
+                            splitVals.forEach(val => {
+                                if (!this.settings.propertyValues[key].includes(val)) {
+                                    this.settings.propertyValues[key].push(val);
+                                    updated = true;
+                                }
+                            });
+                        });
+                    }
+                });
+            });
+
+            if (updated) {
+                await this.saveSettings();
+            }
+        }
+    }
+
+    async scanAllDatabaseFiles() {
+        const files = this.app.vault.getMarkdownFiles();
+        let updated = false;
+        
+        // Reset or Merge? 
+        // If we reset, we lose values from files that might not be scanned if we change logic later.
+        // But if we don't reset, deleted values persist forever.
+        // For now, let's keep it additive.
+        
+        for (const file of files) {
+            const cache = this.app.metadataCache.getFileCache(file);
+            if (cache?.frontmatter?.["markdown-db"]) {
+                const content = await this.app.vault.read(file);
+                const data = parseFile(content);
+
+                data.records.forEach(record => {
+                    Object.entries(record.properties).forEach(([key, values]) => {
+                        if (this.settings.knownProperties.includes(key)) {
+                             values.forEach(rawVal => {
+                                const splitVals = rawVal.split(",").map(v => v.trim()).filter(v => v);
+                                
+                                if (!this.settings.propertyValues[key]) {
+                                    this.settings.propertyValues[key] = [];
+                                }
+
+                                splitVals.forEach(val => {
+                                    if (!this.settings.propertyValues[key].includes(val)) {
+                                        this.settings.propertyValues[key].push(val);
+                                        updated = true;
+                                    }
+                                });
+                            });
+                        }
+                    });
+                });
+            }
+        }
+
+        if (updated) {
+            await this.saveSettings();
+            console.log("Markdown DB: Property values updated.");
+        }
+    }
+
+    async toggleView(file: TFile) {
+        this.isToggling = true;
+        const leaf = this.app.workspace.getLeaf(false);
+        try {
+            if (leaf.view.getViewType() === VIEW_TYPE_MARKDOWN_DB) {
+                await leaf.setViewState({
+                    type: "markdown",
+                    state: { file: file.path }
+                });
+            } else {
+                await leaf.setViewState({
+                    type: VIEW_TYPE_MARKDOWN_DB,
+                    state: { file: file.path }
+                });
+            }
+        } finally {
+            setTimeout(() => {
+                this.isToggling = false;
+            }, 200);
+        }
+    }
+
+    monkeyPatchOpenFile() {
+        const plugin = this;
+        const originalOpenFile = WorkspaceLeaf.prototype.openFile;
+        
+        plugin.register(() => {
+            WorkspaceLeaf.prototype.openFile = originalOpenFile;
+        });
+
+        WorkspaceLeaf.prototype.openFile = async function(file: TFile, state?: any) {
+            // Check if this is a DB file
+            // We need a fast check here.
+            let isDB = false;
+            
+            if (file.extension === "md") {
+                 const cache = plugin.app.metadataCache.getFileCache(file);
+                 if (cache?.frontmatter?.["markdown-db"]) {
+                     isDB = true;
+                 } else if (!cache) {
+                     // If no cache (new file or startup), try reading a bit of content
+                     // This might be slightly slow but necessary for "seamless" feeling on cold start
+                     try {
+                        const content = await plugin.app.vault.read(file);
+                        if (/^---\s*[\s\S]*?markdown-db:\s*true/.test(content)) {
+                            isDB = true;
+                        }
+                     } catch {}
+                 }
+            }
+
+            if (isDB) {
+                // If explicitly requesting markdown mode (source/preview), allow it.
+                // This allows opening DB files as regular markdown when clicking from the DB view itself
+                // (where we pass state: { mode: "source" }).
+                if (state?.state?.mode === "source" || state?.state?.mode === "preview") {
+                    return originalOpenFile.call(this, file, state);
+                }
+
+                // If opening in a new leaf (empty view), treat as "Split" and allow default Markdown view
+                // This fulfills the requirement: "分栏打开的时候，分栏要使用markdown视图"
+                // When opening in a split (Ctrl+Click), the leaf is new and has 'empty' view type.
+                if (this.view.getViewType() === "empty") {
+                    return originalOpenFile.call(this, file, state);
+                }
+
+                if (!plugin.isToggling) {
+                     return this.setViewState({
+                         type: VIEW_TYPE_MARKDOWN_DB,
+                         state: { file: file.path, ...state }
+                     });
+                }
+            }
+
+            return originalOpenFile.call(this, file, state);
+        };
+    }
+
+    updateFileExplorerBadges() {
+        // Retry logic wrapped inside to ensure view is ready
+        this.updateFileExplorerBadgesWithRetry();
+    }
+
+    async updateFileExplorerBadgesWithRetry(retryCount = 0) {
+        const MAX_RETRY = 10;
+        const RETRY_INTERVAL = 500;
+        const BADGE_CLASS = "markdown-db-badge";
+        const OBSIDIAN_TAG_CLASS = "nav-file-tag";
+
+        const fileExplorerLeaves = this.app.workspace.getLeavesOfType("file-explorer");
+        
+        if (fileExplorerLeaves.length === 0) {
+            if (retryCount < MAX_RETRY) {
+                setTimeout(() => this.updateFileExplorerBadgesWithRetry(retryCount + 1), RETRY_INTERVAL);
+            }
+            return;
+        }
+
+        fileExplorerLeaves.forEach((leaf) => {
+            const view = leaf.view as any;
+            if (view.fileItems) {
+                for (const [path, item] of Object.entries(view.fileItems)) {
+                    const navItem = item as any;
+                    // navItem.selfEl is the full row container (div.nav-file-title)
+                    const selfEl = navItem.selfEl;
+                    
+                    if (selfEl) {
+                        // Remove existing badges first to avoid duplicates
+                        const existingBadges = selfEl.querySelectorAll(`.${BADGE_CLASS}`);
+                        existingBadges.forEach((b: HTMLElement) => b.remove());
+
+                        const file = this.app.vault.getAbstractFileByPath(path);
+                        if (file instanceof TFile && file.extension === "md") {
+                            const cache = this.app.metadataCache.getFileCache(file);
+                            const dbVal = cache?.frontmatter?.["markdown-db"];
+                            const isDB = dbVal === true || dbVal === "true";
+
+                            if (isDB) {
+                                const badge = document.createElement("div");
+                                badge.className = `${OBSIDIAN_TAG_CLASS} ${BADGE_CLASS}`;
+                                badge.innerText = "DB";
+                                selfEl.appendChild(badge);
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    registerFileExplorerObserver() {
+        // We still keep the observer for dynamic updates (renames, moving files etc)
+        // But we rely on the specific badge update logic
+        this.app.workspace.onLayoutReady(() => {
+            const fileExplorerLeaves = this.app.workspace.getLeavesOfType("file-explorer");
+            fileExplorerLeaves.forEach((leaf) => {
+                const container = leaf.view.containerEl;
+                if (container) {
+                    const observer = new MutationObserver((mutations) => {
+                        let shouldUpdate = false;
+                        for (const mutation of mutations) {
+                            if (mutation.target instanceof HTMLElement && 
+                                (mutation.target.classList.contains('nav-files-container') || 
+                                 mutation.target.classList.contains('nav-folder-children'))) {
+                                shouldUpdate = true;
+                                break;
+                            }
+                        }
+                        if (shouldUpdate) {
+                            this.updateFileExplorerBadges();
+                        }
+                    });
+                    observer.observe(container, { childList: true, subtree: true });
+                    this.register(() => observer.disconnect());
+                }
+            });
+            // Initial update
+            this.updateFileExplorerBadges();
+        });
+    }
+
+    async onunload() {
+
+    }
 }
