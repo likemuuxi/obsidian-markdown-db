@@ -188,11 +188,8 @@
     flex-direction: column;
     height: 100%;
     overflow-y: auto;
-    padding: 40px 60px; /* Generous padding like a document */
+    padding: 10px;
 }
-
-/* Cover Image Placeholder (Optional - future) */
-/* .markdown-db-record-cover { height: 150px; background: ... } */
 
 /* Title Input - Large and bold */
 .markdown-db-record-title-input {

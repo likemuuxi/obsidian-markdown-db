@@ -3,6 +3,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { App, TFile, setIcon, Notice, Menu, normalizePath } from "obsidian";
 import { TableView } from "./TableView";
 import { Toolbar } from "./Toolbar";
+import { RecordModal } from "./RecordModal";
 import { parseFile, DatabaseData, DatabaseRecord, DatabaseConfig } from "../database/parser";
 import MyPlugin from "../main";
 import { RenameModal } from "../modals/RenameModal";
@@ -420,16 +421,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
                                 onReorderRecord={handleReorderRecord}
                                 portalContainer={portalContainer}
                                 onOpenRecord={(record) => {
-                                    // Open in background or close modal?
-                                    // User probably wants to navigate to it.
-                                    // For now, open in new leaf and close modal?
-                                    // Or keep modal open?
-                                    // Let's open in background leaf
-                                    const leaf = app.workspace.getLeaf(true);
-                                    leaf.openFile(selectedFile, {
-                                        eState: { line: record.lineStart }
-                                    });
-                                    onClose();
+                                    if (selectedFile) {
+                                        // Always use modal as requested, ignoring db-open-mode
+                                        const modal = new RecordModal(app, selectedFile, record);
+                                        const originalOnClose = modal.onClose;
+                                        modal.onClose = async () => {
+                                            if (originalOnClose) await originalOnClose();
+                                            await reloadCurrentFile();
+                                        };
+                                        modal.open();
+                                    }
                                 }}
                                 onAddRecord={handleAddRecord}
                                 onAddProperty={handleAddProperty}
