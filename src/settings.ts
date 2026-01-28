@@ -1,5 +1,6 @@
 import {App, PluginSettingTab, setIcon, Setting, Menu, TFile} from "obsidian";
 import MyPlugin from "./main";
+import { FolderSuggest } from "./suggest/suggest";
 import { PropertyType, PROPERTY_TYPE_ICONS, VALID_PROPERTY_TYPES } from "./database/schema";
 import { addCssClassToFiles, removeCssClassFromFiles, HIDDEN_CSS_CLASS } from "./database/writer";
 
@@ -57,13 +58,16 @@ export class MarkdownDBSettingTab extends PluginSettingTab {
         new Setting(containerEl)
             .setName('Default DB Folder')
             .setDesc('Folder path to create new DB files in (e.g. "Databases"). Leave empty for root.')
-            .addText(text => text
-                .setPlaceholder('Example: Databases')
-                .setValue(this.plugin.settings.defaultDbFolder)
-                .onChange(async (value) => {
-                    this.plugin.settings.defaultDbFolder = value;
-                    await this.plugin.saveSettings();
-                }));
+            .addText(text => {
+                new FolderSuggest(this.app, text.inputEl);
+                text
+                    .setPlaceholder('Example: Databases')
+                    .setValue(this.plugin.settings.defaultDbFolder)
+                    .onChange(async (value) => {
+                        this.plugin.settings.defaultDbFolder = value;
+                        await this.plugin.saveSettings();
+                    });
+            });
 
         new Setting(containerEl)
             .setName('Hide DB Properties')

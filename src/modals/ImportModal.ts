@@ -1,5 +1,5 @@
 import { App, Modal, Setting, Notice, requestUrl, RequestUrlParam, TFile, TFolder, normalizePath } from "obsidian";
-import { FolderSuggest } from "../suggest/FolderSuggest";
+import { FolderSuggest } from "../suggest/suggest";
 
 interface StarredRepo {
     id: number;
