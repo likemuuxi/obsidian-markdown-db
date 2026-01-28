@@ -1,7 +1,8 @@
 import * as React from "react";
 import { useState, useEffect, useRef } from "react";
 import * as ReactDOM from "react-dom";
-import { App, MarkdownRenderer, Component, htmlToMarkdown } from "obsidian";
+import { App, MarkdownRenderer, Component, htmlToMarkdown, Notice } from "obsidian";
+import { PropertyType } from "../database/schema";
 
 interface EditableCellProps {
     value: string;
@@ -20,6 +21,7 @@ interface EditableCellProps {
     onRemoveGlobalValue?: (key: string, value: string) => void;
     contentHeight?: "compact" | "adaptive";
     portalContainer?: HTMLElement;
+    type?: PropertyType;
 }
 
 const TAG_COLORS = [
@@ -42,10 +44,16 @@ const getTagColor = (text: string) => {
     return TAG_COLORS[index];
 };
 
-export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, onSave, placeholder, className, app, component, sourcePath, onLinkClick, isContentColumn, suggestions = [], isPropertyColumn, propertyKey, onRemoveGlobalValue, contentHeight = "compact", portalContainer }) => {
+export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, onSave, placeholder, className, app, component, sourcePath, onLinkClick, isContentColumn, suggestions = [], isPropertyColumn, propertyKey, onRemoveGlobalValue, contentHeight = "compact", portalContainer, type }) => {
     const [isEditing, setIsEditing] = useState(false);
     const contentRef = useRef<HTMLDivElement>(null);
     const viewRef = useRef<HTMLDivElement>(null);
+    
+    // Determine render mode based on type
+    const isTagMode = isPropertyColumn && (type === "multi" || type === "select");
+    const isCheckboxMode = isPropertyColumn && type === "boolean";
+    const isDateMode = isPropertyColumn && type === "date";
+    const isNumberMode = isPropertyColumn && type === "number";
     
     // Property specific state
     const [inputValue, setInputValue] = useState("");
@@ -61,21 +69,29 @@ export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, on
     // --- PROPERTY COLUMN LOGIC ---
     
     const tags = React.useMemo(() => {
-        if (!value) return [];
+        if (!value || !isTagMode) return [];
         return value.split(",").map(s => s.trim()).filter(s => s.length > 0);
-    }, [value]);
+    }, [value, isTagMode]);
 
     const handleAddTag = (tag: string) => {
         const trimmed = tag.trim();
         if (!trimmed) return;
         
-        // Don't add if already exists
-        if (tags.some(t => t.toLowerCase() === trimmed.toLowerCase())) {
-             setInputValue("");
-             return; 
+        let newTags: string[];
+        
+        if (type === "select") {
+            // Single select: replace existing
+            newTags = [trimmed];
+        } else {
+            // Multi select: append
+            // Don't add if already exists
+            if (tags.some(t => t.toLowerCase() === trimmed.toLowerCase())) {
+                 setInputValue("");
+                 return; 
+            }
+            newTags = [...tags, trimmed];
         }
         
-        const newTags = [...tags, trimmed];
         onSave(newTags.join(", "));
         setInputValue("");
         setShowSuggestions(false);
@@ -168,7 +184,7 @@ export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, on
     // since we only use suggestions for properties now.
 
     useEffect(() => {
-        if (!isPropertyColumn && viewRef.current) {
+        if (viewRef.current) {
             viewRef.current.empty();
             // Always render with MarkdownRenderer to support formatting in Content column too
             // CSS handles truncation for single-line view
@@ -266,9 +282,40 @@ export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, on
         setIsEditing(true);
     };
 
+    const handleInputBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+        const newValue = e.target.value;
+        if (newValue !== value) {
+            onSave(newValue);
+        }
+        setIsEditing(false);
+    };
+
+    const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === "Enter") {
+            e.preventDefault();
+            e.currentTarget.blur();
+        }
+        if (e.key === "Escape") {
+            setIsEditing(false);
+        }
+    };
+
     // --- RENDER ---
 
-    if (isPropertyColumn) {
+    if (isCheckboxMode) {
+        return (
+             <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                 <input 
+                    type="checkbox" 
+                    checked={value === "true"} 
+                    onChange={(e) => onSave(String(e.target.checked))}
+                    style={{ cursor: "pointer" }}
+                 />
+             </div>
+        );
+    }
+
+    if (isTagMode) {
         return (
             <div style={{ position: "relative", width: "100%", height: "100%" }}>
                 {/* View Layer - Always rendered to maintain size, hidden when editing */}
@@ -495,7 +542,22 @@ export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, on
     };
 
     return (
-        <div style={{ position: "relative", width: "100%", height: "100%", minHeight: "32px" }}>
+        <div className="markdown-db-cell-container" style={{ position: "relative", width: "100%", height: "100%", minHeight: "32px" }}>
+            {!isEditing && (
+                <div
+                    className="markdown-db-copy-button"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        navigator.clipboard.writeText(value);
+                        new Notice("Copied to clipboard");
+                    }}
+                    title="Copy"
+                    dangerouslySetInnerHTML={{
+                        __html: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="svg-icon lucide-copy"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>`
+                    }}
+                />
+            )}
             {/* View Layer - Always rendered to maintain size, hidden when editing */}
             <div
                 ref={viewRef}
@@ -511,39 +573,95 @@ export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, on
 
             {/* Edit Layer - Portal positioned over the view layer */}
             {isEditing && editCoords && ReactDOM.createPortal(
-                <div
-                    ref={contentRef}
-                    contentEditable={true}
-                    suppressContentEditableWarning={true}
-                    onBlur={handleStandardBlur}
-                    onKeyDown={handleStandardKeyDown}
-                    onPaste={handlePaste}
-                    className={`markdown-db-cell-content editing ${className || ""}`}
-                    style={{
-                        outline: "none",
-                        whiteSpace: "pre-wrap",
-                        wordBreak: "break-word",
-                        position: "fixed",
-                        top: editCoords.top,
-                        left: editCoords.left,
-                        width: editCoords.width,
-                        minHeight: "32px",
-                        height: "auto",
-                        maxHeight: "50vh",
-                        overflowY: "auto",
-                        zIndex: 9999,
-                        backgroundColor: "var(--background-primary)",
-                        border: "2px solid var(--interactive-accent)",
-                        boxSizing: "border-box",
-                        boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
-                        padding: "6px 8px",
-                        margin: 0,
-                        lineHeight: "1.5",
-                        fontFamily: "inherit",
-                        fontSize: "14px",
-                        borderRadius: "4px"
-                    }}
-                />,
+                isDateMode ? (
+                    <input
+                        ref={inputRef}
+                        type="date"
+                        defaultValue={value}
+                        onBlur={handleInputBlur}
+                        onKeyDown={handleInputKeyDown}
+                        className={`markdown-db-cell-content editing ${className || ""}`}
+                        style={{
+                            position: "fixed",
+                            top: editCoords.top,
+                            left: editCoords.left,
+                            width: editCoords.width,
+                            minHeight: "32px",
+                            height: "32px",
+                            zIndex: 9999,
+                            backgroundColor: "var(--background-primary)",
+                            border: "2px solid var(--interactive-accent)",
+                            boxSizing: "border-box",
+                            boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
+                            padding: "0 8px 0 30px",
+                            margin: 0,
+                            fontFamily: "inherit",
+                            fontSize: "14px",
+                            borderRadius: "4px"
+                        }}
+                    />
+                ) : isNumberMode ? (
+                    <input
+                        ref={inputRef}
+                        type="number"
+                        defaultValue={value}
+                        onBlur={handleInputBlur}
+                        onKeyDown={handleInputKeyDown}
+                        className={`markdown-db-cell-content editing ${className || ""}`}
+                        style={{
+                            position: "fixed",
+                            top: editCoords.top,
+                            left: editCoords.left,
+                            width: editCoords.width,
+                            minHeight: "32px",
+                            height: "32px",
+                            zIndex: 9999,
+                            backgroundColor: "var(--background-primary)",
+                            border: "2px solid var(--interactive-accent)",
+                            boxSizing: "border-box",
+                            boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
+                            padding: "0 8px",
+                            margin: 0,
+                            fontFamily: "inherit",
+                            fontSize: "14px",
+                            borderRadius: "4px"
+                        }}
+                    />
+                ) : (
+                    <div
+                        ref={contentRef}
+                        contentEditable={true}
+                        suppressContentEditableWarning={true}
+                        onBlur={handleStandardBlur}
+                        onKeyDown={handleStandardKeyDown}
+                        onPaste={handlePaste}
+                        className={`markdown-db-cell-content editing ${className || ""}`}
+                        style={{
+                            outline: "none",
+                            whiteSpace: "pre-wrap",
+                            wordBreak: "break-word",
+                            position: "fixed",
+                            top: editCoords.top,
+                            left: editCoords.left,
+                            width: editCoords.width,
+                            minHeight: "32px",
+                            height: "auto",
+                            maxHeight: "50vh",
+                            overflowY: "auto",
+                            zIndex: 9999,
+                            backgroundColor: "var(--background-primary)",
+                            border: "2px solid var(--interactive-accent)",
+                            boxSizing: "border-box",
+                            boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
+                            padding: "6px 8px",
+                            margin: 0,
+                            lineHeight: "1.5",
+                            fontFamily: "inherit",
+                            fontSize: "14px",
+                            borderRadius: "4px"
+                        }}
+                    />
+                ),
                 portalContainer || document.body
             )}
         </div>

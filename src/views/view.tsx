@@ -1,14 +1,17 @@
-import { TextFileView, WorkspaceLeaf, TFile, WorkspaceSplit, MarkdownView, Menu } from "obsidian";
+import { TextFileView, WorkspaceLeaf, TFile, WorkspaceSplit, MarkdownView, Menu, Notice } from "obsidian";
 import * as React from "react";
 import { useState, useMemo } from "react";
 import { createRoot, Root } from "react-dom/client";
-import { TableView } from "./components/TableView";
-import { Toolbar } from "./components/Toolbar";
-import { parseFile, DatabaseRecord, DatabaseConfig } from "./database/parser";
-import { updateProperty, renameRecord, addRecord, updateConfig, deleteRecord, updateContent, addPropertyToAllRecords, deletePropertyFromAllRecords, updateTitle } from "./database/writer";
-import { RecordModal } from "./components/RecordModal";
-import { VIEW_TYPE_RECORD_EDIT } from "./views/RecordEditView";
-import type MarkdownDBPlugin from "./main";
+import { TableView } from "../components/TableView";
+import { Toolbar } from "../components/Toolbar";
+import { parseFile} from "../database/parser";
+import { DatabaseRecord, DatabaseConfig, PropertyType } from "../database/schema";
+import { updateProperty, renameRecord, addRecord, updateConfig, deleteRecord, updateContent, addPropertyToAllRecords, deletePropertyFromAllRecords, updateTitle, reorderRecords, renamePropertyInAllRecords } from "../database/writer";
+import { RecordModal } from "../components/RecordModal";
+import { RenameModal } from "../modals/RenameModal";
+import type MarkdownDBPlugin from "../main";
+
+import { PropertyConfig } from "../settings";
 
 export const VIEW_TYPE_MARKDOWN_DB = "markdown-db-view";
 
@@ -16,10 +19,8 @@ const MarkdownDBApp = (props: {
     fileContent: string,
     file: TFile | null,
     view: MarkdownDBView,
-    knownProperties: string[],
-    knownValues: Record<string, string[]>,
-    blockStyleProperties: string[],
-    onSaveToGlobal: (name: string) => void,
+    globalProperties: PropertyConfig[],
+    onSaveToGlobal: (name: string, type?: PropertyType) => void,
     onRemoveGlobalValue: (key: string, value: string) => void
 }) => {
     const dbData = useMemo(() => {
@@ -37,13 +38,13 @@ const MarkdownDBApp = (props: {
         const lowerTerm = searchTerm.toLowerCase();
         return dbData.records.filter(r =>
             r.title.toLowerCase().includes(lowerTerm) ||
-            Object.values(r.properties).some(vals => vals.some(v => v.toLowerCase().includes(lowerTerm))) ||
+            Object.values(r.properties).some(vals => vals.some(v => String(v).toLowerCase().includes(lowerTerm))) ||
             (r.content && r.content.toLowerCase().includes(lowerTerm))
         );
     }, [dbData.records, searchTerm]);
 
-    const handleUpdateProperty = (record: DatabaseRecord, key: string, value: string) => {
-        if (props.file) props.view.handleUpdateProperty(record, key, value);
+    const handleUpdateProperty = (record: DatabaseRecord, key: string, value: string, explicitType?: string) => {
+        if (props.file) props.view.handleUpdateProperty(record, key, value, explicitType);
     };
 
     const handleUpdateContent = (record: DatabaseRecord, newContent: string) => {
@@ -62,8 +63,8 @@ const MarkdownDBApp = (props: {
         if (props.file) props.view.handleAddRecord();
     };
 
-    const handleAddProperty = (name: string) => {
-        if (props.file) props.view.handleAddProperty(name);
+    const handleAddProperty = (name: string, type?: PropertyType) => {
+        if (props.file) props.view.handleAddProperty(name, type);
     };
 
     const handleUpdateConfig = (key: string, value: string) => {
@@ -79,7 +80,11 @@ const MarkdownDBApp = (props: {
     };
 
     const handleHeaderContextMenu = (key: string, event: React.MouseEvent) => {
-        props.view.handleHeaderContextMenu(key, event);
+        props.view.handleHeaderContextMenu(key, event, dbData.config, dbData.records);
+    };
+
+    const handleReorderRecord = (fromIndex: number, toIndex: number) => {
+        if (props.file) props.view.handleReorderRecord(fromIndex, toIndex);
     };
 
     // Override data records with filtered ones for display
@@ -101,9 +106,7 @@ const MarkdownDBApp = (props: {
                 data={displayData}
                 fileName={props.file?.basename}
                 sourcePath={props.file?.path}
-                knownProperties={props.knownProperties}
-                knownValues={props.knownValues}
-                blockStyleProperties={props.blockStyleProperties}
+                globalProperties={props.globalProperties}
                 onUpdateProperty={handleUpdateProperty}
                 onUpdateContent={handleUpdateContent}
                 onRenameRecord={handleRenameRecord}
@@ -115,6 +118,7 @@ const MarkdownDBApp = (props: {
                 onRowContextMenu={handleRowContextMenu}
                 onHeaderContextMenu={handleHeaderContextMenu}
                 onUpdateConfig={handleUpdateConfig}
+                onReorderRecord={handleReorderRecord}
             />
         </div>
     );
@@ -179,9 +183,9 @@ export class MarkdownDBView extends TextFileView {
         }
     }
 
-    handleUpdateProperty = async (record: DatabaseRecord, key: string, value: string) => {
+    handleUpdateProperty = async (record: DatabaseRecord, key: string, value: string, explicitType?: string) => {
         if (this.file) {
-            await updateProperty(this.app, this.file, record, key, value);
+            await updateProperty(this.app, this.file, record, key, value, explicitType);
         }
     }
 
@@ -199,28 +203,50 @@ export class MarkdownDBView extends TextFileView {
 
     handleAddRecord = async () => {
         if (this.file) {
-            await addRecord(this.app, this.file);
+            await addRecord(this.app, this.file, "Untitled");
         }
     }
 
-    handleAddProperty = async (name: string) => {
+    handleAddProperty = async (name: string, type: string = "text") => {
         if (!this.file) return;
 
         // Only add to file
-        await addPropertyToAllRecords(this.app, this.file, name, "");
+        await addPropertyToAllRecords(this.app, this.file, name, type);
     }
 
-    handleSaveToGlobal = async (name: string) => {
-        if (!this.plugin.settings.knownProperties.includes(name)) {
-            this.plugin.settings.knownProperties.push(name);
-            await this.plugin.saveSettings();
-            this.refresh();
+    handleSaveToGlobal = async (name: string, type?: PropertyType) => {
+        const newProps = [...this.plugin.settings.properties];
+        const existingIndex = newProps.findIndex(p => p.name === name);
+        
+        if (existingIndex >= 0) {
+            if (type && newProps[existingIndex].type !== type) {
+                newProps[existingIndex] = { ...newProps[existingIndex], type };
+            }
+        } else {
+            newProps.push({
+                name,
+                type: type || "text",
+                values: [],
+                ignoredValues: []
+            });
         }
+        
+        this.plugin.settings.properties = newProps;
+        await this.plugin.saveSettings();
+        this.refresh();
     }
 
     handleRemoveGlobalValue = async (key: string, value: string) => {
-        if (this.plugin.settings.propertyValues[key]) {
-            this.plugin.settings.propertyValues[key] = this.plugin.settings.propertyValues[key].filter(v => v !== value);
+        const newProps = [...this.plugin.settings.properties];
+        const propIndex = newProps.findIndex(p => p.name === key);
+        
+        if (propIndex >= 0) {
+            const prop = newProps[propIndex];
+            newProps[propIndex] = {
+                ...prop,
+                values: prop.values.filter(v => v !== value)
+            };
+            this.plugin.settings.properties = newProps;
             await this.plugin.saveSettings();
             this.refresh();
         }
@@ -235,6 +261,12 @@ export class MarkdownDBView extends TextFileView {
     handleUpdateTitle = async (newTitle: string) => {
         if (this.file) {
             await updateTitle(this.app, this.file, newTitle);
+        }
+    }
+
+    handleReorderRecord = async (fromIndex: number, toIndex: number) => {
+        if (this.file) {
+            await reorderRecords(this.app, this.file, fromIndex, toIndex);
         }
     }
 
@@ -297,32 +329,76 @@ export class MarkdownDBView extends TextFileView {
         menu.showAtPosition({ x: event.clientX, y: event.clientY });
     }
 
-    handleHeaderContextMenu = (key: string, event: React.MouseEvent) => {
+    handleHeaderContextMenu = (key: string, event: React.MouseEvent, config?: DatabaseConfig, records?: DatabaseRecord[]) => {
         // Prevent default browser context menu
         event.preventDefault();
 
         const menu = new Menu();
 
-        const blockStyles = this.plugin.settings.blockStyleProperties || [];
-        const isBlock = blockStyles.includes(key);
-
         menu.addItem((item) => {
             item
-                .setTitle(isBlock ? "Render as Text" : "Render as Tags")
-                .setIcon(isBlock ? "text-cursor" : "tag")
-                .onClick(async () => {
-                    let newStyles = [...blockStyles];
-                    if (isBlock) {
-                        newStyles = newStyles.filter(k => k !== key);
-                    } else {
-                        newStyles.push(key);
-                    }
-                    
-                    this.plugin.settings.blockStyleProperties = newStyles;
-                    await this.plugin.saveSettings();
-                    this.refresh();
+                .setTitle("Rename property")
+                .setIcon("pencil")
+                .onClick(() => {
+                    new RenameModal(this.app, key, async (newName) => {
+                        if (newName && newName !== key && this.file) {
+                             await renamePropertyInAllRecords(this.app, this.file, key, newName);
+                             
+                             // Update config columnTypes
+                             if (config?.columnTypes && config.columnTypes[key]) {
+                                 const type = config.columnTypes[key];
+                                 const newTypes = { ...config.columnTypes };
+                                 delete newTypes[key];
+                                 newTypes[newName] = type;
+                                 await updateConfig(this.app, this.file, "db-column-types", JSON.stringify(newTypes));
+                             }
+                             
+                             // Update config columnOrder
+                             if (config?.columnOrder && config.columnOrder.includes(key)) {
+                                 const newOrder = config.columnOrder.map(k => k === key ? newName : k);
+                                 await updateConfig(this.app, this.file, "db-columns", JSON.stringify(newOrder));
+                             }
+                             
+                             new Notice(`Property renamed to "${newName}"`);
+                        }
+                    }).open();
                 });
         });
+
+        const globalProp = this.plugin.settings.properties.find(p => p.name === key);
+        if (!globalProp) {
+            menu.addItem((item) => {
+                item
+                    .setTitle("Add to global properties")
+                    .setIcon("globe")
+                    .onClick(async () => {
+                        let type: PropertyType = "text";
+                        if (config?.columnTypes && config.columnTypes[key]) {
+                            type = config.columnTypes[key];
+                        } else if (records) {
+                             const foundRecord = records.find(r => r.properties[key] && r.properties[key].length > 0);
+                             if (foundRecord) {
+                                 type = foundRecord.properties[key][0].type;
+                             }
+                        }
+                        
+                        this.plugin.settings.properties = [
+                            ...this.plugin.settings.properties,
+                            {
+                                name: key,
+                                type: type,
+                                values: [],
+                                ignoredValues: []
+                            }
+                        ];
+                        await this.plugin.saveSettings();
+                        new Notice(`Property "${key}" added to global settings`);
+                        this.refresh();
+                    });
+            });
+        }
+
+        menu.addSeparator();
 
         menu.addItem((item) => {
             item
@@ -332,6 +408,7 @@ export class MarkdownDBView extends TextFileView {
                 .onClick(async () => {
                     if (this.file) {
                         await deletePropertyFromAllRecords(this.app, this.file, key);
+                        new Notice(`Property "${key}" deleted`);
                     }
                 });
         });
@@ -346,9 +423,7 @@ export class MarkdownDBView extends TextFileView {
                     fileContent: this.fileContent,
                     file: this.file,
                     view: this,
-                    knownProperties: this.plugin.settings.knownProperties,
-                    knownValues: this.plugin.settings.propertyValues,
-                    blockStyleProperties: this.plugin.settings.blockStyleProperties,
+                    globalProperties: this.plugin.settings.properties,
                     onSaveToGlobal: this.handleSaveToGlobal,
                     onRemoveGlobalValue: this.handleRemoveGlobalValue
                 })

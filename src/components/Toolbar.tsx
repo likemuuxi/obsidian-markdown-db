@@ -2,7 +2,7 @@ import * as React from "react";
 import { useState, useRef, useEffect } from "react";
 import * as ReactDOM from "react-dom";
 import { setIcon } from "obsidian";
-import { DatabaseConfig, SortRule, FilterRule } from "../database/parser";
+import { DatabaseConfig, SortRule, FilterRule } from "../database/schema";
 
 const Icon = ({ name, className }: { name: string; className?: string }) => {
     const ref = useRef<HTMLSpanElement>(null);
@@ -194,7 +194,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({ title, config, onSearch, onUpd
                 <div className={`markdown-db-search-container ${showSearch ? "active" : ""}`} ref={searchContainerRef}>
                     {!showSearch && (
                         <button
-                            className="markdown-db-toolbar-btn icon-only"
+                            className="markdown-db-toolbar-text-btn"
                             onClick={() => setShowSearch(true)}
                             title="Search"
                         >
@@ -435,7 +435,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({ title, config, onSearch, onUpd
                 {/* Config Button */}
                 <div className="markdown-db-config-container" ref={configRef}>
                     <button
-                        className="markdown-db-toolbar-btn"
+                        className="markdown-db-toolbar-text-btn"
                         onClick={handleConfigClick}
                         title="Database Settings"
                     >
@@ -477,18 +477,32 @@ export const Toolbar: React.FC<ToolbarProps> = ({ title, config, onSearch, onUpd
                                     <option value="modal">Modal</option>
                                 </select>
                             </div>
-                            <div className="markdown-db-config-item">
-                                <span className="markdown-db-config-label">Content Height</span>
-                                <select
-                                    value={config.contentHeight || "compact"}
-                                    onChange={(e) => {
-                                        onUpdateConfig("db-content-height", e.target.value);
+                            <div className="markdown-db-config-item" style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                                <span className="markdown-db-config-label" style={{ marginBottom: 0 }}>Show Content</span>
+                                <div 
+                                    className={`checkbox-container ${config.showContent !== false ? "is-enabled" : ""}`}
+                                    onClick={() => {
+                                        const newVal = config.showContent === false ? "true" : "false";
+                                        onUpdateConfig("db-show-content", newVal);
                                     }}
                                 >
-                                    <option value="compact">Compact</option>
-                                    <option value="adaptive">Adaptive</option>
-                                </select>
+                                    <input type="checkbox" tabIndex={0} />
+                                </div>
                             </div>
+                            {config.showContent !== false && (
+                                <div className="markdown-db-config-item" style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                                    <span className="markdown-db-config-label" style={{ marginBottom: 0 }}>Adaptive Height</span>
+                                    <div 
+                                        className={`checkbox-container ${config.contentHeight === "adaptive" ? "is-enabled" : ""}`}
+                                        onClick={() => {
+                                            const newVal = config.contentHeight === "adaptive" ? "compact" : "adaptive";
+                                            onUpdateConfig("db-content-height", newVal);
+                                        }}
+                                    >
+                                        <input type="checkbox" tabIndex={0} />
+                                    </div>
+                                </div>
+                            )}
                         </div>,
                         portalContainer || document.body
                     )}

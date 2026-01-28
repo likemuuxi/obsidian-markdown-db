@@ -1,7 +1,8 @@
 import * as React from "react";
-import { App, Notice } from "obsidian";
+import { App, Notice, getIcon } from "obsidian";
 import { useState, useMemo } from "react";
-import { DatabaseData, DatabaseRecord } from "../database/parser";
+import { DatabaseData, DatabaseRecord, PropertyType, PROPERTY_TYPE_ICONS } from "../database/schema";
+import { PropertyConfig } from "../settings";
 import { EditableCell } from "./EditableCell";
 import { PropertyMenu } from "./PropertyMenu";
 
@@ -10,16 +11,14 @@ interface TableViewProps {
     data: DatabaseData;
     fileName?: string;
     sourcePath?: string;
-    knownProperties: string[];
-    knownValues: Record<string, string[]>;
-    blockStyleProperties?: string[];
-    onUpdateProperty: (record: DatabaseRecord, key: string, value: string) => void;
+    globalProperties: PropertyConfig[];
+    onUpdateProperty: (record: DatabaseRecord, key: string, value: string, explicitType?: string) => void;
     onUpdateContent: (record: DatabaseRecord, newContent: string) => void;
     onRenameRecord: (record: DatabaseRecord, newName: string) => void;
     onOpenRecord: (record: DatabaseRecord) => void;
     onAddRecord: () => void;
-    onAddProperty: (name: string) => void;
-    onSaveToGlobal: (name: string) => void;
+    onAddProperty: (name: string, type?: PropertyType) => void;
+    onSaveToGlobal: (name: string, type?: PropertyType) => void;
     onRemoveGlobalValue: (key: string, value: string) => void;
     onRowContextMenu: (record: DatabaseRecord, event: React.MouseEvent) => void;
     onHeaderContextMenu: (key: string, event: React.MouseEvent) => void;
@@ -28,7 +27,7 @@ interface TableViewProps {
     portalContainer?: HTMLElement;
 }
 
-export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourcePath, knownProperties, knownValues, blockStyleProperties, onUpdateProperty, onUpdateContent, onRenameRecord, onOpenRecord, onAddRecord, onAddProperty, onSaveToGlobal, onRemoveGlobalValue, onRowContextMenu, onHeaderContextMenu, onUpdateConfig, onReorderRecord, portalContainer }) => {
+export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourcePath, globalProperties, onUpdateProperty, onUpdateContent, onRenameRecord, onOpenRecord, onAddRecord, onAddProperty, onSaveToGlobal, onRemoveGlobalValue, onRowContextMenu, onHeaderContextMenu, onUpdateConfig, onReorderRecord, portalContainer }) => {
     
     const propertyKeys = useMemo(() => {
         const all = Array.from(data.allKeys);
@@ -58,7 +57,7 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                         recordValue = record.content || "";
                     } else {
                         const vals = record.properties[key];
-                        recordValue = vals ? vals.join(", ") : "";
+                        recordValue = vals ? vals.map(v => String(v.value)).join(", ") : "";
                     }
                     
                     const valLower = recordValue.toLowerCase();
@@ -100,8 +99,8 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                         valA = a.content || "";
                         valB = b.content || "";
                     } else {
-                        valA = (a.properties[key] || []).join(", ");
-                        valB = (b.properties[key] || []).join(", ");
+                        valA = (a.properties[key] || []).map(v => String(v.value)).join(", ");
+                        valB = (b.properties[key] || []).map(v => String(v.value)).join(", ");
                     }
 
                     if (valA !== valB) {
@@ -116,7 +115,7 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
         return records;
     }, [data.records, data.config.filters, data.config.sort]);
 
-    const columns = ["Name", ...propertyKeys, "Content"];
+    const columns = ["Name", ...propertyKeys, ...(data.config.showContent !== false ? ["Content"] : [])];
     const displayTitle = fileName || data.title;
 
     const [menuOpen, setMenuOpen] = useState(false);
@@ -228,6 +227,47 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
         }
     };
 
+    const allPropertyTypes = useMemo(() => {
+        const types: Record<string, PropertyType> = {};
+        
+        // 0. Global defaults
+        globalProperties.forEach(p => {
+            types[p.name] = p.type;
+        });
+
+        // 1. Config
+        if (data.config.columnTypes) {
+             Object.assign(types, data.config.columnTypes);
+        }
+        // 2. Scan records for missing or text types
+        data.records.forEach(record => {
+            Object.entries(record.properties).forEach(([key, values]) => {
+                if (values && values.length > 0) {
+                     const valType = values[0].type;
+                     // If type is not recorded or is text, and we found a more specific type
+                     if ((!types[key] || types[key] === "text") && valType !== "text") {
+                         types[key] = valType;
+                     }
+                     // If not recorded, record it (even if text)
+                     if (!types[key]) {
+                         types[key] = valType;
+                     }
+                }
+            });
+        });
+        return types;
+    }, [data]);
+
+    const dragHandleIcon = useMemo(() => {
+        const icon = getIcon("grip-vertical");
+        if (icon) {
+            icon.style.width = "14px";
+            icon.style.height = "14px";
+            return icon.outerHTML;
+        }
+        return "";
+    }, []);
+
     return (
         <div className="markdown-db-table-container">
             <table className="markdown-db-table" style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -236,6 +276,23 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                         <th style={{ width: "32px", padding: "8px 4px", borderBottom: "2px solid var(--background-modifier-border)" }}></th>
                         {columns.map(col => {
                             const isProperty = col !== "Name" && col !== "Content";
+                            let columnType = isProperty && data.config.columnTypes ? data.config.columnTypes[col] : undefined;
+                            
+                            // Fallback: Infer from records if type is missing or "text" (to handle stale config)
+                            if (isProperty && (!columnType || columnType === "text")) {
+                                const recordWithVal = data.records.find(r => r.properties[col] && r.properties[col].length > 0 && r.properties[col][0].type !== "text");
+                                if (recordWithVal) {
+                                    columnType = recordWithVal.properties[col][0].type;
+                                }
+                            }
+
+                            const iconName = columnType ? PROPERTY_TYPE_ICONS[columnType] : (isProperty ? "align-left" : (col === "Name" ? "uppercase-lowercase-a" : "text-quote"));
+                            const iconSvg = getIcon(iconName);
+                            if (iconSvg) {
+                                iconSvg.style.width = "14px";
+                                iconSvg.style.height = "14px";
+                            }
+                            
                             return (
                             <th key={col} 
                                 draggable={isProperty}
@@ -259,6 +316,17 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                                     }
                                 }}
                             >
+                                <span 
+                                    style={{ 
+                                        display: "inline-flex", 
+                                        alignItems: "center", 
+                                        marginRight: "6px", 
+                                        verticalAlign: "text-bottom",
+                                        color: "var(--text-muted)",
+                                        opacity: 0.8
+                                    }}
+                                    dangerouslySetInnerHTML={{ __html: iconSvg?.outerHTML || "" }}
+                                />
                                 {col}
                             </th>
                         )})}
@@ -312,9 +380,11 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                                         }}
                                         title="Drag to reorder"
                                     >
-                                        <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor">
-                                             <path d="M4 4a2 2 0 1 1 0-4 2 2 0 0 1 0 4zm0 6a2 2 0 1 1 0-4 2 2 0 0 1 0 4zm0 6a2 2 0 1 1 0-4 2 2 0 0 1 0 4zm8-12a2 2 0 1 1 0-4 2 2 0 0 1 0 4zm0 6a2 2 0 1 1 0-4 2 2 0 0 1 0 4zm0 6a2 2 0 1 1 0-4 2 2 0 0 1 0 4z"/>
-                                        </svg>
+                                        <span 
+                                            style={{ display: "inline-flex", alignItems: "center", color: "var(--text-muted)" }}
+                                            title="Drag to reorder"
+                                            dangerouslySetInnerHTML={{ __html: dragHandleIcon }}
+                                        />
                                     </div>
                                 )}
                             </td>
@@ -340,8 +410,36 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                                     />
                                 </div>
                             </td>
-                            {propertyKeys.map(key => (
-                                <td key={key} style={{
+                            {propertyKeys.map(key => {
+                                const val = record.properties[key];
+                                // Derive type using the unified allPropertyTypes logic
+                                const type = allPropertyTypes[key] || "text";
+
+                                return (
+                                    <td key={key} style={{
+                                        padding: "0",
+                                        verticalAlign: type === "boolean" ? "middle" : "top",
+                                        color: "var(--text-normal)",
+                                        position: "relative"
+                                    }}>
+                                        <EditableCell
+                                            app={app}
+                                            component={null}
+                                            sourcePath={sourcePath || displayTitle}
+                                            value={val?.map(v => String(v.value)).join(", ") || ""}
+                                            onSave={(newVal) => onUpdateProperty(record, key, newVal, type)}
+                                        suggestions={globalProperties.find(p => p.name === key)?.values || []}
+                                        isPropertyColumn={type === "multi" || type === "select" || type === "boolean" || type === "date" || type === "number"}
+                                        propertyKey={key}
+                                            onRemoveGlobalValue={onRemoveGlobalValue}
+                                            portalContainer={portalContainer}
+                                            type={type}
+                                        />
+                                    </td>
+                                );
+                            })}
+                            {data.config.showContent !== false && (
+                                <td style={{
                                     padding: "0",
                                     verticalAlign: "top",
                                     color: "var(--text-normal)",
@@ -351,33 +449,14 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                                         app={app}
                                         component={null}
                                         sourcePath={sourcePath || displayTitle}
-                                        value={record.properties[key]?.join(", ") || ""}
-                                        onSave={(newVal) => onUpdateProperty(record, key, newVal)}
-                                        suggestions={knownValues?.[key] || []}
-                                        isPropertyColumn={blockStyleProperties?.includes(key) ?? false}
-                                        propertyKey={key}
-                                        onRemoveGlobalValue={onRemoveGlobalValue}
+                                        value={record.content?.trim() || ""}
+                                        onSave={(newVal) => onUpdateContent(record, newVal)}
+                                        isContentColumn={true}
+                                        contentHeight={data.config.contentHeight}
                                         portalContainer={portalContainer}
                                     />
                                 </td>
-                            ))}
-                            <td style={{
-                                padding: "0",
-                                verticalAlign: "top",
-                                color: "var(--text-normal)",
-                                position: "relative"
-                            }}>
-                                <EditableCell
-                                    app={app}
-                                    component={null}
-                                    sourcePath={sourcePath || displayTitle}
-                                    value={record.content?.trim() || ""}
-                                    onSave={(newVal) => onUpdateContent(record, newVal)}
-                                    isContentColumn={true}
-                                    contentHeight={data.config.contentHeight}
-                                    portalContainer={portalContainer}
-                                />
-                            </td>
+                            )}
                             {/* Empty cell for the add column button column */}
                             <td style={{ borderBottom: "1px solid var(--background-modifier-border)", borderRight: "none" }}></td>
                         </tr>
@@ -398,15 +477,16 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
             {menuOpen && (
                 <PropertyMenu
                     onClose={() => setMenuOpen(false)}
-                    onSelect={(name) => {
-                        onAddProperty(name);
+                    onSelect={(name, type) => {
+                        onAddProperty(name, type);
                         setMenuOpen(false);
                     }}
                     position={menuPosition}
-                    knownProperties={knownProperties}
+                    globalProperties={globalProperties}
                     existingProperties={Array.from(data.allKeys)}
                     onSaveToGlobal={onSaveToGlobal}
                     portalContainer={portalContainer}
+                    propertyTypes={allPropertyTypes}
                 />
             )}
         </div>

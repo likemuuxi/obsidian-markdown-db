@@ -1,5 +1,5 @@
 import { App, Modal, TFile, Component, Setting, MarkdownRenderer } from "obsidian";
-import { DatabaseRecord } from "../database/parser";
+import { DatabaseRecord } from "../database/schema";
 import { updateRecordRaw } from "../database/writer";
 
 export class RecordModal extends Modal {
@@ -27,9 +27,8 @@ export class RecordModal extends Modal {
 
         // Parse content into sections
         let title = "";
-        const propertyLines: string[] = [];
+        let propertiesContent = "";
         const contentLines: string[] = [];
-        const propertyRegex = /\[(.*?)::(.*?)\]/;
 
         recordLines.forEach((line, index) => {
             if (index === 0) {
@@ -38,8 +37,10 @@ export class RecordModal extends Modal {
                 return;
             }
             
-            if (propertyRegex.test(line)) {
-                propertyLines.push(line);
+            const trimmed = line.trim();
+            if (trimmed.startsWith("%%") && trimmed.endsWith("%%")) {
+                // Properties block
+                propertiesContent = trimmed.substring(2, trimmed.length - 2).trim();
             } else {
                 contentLines.push(line);
             }
@@ -50,7 +51,7 @@ export class RecordModal extends Modal {
             contentLines.shift();
         }
 
-        const propertiesText = propertyLines.join("\n");
+        const propertiesText = propertiesContent;
         const contentText = contentLines.join("\n");
 
         // UI Construction
@@ -75,10 +76,10 @@ export class RecordModal extends Modal {
 
         // Properties Section
         const propsSection = container.createDiv({ cls: "markdown-db-record-properties" });
-        propsSection.createEl("h4", { text: "Properties" });
+        propsSection.createEl("h4", { text: "Properties (inside %% block)" });
         const propsTextarea = propsSection.createEl("textarea", { 
             text: propertiesText,
-            placeholder: "[key::value]"
+            placeholder: "[key:: type(value)] [key2:: type(val2)]"
         });
         propsTextarea.oninput = (e) => {
             currentProperties = (e.target as HTMLTextAreaElement).value;
@@ -152,7 +153,7 @@ export class RecordModal extends Modal {
              
              let newBlock = header;
              if (props) {
-                 newBlock += "\n" + props;
+                 newBlock += `\n%% ${props} %%`;
              }
              // Ensure separation between properties and content if both exist
              if (content) {

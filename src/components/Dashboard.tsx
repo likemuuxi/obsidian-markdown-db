@@ -4,7 +4,10 @@ import { App, TFile, setIcon, Notice, Menu, normalizePath } from "obsidian";
 import { TableView } from "./TableView";
 import { Toolbar } from "./Toolbar";
 import { RecordModal } from "./RecordModal";
-import { parseFile, DatabaseData, DatabaseRecord, DatabaseConfig } from "../database/parser";
+import { DatabaseData, DatabaseRecord, DatabaseConfig } from "../database/schema";
+import { parseFile } from "../database/parser";
+import { PropertyType } from "../database/schema";
+import { PropertyConfig } from "../settings";
 import MyPlugin from "../main";
 import { RenameModal } from "../modals/RenameModal";
 import { CreateDatabaseModal } from "../modals/CreateDatabaseModal";
@@ -18,8 +21,8 @@ import {
     addPropertyToAllRecords, 
     deletePropertyFromAllRecords, 
     updateTitle,
-    createRecord,
-    reorderRecords
+    reorderRecords,
+    renamePropertyInAllRecords
 } from "../database/writer";
 
 interface DashboardProps {
@@ -30,12 +33,51 @@ interface DashboardProps {
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, portalContainer }) => {
+    const [globalProperties, setGlobalProperties] = useState<PropertyConfig[]>(plugin.settings.properties);
+
+    const onSaveToGlobal = async (name: string, type?: PropertyType) => {
+        const newProps = [...plugin.settings.properties];
+        const existingIndex = newProps.findIndex(p => p.name === name);
+        
+        if (existingIndex >= 0) {
+            if (type && newProps[existingIndex].type !== type) {
+                newProps[existingIndex] = { ...newProps[existingIndex], type };
+            }
+        } else {
+            newProps.push({
+                name,
+                type: type || "text",
+                values: [],
+                ignoredValues: []
+            });
+        }
+        
+        plugin.settings.properties = newProps;
+        await plugin.saveSettings();
+        setGlobalProperties(newProps);
+    };
+
+    const onRemoveGlobalValue = async (key: string, value: string) => {
+        const newProps = [...plugin.settings.properties];
+        const propIndex = newProps.findIndex(p => p.name === key);
+        
+        if (propIndex >= 0) {
+            const prop = newProps[propIndex];
+            newProps[propIndex] = {
+                ...prop,
+                values: prop.values.filter(v => v !== value)
+            };
+            plugin.settings.properties = newProps;
+            await plugin.saveSettings();
+            setGlobalProperties(newProps);
+        }
+    };
+
     const [files, setFiles] = useState<TFile[]>([]);
     const [selectedFile, setSelectedFile] = useState<TFile | null>(null);
     const [dbData, setDbData] = useState<DatabaseData | null>(null);
     const [loading, setLoading] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
-    const [quickAddText, setQuickAddText] = useState("");
 
     // Load DB files on mount
     useEffect(() => {
@@ -114,9 +156,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
     };
 
     // --- Writer Handlers ---
-    const handleUpdateProperty = async (record: DatabaseRecord, key: string, value: string) => {
+    const handleUpdateProperty = async (record: DatabaseRecord, key: string, value: string, explicitType?: string) => {
         if (selectedFile) {
-            await updateProperty(app, selectedFile, record, key, value);
+            await updateProperty(app, selectedFile, record, key, value, explicitType);
             await reloadCurrentFile();
         }
     };
@@ -145,14 +187,21 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
 
     const handleAddRecord = async () => {
         if (selectedFile) {
-            await addRecord(app, selectedFile);
+            await addRecord(app, selectedFile, "Untitled");
             await reloadCurrentFile();
         }
     };
 
-    const handleAddProperty = async (name: string) => {
+    const handleAddProperty = async (name: string, type: PropertyType = "text") => {
         if (selectedFile) {
-            await addPropertyToAllRecords(app, selectedFile, name, "");
+            await addPropertyToAllRecords(app, selectedFile, name, type, "");
+            
+            // Update column types in config
+            if (dbData) {
+                const newTypes = { ...(dbData.config.columnTypes || {}), [name]: type };
+                await updateConfig(app, selectedFile, "db-column-types", JSON.stringify(newTypes));
+            }
+            
             await reloadCurrentFile();
         }
     };
@@ -169,18 +218,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
             await updateTitle(app, selectedFile, newTitle);
             await reloadCurrentFile();
         }
-    };
-
-    const handleQuickAdd = async () => {
-        if (!selectedFile || !quickAddText.trim()) return;
-        
-        // Add as a new record
-        // Use text as title? Or content? 
-        // Usually quick add is for title.
-        await createRecord(app, selectedFile, quickAddText, {}, "");
-        setQuickAddText("");
-        await reloadCurrentFile();
-        new Notice("Record added!");
     };
 
     const handleRowContextMenu = (record: DatabaseRecord, event: React.MouseEvent) => {
@@ -210,36 +247,66 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
         const lowerTerm = searchTerm.toLowerCase();
         return dbData.records.filter(r =>
             r.title.toLowerCase().includes(lowerTerm) ||
-            Object.values(r.properties).some(vals => vals.some(v => v.toLowerCase().includes(lowerTerm))) ||
+            Object.values(r.properties).some(vals => vals.some(v => String(v.value).toLowerCase().includes(lowerTerm))) ||
             (r.content && r.content.toLowerCase().includes(lowerTerm))
         );
     }, [dbData, searchTerm]);
 
     const displayData = dbData ? { ...dbData, records: filteredRecords } : null;
 
-    const [blockStyles, setBlockStyles] = useState<string[]>(plugin.settings.blockStyleProperties || []);
-
     const handleHeaderContextMenu = (key: string, event: React.MouseEvent) => {
         const menu = new Menu();
-        const isBlock = blockStyles.includes(key);
 
         menu.addItem((item) => {
             item
-                .setTitle(isBlock ? "Render as Text" : "Render as Tags")
-                .setIcon(isBlock ? "text-cursor" : "tag")
-                .onClick(async () => {
-                    let newStyles = [...blockStyles];
-                    if (isBlock) {
-                        newStyles = newStyles.filter(k => k !== key);
-                    } else {
-                        newStyles.push(key);
-                    }
-                    
-                    plugin.settings.blockStyleProperties = newStyles;
-                    await plugin.saveSettings();
-                    setBlockStyles(newStyles);
+                .setTitle("Rename property")
+                .setIcon("pencil")
+                .onClick(() => {
+                    new RenameModal(app, key, async (newName) => {
+                        if (newName && newName !== key && selectedFile) {
+                             await renamePropertyInAllRecords(app, selectedFile, key, newName);
+                             
+                             // Update config columnTypes
+                             if (dbData?.config.columnTypes && dbData.config.columnTypes[key]) {
+                                 const type = dbData.config.columnTypes[key];
+                                 const newTypes = { ...dbData.config.columnTypes };
+                                 delete newTypes[key];
+                                 newTypes[newName] = type;
+                                 await updateConfig(app, selectedFile, "db-column-types", JSON.stringify(newTypes));
+                             }
+                             
+                             // Update config columnOrder
+                             if (dbData?.config.columnOrder && dbData.config.columnOrder.includes(key)) {
+                                 const newOrder = dbData.config.columnOrder.map(k => k === key ? newName : k);
+                                 await updateConfig(app, selectedFile, "db-columns", JSON.stringify(newOrder));
+                             }
+                             
+                             await reloadCurrentFile();
+                             new Notice(`Property renamed to "${newName}"`);
+                        }
+                    }).open();
                 });
         });
+
+        const globalProp = globalProperties.find(p => p.name === key);
+        if (!globalProp) {
+            menu.addItem((item) => {
+                item
+                    .setTitle("Add to global properties")
+                    .setIcon("globe")
+                    .onClick(async () => {
+                        let type: PropertyType = "text";
+                        if (dbData?.config.columnTypes && dbData.config.columnTypes[key]) {
+                            type = dbData.config.columnTypes[key];
+                        }
+                        
+                        await onSaveToGlobal(key, type);
+                        new Notice(`Property "${key}" added to global settings`);
+                    });
+            });
+        }
+
+        menu.addSeparator();
 
         menu.addItem((item) => {
             item
@@ -412,9 +479,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
                                 data={displayData}
                                 fileName={selectedFile.basename}
                                 sourcePath={selectedFile.path}
-                                knownProperties={[]} // Todo: Load global known properties if needed
-                                knownValues={{}} // Todo: Load global known values
-                                blockStyleProperties={blockStyles}
+                                globalProperties={globalProperties}
                                 onUpdateProperty={handleUpdateProperty}
                                 onUpdateContent={handleUpdateContent}
                                 onRenameRecord={handleRenameRecord}
@@ -434,8 +499,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
                                 }}
                                 onAddRecord={handleAddRecord}
                                 onAddProperty={handleAddProperty}
-                                onSaveToGlobal={() => {}}
-                                onRemoveGlobalValue={() => {}}
+                                onSaveToGlobal={onSaveToGlobal}
+                                onRemoveGlobalValue={onRemoveGlobalValue}
                                 onRowContextMenu={handleRowContextMenu}
                                 onHeaderContextMenu={handleHeaderContextMenu}
                                 onUpdateConfig={handleUpdateConfig}

@@ -1,12 +1,50 @@
-import { App, TFile } from "obsidian";
-import { DatabaseRecord } from "./parser";
+import { App, TFile, Notice } from "obsidian";
+import { TypedValue, formatTypedValue, parseTypedValue, DatabaseRecord } from "./schema";
+import { extractProperties } from "./utils";
+
+// Helper to escape regex special characters
+function escapeRegExp(string: string) {
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function upsertPropertyInBlock(blockContent: string, key: string, newPropertyStr: string | null, overwrite: boolean = true): string {
+    const properties = extractProperties(blockContent);
+    
+    const newProperties: string[] = [];
+    let found = false;
+    
+    for (const prop of properties) {
+        const currentKey = prop.key;
+        
+        if (currentKey === key) {
+            if (overwrite) {
+                if (newPropertyStr !== null) {
+                    newProperties.push(newPropertyStr);
+                }
+                // If null, we skip pushing (delete)
+            } else {
+                newProperties.push(prop.full); // Keep existing
+            }
+            found = true;
+        } else {
+            newProperties.push(prop.full);
+        }
+    }
+    
+    if (!found && newPropertyStr !== null) {
+        newProperties.push(newPropertyStr);
+    }
+    
+    return newProperties.join(" ");
+}
 
 export const updateProperty = async (
     app: App,
     file: TFile,
     record: DatabaseRecord,
     key: string,
-    newValue: string
+    newValue: string,
+    explicitType?: string
 ) => {
     await app.vault.process(file, (content) => {
         const lines = content.split(/\r?\n/);
@@ -22,7 +60,7 @@ export const updateProperty = async (
 
         if (startLine === -1) return content;
 
-        // Find end of record
+        // Find end of record (next ## or end of file)
         let endLine = lines.length;
         for (let i = startLine + 1; i < lines.length; i++) {
             if (lines[i].startsWith("## ")) {
@@ -31,152 +69,158 @@ export const updateProperty = async (
             }
         }
 
-        const propertyRegex = new RegExp(`\\[${escapeRegExp(key)}::(.*?)\\]`, 'g');
-        let firstMatchFound = false;
-        const linesToRemove: number[] = [];
+        // Look for %% block in the record
+        let commentBlockIndex = -1;
+        let commentBlockContent = "";
+        
+        for (let i = startLine + 1; i < endLine; i++) {
+            const line = lines[i].trim();
+            if (line.startsWith("%%") && line.endsWith("%%")) {
+                commentBlockIndex = i;
+                commentBlockContent = line;
+                break;
+            }
+        }
 
-        for (let i = startLine; i < endLine; i++) {
-            let line = lines[i];
+        const shouldDelete = newValue === "" || newValue === null || newValue === undefined;
+        let newPropertyStr: string | null = null;
+
+        if (!shouldDelete) {
+            let type = explicitType || "text";
+            let existingValue: TypedValue | undefined;
             
-            if (propertyRegex.test(line)) {
-                // Replace matches
-                const newLine = line.replace(propertyRegex, () => {
-                    if (!firstMatchFound) {
-                        firstMatchFound = true;
-                        return `[${key}::${newValue}]`;
-                    } else {
-                        return "";
-                    }
-                });
-                
-                lines[i] = newLine;
+            // Only use record type if explicitType is not provided
+            if (!explicitType && record.properties[key] && record.properties[key].length > 0) {
+                existingValue = record.properties[key][0];
+                type = existingValue.type;
+            }
 
-                // If the line became empty (and we just removed a property), we might want to remove it.
-                // However, be careful not to remove the line if it was the one we just updated!
-                // If we updated it, it contains `[key::newValue]`, so it's not empty.
-                // If we removed all occurrences (because first was found earlier), it might be empty.
+            // Create new TypedValue
+            const newTypedValue: TypedValue = {
+                type: type as any,
+                value: newValue
+            };
+
+            newPropertyStr = `[${key}::${formatTypedValue(newTypedValue)}]`;
+        }
+
+        if (commentBlockIndex !== -1) {
+            // Update existing block
+            let innerContent = commentBlockContent.substring(2, commentBlockContent.length - 2).trim();
+            innerContent = upsertPropertyInBlock(innerContent, key, newPropertyStr, true);
+            
+            // If innerContent becomes empty after deletion, remove the line?
+            // The user requested to remove [Category::] if empty.
+            // If the whole block becomes empty (e.g. `%%  %%`), we could remove it.
+            if (innerContent.trim() === "") {
+                lines.splice(commentBlockIndex, 1);
+            } else {
+                lines[commentBlockIndex] = `%% ${innerContent} %%`;
+
+                // Ensure empty line after if followed by content
+                const nextLineIdx = commentBlockIndex + 1;
+                if (nextLineIdx < lines.length) {
+                    const nextLine = lines[nextLineIdx];
+                    if (nextLine.trim() !== "") {
+                        lines.splice(nextLineIdx, 0, "");
+                    }
+                }
+            }
+        } else {
+            // Create new block after header
+            // Insert at startLine + 1
+            if (newPropertyStr !== null) {
+                const nextLineIdx = startLine + 1;
+                const hasContentFollowing = nextLineIdx < lines.length && lines[nextLineIdx].trim() !== "";
                 
-                if (newLine.trim() === "") {
-                    linesToRemove.push(i);
+                if (hasContentFollowing) {
+                    lines.splice(startLine + 1, 0, `%% ${newPropertyStr} %%`, "");
+                } else {
+                    lines.splice(startLine + 1, 0, `%% ${newPropertyStr} %%`);
                 }
             }
         }
         
-        // Remove empty lines in reverse order
-        for (let i = linesToRemove.length - 1; i >= 0; i--) {
-            lines.splice(linesToRemove[i], 1);
-        }
-
-        if (!firstMatchFound) {
-            // Insert after H2
-            const newPropertyStr = `[${key}::${newValue}]`;
-            lines.splice(startLine + 1, 0, newPropertyStr);
-        }
-
         return lines.join("\n");
     });
 };
 
-export const reorderRecords = async (app: App, file: TFile, fromIndex: number, toIndex: number) => {
-    await app.vault.process(file, (content) => {
-        const lines = content.split(/\r?\n/);
-        const recordRanges: {start: number, end: number}[] = [];
-        
-        let currentStart = -1;
-        
-        // Scan for records
-        for (let i = 0; i < lines.length; i++) {
-            if (lines[i].startsWith("## ")) {
-                if (currentStart !== -1) {
-                    recordRanges.push({start: currentStart, end: i - 1});
-                }
-                currentStart = i;
-            }
-        }
-        if (currentStart !== -1) {
-            recordRanges.push({start: currentStart, end: lines.length - 1});
-        }
-        
-        if (fromIndex < 0 || fromIndex >= recordRanges.length || toIndex < 0 || toIndex >= recordRanges.length) {
-            return content;
-        }
-
-        // Extract blocks
-        const records = recordRanges.map(r => lines.slice(r.start, r.end + 1).join("\n"));
-        const preamble = recordRanges.length > 0 ? lines.slice(0, recordRanges[0].start).join("\n") : "";
-        
-        // Move
-        const [movedRecord] = records.splice(fromIndex, 1);
-        records.splice(toIndex, 0, movedRecord);
-        
-        // Reassemble
-        const parts = [];
-        // Only push preamble if it exists and is not empty (or if the first record started after line 0)
-        if (recordRanges.length > 0 && recordRanges[0].start > 0) {
-            parts.push(preamble);
-        } else if (preamble.trim()) {
-            // Edge case: maybe preamble is just comments/frontmatter but starts at 0?
-            // If record starts at 0, preamble is empty.
-            // If record starts at 5, preamble is lines 0-4.
-            // logic above covers it.
-        }
-        
-        parts.push(...records);
-        
-        return parts.join("\n");
-    });
-};
-
-export const addPropertyToAllRecords = async (app: App, file: TFile, key: string, defaultValue: string) => {
+export const addPropertyToAllRecords = async (app: App, file: TFile, key: string, type: string = "text", defaultValue: string = "") => {
     await app.vault.process(file, (content) => {
         const lines = content.split(/\r?\n/);
         const newLines: string[] = [];
-        const propertyRegex = /\[(.*?)::(.*?)\]/;
+        const newPropertyStr = `[${key}::${type}(${defaultValue})]`; // Use provided type
         
-        // We need to iterate and inject property into each record
-        // A record starts with "## Title"
-        // We want to add the new property after the last existing property of the record, 
-        // or immediately after the header if no properties exist.
-        
-        let insideRecord = false;
-        let lastPropertyLineIndex = -1;
-        let recordStartIndex = -1;
-
-        for (let i = 0; i < lines.length; i++) {
+        let i = 0;
+        while (i < lines.length) {
             const line = lines[i];
             
             if (line.startsWith("## ")) {
-                // If we were inside a record and haven't added the property yet (should be done during processing),
-                // wait, we process record by record.
-                
-                // Better approach:
-                // Scan the file. identify insertion points.
-                // Or just rebuild the file line by line?
-                // Rebuilding line by line is safer if we track state.
-                
-                // Actually, let's look at how we want to insert.
-                // For every "## ", we enter a new record.
-                // We should look for the end of the property block of this record.
-                // The property block ends when we hit a non-property line (that is not empty? or just content?)
-                // Or we can just append it to the top of the property list? Or bottom?
-                // Usually bottom of property list.
-                
-                // Let's keep it simple: Insert after the header.
-                // That ensures it's a property.
-                // BUT, if we insert after header, and there are other properties, it's fine.
-                // [New::Val]
-                // [Old::Val]
-                // works.
-                
-                // However, user might prefer it at the end of properties.
-                // Let's try to find the last property line.
-                
-                // Let's simplify:
-                // Just insert `[Key::Value]` immediately after `## Title`.
-                // This is robust and easy.
-                
                 newLines.push(line);
-                newLines.push(`[${key}::${defaultValue}]`);
+                
+                // Check if next line is already a comment block
+                let nextLineIndex = i + 1;
+                let foundBlock = false;
+                
+                // Peek next lines (skipping empty lines?)
+                // Usually it's immediately after.
+                if (nextLineIndex < lines.length && lines[nextLineIndex].trim().startsWith("%%") && lines[nextLineIndex].trim().endsWith("%%")) {
+                    // Update existing block
+                    let blockLine = lines[nextLineIndex];
+                    let innerContent = blockLine.trim().substring(2, blockLine.trim().length - 2).trim();
+                    
+                    const updatedInner = upsertPropertyInBlock(innerContent, key, newPropertyStr, false);
+                    newLines.push(`%% ${updatedInner} %%`);
+                    
+                    i++; // Skip the original block line
+                    foundBlock = true;
+                } 
+                
+                if (!foundBlock) {
+                    // Create new block
+                    newLines.push(`%% ${newPropertyStr} %%`);
+                    
+                    // Add empty line if next line has content
+                    if (i + 1 < lines.length && lines[i+1].trim() !== "") {
+                        newLines.push("");
+                    }
+                }
+            } else {
+                newLines.push(line);
+            }
+            i++;
+        }
+        
+        return newLines.join("\n");
+    });
+};
+
+export const renamePropertyInAllRecords = async (app: App, file: TFile, oldKey: string, newKey: string) => {
+    await app.vault.process(file, (content) => {
+        const lines = content.split(/\r?\n/);
+        const newLines: string[] = [];
+        
+        for (let i = 0; i < lines.length; i++) {
+            let line = lines[i];
+            const trimmed = line.trim();
+            
+            if (trimmed.startsWith("%%") && trimmed.endsWith("%%")) {
+                let innerContent = trimmed.substring(2, trimmed.length - 2).trim();
+                
+                // Regex to find property [oldKey:: ...]
+                const propertyRegex = new RegExp(`\\[\\s*${escapeRegExp(oldKey)}\\s*::`, 'g');
+                
+                if (propertyRegex.test(innerContent)) {
+                    innerContent = innerContent.replace(propertyRegex, `[${newKey}::`);
+                    newLines.push(`%% ${innerContent} %%`);
+                } else {
+                    newLines.push(line);
+                }
+
+                // Add empty line if next line has content
+                if (i + 1 < lines.length && lines[i+1].trim() !== "") {
+                    newLines.push("");
+                }
             } else {
                 newLines.push(line);
             }
@@ -186,52 +230,48 @@ export const addPropertyToAllRecords = async (app: App, file: TFile, key: string
     });
 };
 
-export const renameRecord = async (app: App, file: TFile, oldTitle: string, newTitle: string) => {
-    await app.vault.process(file, (data) => {
-        const lines = data.split(/\r?\n/);
-        const titleLineIndex = lines.findIndex(l => l.trim() === `## ${oldTitle}`);
-        if (titleLineIndex !== -1) {
-            lines[titleLineIndex] = `## ${newTitle}`;
-        }
-        return lines.join("\n");
-    });
-};
-
-export const addRecord = async (app: App, file: TFile) => {
-    await app.vault.process(file, (data) => {
-        return data + "\n\n## New Record\n";
-    });
-};
-
-export const createRecord = async (app: App, file: TFile, title: string, properties: Record<string, string>, content: string) => {
-    await app.vault.process(file, (data) => {
-        let newRecord = `## ${title}\n`;
+export const deletePropertyFromAllRecords = async (app: App, file: TFile, key: string) => {
+    await app.vault.process(file, (content) => {
+        const lines = content.split(/\r?\n/);
+        const newLines: string[] = [];
         
-        // Add properties
-        for (const [key, value] of Object.entries(properties)) {
-            if (value && value.trim()) {
-                newRecord += `[${key}::${value}]\n`;
+        for (let i = 0; i < lines.length; i++) {
+            let line = lines[i];
+            const trimmed = line.trim();
+            
+            if (trimmed.startsWith("%%") && trimmed.endsWith("%%")) {
+                let innerContent = trimmed.substring(2, trimmed.length - 2).trim();
+                
+                // Regex to find and remove property [key:: ...]
+                // Need to be careful about spacing
+                const propertyRegex = new RegExp(`\\[\\s*${escapeRegExp(key)}\\s*::\\s*.*?\\]`, 'g');
+                
+                if (propertyRegex.test(innerContent)) {
+                    innerContent = innerContent.replace(propertyRegex, "").trim();
+                    // Clean up double spaces
+                    innerContent = innerContent.replace(/\s\s+/g, " ");
+                    
+                    if (innerContent.length === 0) {
+                        // Empty block? Remove it?
+                        // If it's empty, we can remove the line entirely
+                        continue;
+                    } else {
+                        newLines.push(`%% ${innerContent} %%`);
+                    }
+                } else {
+                    newLines.push(line);
+                }
+
+                // Add empty line if next line has content
+                if (i + 1 < lines.length && lines[i+1].trim() !== "") {
+                    newLines.push("");
+                }
+            } else {
+                newLines.push(line);
             }
         }
         
-        // Add content
-        if (content && content.trim()) {
-            newRecord += `\n${content}\n`;
-        } else {
-             newRecord += `\n`; // Ensure at least one newline after properties
-        }
-        
-        // Append to file
-        // Ensure separation from previous content
-        if (!data.endsWith("\n\n")) {
-             if (data.endsWith("\n")) {
-                 newRecord = "\n" + newRecord;
-             } else {
-                 newRecord = "\n\n" + newRecord;
-             }
-        }
-        
-        return data + newRecord;
+        return newLines.join("\n");
     });
 };
 
@@ -259,14 +299,12 @@ export const updateContent = async (app: App, file: TFile, record: DatabaseRecor
             }
         }
 
-        // Identify property lines to preserve
-        const propertyRegex = /\[.*::.*\]/;
-        const propertyLines: string[] = [];
-        
-        // Collect existing property lines
+        // Identify existing property block (%% ... %%)
+        let propertyBlockLine = "";
         for (let i = startLine + 1; i < endLine; i++) {
-            if (propertyRegex.test(lines[i])) {
-                propertyLines.push(lines[i]);
+            if (lines[i].trim().startsWith("%%") && lines[i].trim().endsWith("%%")) {
+                propertyBlockLine = lines[i];
+                break;
             }
         }
         
@@ -275,98 +313,134 @@ export const updateContent = async (app: App, file: TFile, record: DatabaseRecor
         const header = lines[startLine];
         
         // Properties
-        const propertiesBlock = propertyLines.length > 0 ? propertyLines.join("\n") : "";
+        const propertiesBlock = propertyBlockLine;
         
         // New Content
-        // Ensure new content is separated from properties if properties exist
-        const contentBlock = newContent;
+        // Ensure new content is separated from properties
+        let newRecordBlock = header;
         
-        let newBlock = header;
         if (propertiesBlock) {
-             newBlock += "\n" + propertiesBlock;
+            newRecordBlock += "\n" + propertiesBlock;
         }
-        if (contentBlock) {
-            newBlock += "\n" + contentBlock;
-        } else {
-             // If no content, maybe just a newline if properties exist to be clean?
-             // Or keep tight. Let's add one newline if properties exist and no content to separate next header?
-             // No, usually "## Title\n[Prop::Val]\n\n## Next" is good.
-             // If content is empty, just header + props.
-             if (propertiesBlock) newBlock += "\n";
-        }
-
-        // Replace the range in lines
-        // Note: this is a bit tricky with array splice if we are constructing a string block.
-        // Easier to keep lines array.
         
-        // Let's do it carefully with lines array modification
-        
-        // 1. Remove old lines from startLine+1 to endLine
-        // 2. Insert new lines
-        
-        // Prepare new lines array segment
-        const newLinesSegment: string[] = [];
-        if (propertiesBlock) {
-            newLinesSegment.push(...propertiesBlock.split("\n"));
+        if (newContent) {
+            newRecordBlock += "\n\n" + newContent;
         }
-        if (contentBlock) {
-            newLinesSegment.push(...contentBlock.split("\n"));
-        } else if (propertiesBlock) {
-             // Ensure at least one empty line after properties if no content?
-             // Not strictly required but looks better.
-             newLinesSegment.push("");
-        }
-
-        // Splice
-        const deleteCount = endLine - (startLine + 1);
-        lines.splice(startLine + 1, deleteCount, ...newLinesSegment);
-
+        
+        // Replace old block
+        // We need to be careful to remove all old lines
+        lines.splice(startLine, endLine - startLine, newRecordBlock);
+        
         return lines.join("\n");
     });
 };
-export const deletePropertyFromAllRecords = async (app: App, file: TFile, key: string) => {
-    await app.vault.process(file, (content) => {
-        const lines = content.split(/\r?\n/);
-        const newLines: string[] = [];
-        const propertyRegex = new RegExp(`^\\[${escapeRegExp(key)}::.*?\\]$`);
-        const inlinePropertyRegex = new RegExp(`\\[${escapeRegExp(key)}::.*?\\]`, 'g');
 
-        for (let i = 0; i < lines.length; i++) {
-            const line = lines[i];
+export const renameRecord = async (app: App, file: TFile, oldName: string, newName: string) => {
+    await app.vault.process(file, (data) => {
+        return data.replace("## " + oldName, "## " + newName);
+    });
+};
+
+export const deleteRecord = async (app: App, file: TFile, record: DatabaseRecord) => {
+    // new Notice(`Deleting record: ${record.id}`);
+    await app.vault.process(file, (data) => {
+        const lines = data.split(/\r?\n/);
+        
+        let startLine = -1;
+
+        // Strategy 1: Try exact line location from record (fast path & handles duplicates)
+        // Check if the line at record.lineStart matches the record pattern
+        if (record.lineStart >= 0 && record.lineStart < lines.length) {
+            const line = lines[record.lineStart].trim();
+            // Compare trimmed versions to handle whitespace inconsistencies
+            // Especially for empty titles: "## " vs "##"
+            const target = `## ${record.id}`.trim();
+            const targetTitle = `## ${record.title}`.trim();
             
-            // If the line is EXACTLY the property (common case for list of properties)
-            if (propertyRegex.test(line.trim())) {
-                // Skip this line (delete it)
-                continue;
-            }
-            
-            // If the line contains the property but also other things (inline)
-            // Remove the property string
-            if (line.includes(`[${key}::`)) {
-                newLines.push(line.replace(inlinePropertyRegex, "").trim());
-            } else {
-                newLines.push(line);
+            // Allow matching "##" if record.id is empty
+            if (line === target || line === targetTitle) {
+                startLine = record.lineStart;
             }
         }
         
-        return newLines.join("\n");
+        // Strategy 2: Fallback to linear search
+        if (startLine === -1) {
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+                const target = `## ${record.id}`.trim();
+                const targetTitle = `## ${record.title}`.trim();
+                
+                if (line === target || line === targetTitle) {
+                    startLine = i;
+                    break;
+                }
+            }
+        }
+
+        if (startLine === -1) {
+             new Notice(`Could not find record to delete: "${record.id}"`);
+             return data;
+        }
+
+        let endLine = lines.length;
+        for (let i = startLine + 1; i < lines.length; i++) {
+            if (lines[i].startsWith("## ")) {
+                endLine = i;
+                break;
+            }
+        }
+
+        lines.splice(startLine, endLine - startLine);
+        return lines.join("\n");
+    });
+};
+
+export const addRecord = async (app: App, file: TFile, title: string) => {
+    await app.vault.process(file, (data) => {
+        // Append to end
+        // Format:
+        // ## Title
+        // %% %%
+        // (empty content)
+        
+        let prefix = "\n";
+        if (data.length > 0) {
+            if (data.endsWith("\n\n")) {
+                prefix = "";
+            } else if (data.endsWith("\n")) {
+                prefix = "\n";
+            } else {
+                prefix = "\n\n";
+            }
+        } else {
+            prefix = "";
+        }
+        
+        const newRecord = `${prefix}## ${title}\n%%  %%\n`;
+        return data + newRecord;
+    });
+};
+export const updateTitle = async (app: App, file: TFile, newTitle: string) => {
+    await app.vault.process(file, (data) => {
+        const lines = data.split(/\r?\n/);
+        // Find H1
+        for (let i = 0; i < lines.length; i++) {
+            if (lines[i].startsWith("# ")) {
+                lines[i] = "# " + newTitle;
+                break;
+            }
+        }
+        return lines.join("\n");
     });
 };
 
 export const updateConfig = async (app: App, file: TFile, key: string, value: string) => {
     await app.vault.process(file, (data) => {
-        // Handle db-columns value format: remove brackets if present to avoid regex issues with inline properties
-        let processedValue = value;
-        if (key === "db-columns" && value.startsWith("[") && value.endsWith("]")) {
-            processedValue = value.substring(1, value.length - 1);
-        }
-
-        // Special handling for db-sort and db-filter: remove if empty array
-        const shouldRemove = (key === "db-sort" || key === "db-filter") && value === "[]";
-
+        // Configs are now stored in %% ... %% at the top (before first ##)
+        
         const lines = data.split(/\r?\n/);
         
-        // 1. Find H1 to determine insertion point
+        // Find H1
         let h1Index = -1;
         for (let i = 0; i < lines.length; i++) {
             if (lines[i].startsWith("# ")) {
@@ -375,194 +449,165 @@ export const updateConfig = async (app: App, file: TFile, key: string, value: st
             }
         }
         
-        // 2. Scan for existing property before the first record (H2)
-        let recordStartIndex = lines.length;
+        // Find first H2
+        let firstRecordIndex = lines.length;
         for (let i = 0; i < lines.length; i++) {
             if (lines[i].startsWith("## ")) {
-                recordStartIndex = i;
+                firstRecordIndex = i;
                 break;
             }
         }
         
-        const propertyRegex = new RegExp(`\\[${escapeRegExp(key)}::(.*?)\\]`);
-        let foundIndex = -1;
-        
-        for (let i = 0; i < recordStartIndex; i++) {
-            if (propertyRegex.test(lines[i])) {
-                foundIndex = i;
+        // Look for %% block between H1 and firstRecordIndex
+        let configBlockIndex = -1;
+        for (let i = 0; i < firstRecordIndex; i++) {
+            if (lines[i].trim().startsWith("%%") && lines[i].trim().endsWith("%%")) {
+                configBlockIndex = i;
                 break;
             }
         }
         
-        if (foundIndex !== -1) {
-            if (shouldRemove) {
-                // Check if the line is just this property
-                const line = lines[foundIndex].trim();
-                const startRegex = new RegExp(`^\\[${escapeRegExp(key)}::`);
-                
-                if (startRegex.test(line) && line.endsWith("]")) {
-                     // Remove the whole line
-                     lines.splice(foundIndex, 1);
-                } else {
-                    // Inline property mixed with other text? Remove the property part.
-                    // Use greedy regex for complex properties to capture everything until the last ']'
-                    const greedyRegex = new RegExp(`\\[${escapeRegExp(key)}::(.*)\\]`);
-                    lines[foundIndex] = lines[foundIndex].replace(greedyRegex, "").trim();
-                    // If line becomes empty, remove it? 
-                    if (lines[foundIndex] === "") {
-                        lines.splice(foundIndex, 1);
-                    }
-                }
-            } else {
-                // Update Logic
-                // Check if the line is just this property (ignoring whitespace and potential garbage tails like "]]")
-                const line = lines[foundIndex].trim();
-                // Regex to match start of property
-                const startRegex = new RegExp(`^\\[${escapeRegExp(key)}::`);
-                
-                if (startRegex.test(line)) {
-                    // If it starts with the property, we assume the whole line is meant to be this property.
-                    // This aggressively cleans up any trailing garbage like "]]]" from previous bug.
-                    lines[foundIndex] = `[${key}::${processedValue}]`;
-                } else {
-                    // Inline property mixed with other text? Use replace.
-                    if (key === "db-filter" || key === "db-sort" || key === "db-column-styles") {
-                         // Use greedy regex for complex properties to capture everything until the last ']'
-                         const greedyRegex = new RegExp(`\\[${escapeRegExp(key)}::(.*)\\]`);
-                         lines[foundIndex] = lines[foundIndex].replace(greedyRegex, `[${key}::${processedValue}]`);
-                    } else {
-                         lines[foundIndex] = lines[foundIndex].replace(propertyRegex, `[${key}::${processedValue}]`);
-                    }
-                }
-            }
+        const newPropertyStr = `[${key}::${value}]`;
+        
+        if (configBlockIndex !== -1) {
+            let inner = lines[configBlockIndex].trim().substring(2, lines[configBlockIndex].trim().length - 2).trim();
+            inner = upsertPropertyInBlock(inner, key, newPropertyStr, true);
+            lines[configBlockIndex] = `%% ${inner} %%`;
         } else {
-            if (!shouldRemove) {
-                // Insert new property
-                // Priority: After H1 > Create H1 (if missing) > After Frontmatter > At Start
-                
-                if (h1Index !== -1) {
-                    // H1 exists, insert after it
-                    lines.splice(h1Index + 1, 0, `[${key}::${processedValue}]`);
-                } else {
-                    // H1 does not exist. Create it using filename.
-                    const title = file.basename;
-                    const h1Line = `# ${title}`;
-                    
-                    let insertIndex = 0;
-                    
-                    if (lines[0] && lines[0].trim() === "---") {
-                        // Find end of frontmatter
-                        for (let i = 1; i < lines.length; i++) {
-                            if (lines[i].trim() === "---") {
-                                insertIndex = i + 1;
-                                break;
-                            }
-                        }
-                    }
-                    
-                    lines.splice(insertIndex, 0, h1Line, `[${key}::${processedValue}]`);
-                }
-            }
+            // Create block
+            // Insert after H1 if exists, else at 0
+            const insertAt = h1Index !== -1 ? h1Index + 1 : 0;
+            lines.splice(insertAt, 0, `%% ${newPropertyStr} %%`);
         }
         
         return lines.join("\n");
     });
 };
 
-function escapeRegExp(string: string) {
-    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // $& means the whole matched string
+export const reorderRecords = async (app: App, file: TFile, fromIndex: number, toIndex: number) => {
+    // new Notice(`Moving record ${fromIndex} -> ${toIndex}`);
+    await app.vault.process(file, (data) => {
+        const lines = data.split(/\r?\n/);
+        const recordStarts: number[] = [];
+        
+        // Identify where each record starts (lines starting with "## ")
+        for (let i = 0; i < lines.length; i++) {
+            if (lines[i].startsWith("## ")) {
+                recordStarts.push(i);
+            }
+        }
+        
+        // Validate indices
+        if (recordStarts.length === 0) {
+             new Notice("No records found to reorder");
+             return data;
+        }
+
+        if (fromIndex < 0 || fromIndex >= recordStarts.length || 
+            toIndex < 0 || toIndex >= recordStarts.length || 
+            fromIndex === toIndex) {
+            new Notice(`Invalid reorder indices: ${fromIndex} -> ${toIndex} (Total: ${recordStarts.length})`);
+            return data;
+        }
+
+        // Split content into blocks
+        // Block 0: Preamble (everything before first record)
+        // Block 1..N: Records
+        
+        const preamble = lines.slice(0, recordStarts[0]);
+        const recordBlocks: string[][] = [];
+        
+        for (let i = 0; i < recordStarts.length; i++) {
+            const start = recordStarts[i];
+            const end = (i + 1 < recordStarts.length) ? recordStarts[i+1] : lines.length;
+            recordBlocks.push(lines.slice(start, end));
+        }
+        
+        // Move the record block
+        const [movedRecord] = recordBlocks.splice(fromIndex, 1);
+        recordBlocks.splice(toIndex, 0, movedRecord);
+        
+        // Reassemble
+        const finalLines = [...preamble, ...recordBlocks.reduce((acc, val) => acc.concat(val), [])];
+        return finalLines.join("\n");
+    });
+};
+
+export const updateRecordRaw = async (app: App, file: TFile, record: DatabaseRecord, newRecordBlock: string) => {
+    await app.vault.process(file, (data) => {
+        const lines = data.split(/\r?\n/);
+        
+        let startLine = -1;
+        for (let i = 0; i < lines.length; i++) {
+            if (lines[i].trim() === "## " + record.id) {
+                startLine = i;
+                break;
+            }
+        }
+
+        if (startLine === -1) return data;
+
+        let endLine = lines.length;
+        for (let i = startLine + 1; i < lines.length; i++) {
+            if (lines[i].startsWith("## ")) {
+                endLine = i;
+                break;
+            }
+        }
+
+        // Replace lines
+        lines.splice(startLine, endLine - startLine, newRecordBlock);
+        
+        return lines.join("\n");
+    });
+};
+
+export const HIDDEN_CSS_CLASS = "markdown-db-hidden";
+
+export async function addCssClassToFiles(app: App, files: TFile[], cssClass: string) {
+    for (const file of files) {
+        await app.fileManager.processFrontMatter(file, (frontmatter) => {
+            const classes = frontmatter["cssclasses"] || [];
+            if (!Array.isArray(classes)) {
+                // Handle case where cssclasses might be a single string
+                if (typeof classes === 'string') {
+                     if (classes !== cssClass) {
+                         frontmatter["cssclasses"] = [classes, cssClass];
+                     }
+                } else {
+                    frontmatter["cssclasses"] = [cssClass];
+                }
+            } else {
+                if (!classes.includes(cssClass)) {
+                    classes.push(cssClass);
+                    frontmatter["cssclasses"] = classes;
+                }
+            }
+        });
+    }
 }
 
-export const updateRecordRaw = async (app: App, file: TFile, record: DatabaseRecord, newRawContent: string) => {
-    await app.vault.process(file, (data) => {
-        const lines = data.split(/\r?\n/);
-        // Re-find record
-        let startLine = -1;
-        for (let i = 0; i < lines.length; i++) {
-            if (lines[i].trim() === "## " + record.id) {
-                startLine = i;
-                break;
+export async function removeCssClassFromFiles(app: App, files: TFile[], cssClass: string) {
+    for (const file of files) {
+        await app.fileManager.processFrontMatter(file, (frontmatter) => {
+            const classes = frontmatter["cssclasses"];
+            if (!classes) return;
+            
+            if (Array.isArray(classes)) {
+                const index = classes.indexOf(cssClass);
+                if (index > -1) {
+                    classes.splice(index, 1);
+                    if (classes.length === 0) {
+                        delete frontmatter["cssclasses"];
+                    } else {
+                        frontmatter["cssclasses"] = classes;
+                    }
+                }
+            } else if (typeof classes === 'string') {
+                if (classes === cssClass) {
+                    delete frontmatter["cssclasses"];
+                }
             }
-        }
-
-        if (startLine === -1) return data; // Record not found
-
-        // Find end of record
-        let endLine = lines.length;
-        for (let i = startLine + 1; i < lines.length; i++) {
-            if (lines[i].startsWith("## ")) {
-                endLine = i;
-                break;
-            }
-        }
-        
-        // Splice
-        const newLines = newRawContent.split(/\r?\n/);
-        
-        lines.splice(startLine, endLine - startLine, ...newLines);
-        
-        return lines.join("\n");
-    });
-};
-
-export const deleteRecord = async (app: App, file: TFile, record: DatabaseRecord) => {
-    await app.vault.process(file, (content) => {
-        const lines = content.split(/\r?\n/);
-
-        // Parse finding lines again to be safe
-        // Ideally we reuse lineStart/lineEnd if we trust them but file might have changed.
-        // Let's re-scan for safety.
-
-        let startLine = -1;
-        for (let i = 0; i < lines.length; i++) {
-            if (lines[i].trim() === "## " + record.id) {
-                startLine = i;
-                break;
-            }
-        }
-
-        if (startLine === -1) return content;
-
-        let endLine = lines.length;
-        for (let i = startLine + 1; i < lines.length; i++) {
-            if (lines[i].startsWith("## ")) {
-                endLine = i;
-                break;
-            }
-        }
-
-        // Remove lines from startLine to endLine - 1
-        lines.splice(startLine, endLine - startLine);
-
-        return lines.join("\n");
-    });
-};
-
-export const updateTitle = async (app: App, file: TFile, newTitle: string) => {
-    await app.vault.process(file, (data) => {
-        const lines = data.split(/\r?\n/);
-        // Find H1
-        for (let i = 0; i < lines.length; i++) {
-            if (lines[i].startsWith("# ")) {
-                lines[i] = "# " + newTitle;
-                return lines.join("\n");
-            }
-        }
-        // If no H1, insert after frontmatter or at top
-        const frontmatterRegex = /^---\r?\n([\s\S]*?)\r?\n---/;
-        const match = data.match(frontmatterRegex);
-        if (match) {
-            // Insert after frontmatter
-            const endOfFM = match[0].length;
-            // Check if there is a newline after frontmatter
-            if (data[endOfFM] === '\n') {
-                return data.slice(0, endOfFM) + "\n# " + newTitle + data.slice(endOfFM);
-            } else {
-                 return data.slice(0, endOfFM) + "\n\n# " + newTitle + "\n" + data.slice(endOfFM);
-            }
-        } else {
-            return "# " + newTitle + "\n\n" + data;
-        }
-    });
-};
-
+        });
+    }
+}

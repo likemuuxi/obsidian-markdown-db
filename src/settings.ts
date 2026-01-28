@@ -1,24 +1,36 @@
-import {App, PluginSettingTab, setIcon, Setting} from "obsidian";
+import {App, PluginSettingTab, setIcon, Setting, Menu, TFile} from "obsidian";
 import MyPlugin from "./main";
+import { PropertyType, PROPERTY_TYPE_ICONS, VALID_PROPERTY_TYPES } from "./database/schema";
+import { addCssClassToFiles, removeCssClassFromFiles, HIDDEN_CSS_CLASS } from "./database/writer";
+
+export interface PropertyConfig {
+    name: string;
+    type: PropertyType;
+    values: string[];
+    ignoredValues: string[];
+}
 
 export interface MarkdownDBSettings {
-    knownProperties: string[];
-    propertyValues: Record<string, string[]>;
-    blockStyleProperties: string[];
+    properties: PropertyConfig[];
     defaultDbFolder: string;
     lastOpenedDbPath?: string;
+    hideProperties: boolean;
+    
+    // Deprecated fields (kept for migration types, can be optional or handled via casting in main.ts)
+    // We remove them from the interface to force update, but we'll cast `any` during migration.
 }
 
 export const DEFAULT_SETTINGS: MarkdownDBSettings = {
-    knownProperties: [],
-    propertyValues: {},
-    blockStyleProperties: [],
-    defaultDbFolder: ""
+    properties: [],
+    defaultDbFolder: "",
+    hideProperties: false
 }
 
 export class MarkdownDBSettingTab extends PluginSettingTab {
     plugin: MyPlugin;
     selectedProperty: string | null = null;
+    filterType: PropertyType | 'all' = 'all';
+    searchQuery: string = "";
 
     constructor(app: App, plugin: MyPlugin) {
         super(app, plugin);
@@ -43,6 +55,30 @@ export class MarkdownDBSettingTab extends PluginSettingTab {
                     await this.plugin.saveSettings();
                 }));
 
+        new Setting(containerEl)
+            .setName('Hide DB Properties')
+            .setDesc('Hide lines wrapped in %% %% in the editor for DB files.')
+            .addToggle(toggle => toggle
+                .setValue(this.plugin.settings.hideProperties)
+                .onChange(async (value) => {
+                    this.plugin.settings.hideProperties = value;
+                    await this.plugin.saveSettings();
+                    
+                    // Identify all DB files
+                    const dbFiles = this.app.vault.getMarkdownFiles().filter(file => {
+                         const cache = this.app.metadataCache.getFileCache(file);
+                         return cache?.frontmatter?.['markdown-db'] === true || cache?.frontmatter?.['markdown-db'] === 'true';
+                    });
+
+                    if (value) {
+                         await addCssClassToFiles(this.app, dbFiles, HIDDEN_CSS_CLASS);
+                    } else {
+                         await removeCssClassFromFiles(this.app, dbFiles, HIDDEN_CSS_CLASS);
+                    }
+                }));
+
+        containerEl.createEl('h2', {text: 'Properties Manage'});
+
         const mainContainer = containerEl.createDiv({ cls: 'markdown-db-settings-container' });
 
         // --- Left Pane: Property List ---
@@ -52,42 +88,115 @@ export class MarkdownDBSettingTab extends PluginSettingTab {
         const addPropHeader = leftPane.createDiv({ cls: 'markdown-db-settings-sidebar-header' });
         
         const addPropInputContainer = addPropHeader.createDiv({ cls: 'markdown-db-input-group' });
-        
+
         const propInput = addPropInputContainer.createEl("input", {type: "text"});
-        propInput.placeholder = "New property...";
+        propInput.placeholder = "Search properties...";
+        propInput.value = this.searchQuery;
         propInput.style.flex = "1";
-
-        const propAddBtn = addPropInputContainer.createEl("button", { cls: "mod-cta" });
-        setIcon(propAddBtn, "plus");
-        
-        const handleAddProp = async () => {
-            const val = propInput.value.trim();
-            if (val && !this.plugin.settings.knownProperties.includes(val)) {
-                this.plugin.settings.knownProperties.push(val);
-                this.plugin.settings.propertyValues[val] = [];
-                this.selectedProperty = val; // Auto-select new property
-                await this.plugin.saveSettings();
-                propInput.value = "";
-                this.display();
-            }
-        };
-
-        propAddBtn.onclick = handleAddProp;
-        propInput.addEventListener("keypress", (e) => {
-            if (e.key === "Enter") handleAddProp();
-        });
 
         // Property List (Scrollable)
         const propList = leftPane.createDiv({ cls: 'markdown-db-settings-list' });
 
-        this.plugin.settings.knownProperties.forEach((prop, index) => {
+        propInput.addEventListener("input", (e) => {
+            this.searchQuery = (e.target as HTMLInputElement).value;
+            const query = this.searchQuery.toLowerCase();
+            
+            const items = propList.querySelectorAll('.markdown-db-settings-item');
+            items.forEach((item) => {
+                const text = item.textContent || "";
+                if (text.toLowerCase().includes(query)) {
+                    (item as HTMLElement).style.display = "flex";
+                } else {
+                    (item as HTMLElement).style.display = "none";
+                }
+            });
+        });
+
+        // Filter Button
+        const filterBtn = addPropInputContainer.createEl("button", { cls: "clickable-icon" });
+        filterBtn.style.marginRight = "8px";
+        filterBtn.style.background = "transparent";
+        filterBtn.style.border = "none";
+        filterBtn.style.padding = "4px";
+        filterBtn.style.cursor = "pointer";
+        filterBtn.style.display = "flex";
+        filterBtn.style.alignItems = "center";
+        
+        const filterIconName = this.filterType === 'all' ? "filter" : PROPERTY_TYPE_ICONS[this.filterType];
+        setIcon(filterBtn, filterIconName);
+        filterBtn.title = this.filterType === 'all' ? "Filter by Type" : `Filter: ${this.filterType}`;
+
+        filterBtn.onclick = (e) => {
+            const menu = new Menu();
+            
+            menu.addItem((item) => {
+                item.setTitle("All Types")
+                    .setIcon("filter")
+                    .setChecked(this.filterType === 'all')
+                    .onClick(() => {
+                        this.filterType = 'all';
+                        this.display();
+                    });
+            });
+
+            menu.addSeparator();
+
+            VALID_PROPERTY_TYPES.forEach(type => {
+                menu.addItem((item) => {
+                    item.setTitle(type.charAt(0).toUpperCase() + type.slice(1))
+                        .setIcon(PROPERTY_TYPE_ICONS[type])
+                        .setChecked(this.filterType === type)
+                        .onClick(() => {
+                            this.filterType = type;
+                            this.display();
+                        });
+                });
+            });
+
+            const rect = filterBtn.getBoundingClientRect();
+            menu.showAtPosition({ x: rect.left, y: rect.bottom + 5 });
+        };
+
+        this.plugin.settings.properties.forEach((propConfig, index) => {
+            const prop = propConfig.name;
+            const type = propConfig.type;
+
+            if (this.filterType !== 'all' && type !== this.filterType) {
+                return;
+            }
+
             const propItem = propList.createDiv({ cls: 'markdown-db-settings-item' });
+            if (this.searchQuery && !prop.toLowerCase().includes(this.searchQuery.toLowerCase())) {
+                propItem.style.display = "none";
+            }
             
             if (this.selectedProperty === prop) {
                 propItem.classList.add('is-selected');
             }
 
-            propItem.createSpan({text: prop});
+            const labelContainer = propItem.createDiv();
+            labelContainer.style.display = "flex";
+            labelContainer.style.alignItems = "center";
+            labelContainer.style.flex = "1";
+            labelContainer.style.overflow = "hidden"; // Prevent text overflow issues
+
+            // 图标与文字紧挨，靠左显示
+            const iconSpan = labelContainer.createSpan({ cls: 'markdown-db-settings-item-icon' });
+            iconSpan.style.display = "inline-flex";
+            iconSpan.style.alignItems = "center";
+            iconSpan.style.marginRight = "6px";
+            iconSpan.style.color = "var(--text-muted)";
+            iconSpan.style.flexShrink = "0";
+            iconSpan.style.width = "16px";
+            iconSpan.style.height = "16px";
+            setIcon(iconSpan, PROPERTY_TYPE_ICONS[type]);
+
+            // 文字
+            const textSpan = labelContainer.createSpan({text: prop});
+            textSpan.style.textAlign = "left";
+            textSpan.style.whiteSpace = "nowrap";
+            textSpan.style.overflow = "hidden";
+            textSpan.style.textOverflow = "ellipsis";
 
             const deleteBtn = propItem.createEl("button", { cls: 'markdown-db-settings-item-delete' });
             setIcon(deleteBtn, "trash");
@@ -95,9 +204,9 @@ export class MarkdownDBSettingTab extends PluginSettingTab {
             
             deleteBtn.onclick = async (e) => {
                 e.stopPropagation();
-                // Simple confirmation could be added here if needed
-                this.plugin.settings.knownProperties.splice(index, 1);
-                delete this.plugin.settings.propertyValues[prop];
+                
+                this.plugin.settings.properties.splice(index, 1);
+                
                 if (this.selectedProperty === prop) {
                     this.selectedProperty = null;
                 }
@@ -111,13 +220,12 @@ export class MarkdownDBSettingTab extends PluginSettingTab {
             };
         });
 
-
         // --- Right Pane: Value Management ---
         const rightPane = mainContainer.createDiv({ cls: 'markdown-db-settings-content' });
 
         if (!this.selectedProperty) {
             const emptyState = rightPane.createDiv({ cls: 'markdown-db-empty-state' });
-            const iconContainer = emptyState.createDiv({ style: "margin-bottom: 16px; opacity: 0.5;" });
+            const iconContainer = emptyState.createDiv();
             setIcon(iconContainer, "layout-list"); 
             // Scale up the icon
             iconContainer.querySelector("svg")?.setAttribute("width", "48");
@@ -125,93 +233,86 @@ export class MarkdownDBSettingTab extends PluginSettingTab {
             
             emptyState.createDiv({
                 text: "Select a property to manage its values.",
-                style: "font-size: 1.1em;"
             });
         } else {
             const prop = this.selectedProperty;
-
-            new Setting(rightPane)
-                .setName(prop)
-                .setDesc("Render as Block")
-                .addToggle(toggle => toggle
-                    .setValue(this.plugin.settings.blockStyleProperties?.includes(prop) || false)
-                    .onChange(async (value) => {
-                        if (!this.plugin.settings.blockStyleProperties) {
-                            this.plugin.settings.blockStyleProperties = [];
-                        }
-                        
-                        if (value) {
-                            if (!this.plugin.settings.blockStyleProperties.includes(prop)) {
-                                this.plugin.settings.blockStyleProperties.push(prop);
-                            }
-                        } else {
-                            this.plugin.settings.blockStyleProperties = this.plugin.settings.blockStyleProperties.filter(p => p !== prop);
-                        }
-                        await this.plugin.saveSettings();
-                    }));
-
-            rightPane.createDiv({
-                style: "border-bottom: 1px solid var(--background-modifier-border); margin-bottom: 20px;"
-            });
-
-            // const header = rightPane.createDiv({ cls: 'markdown-db-header-title' });
-            // header.setText(prop); // Just show the property name as title
-
-            // Add Value Input
-            // const addValContainer = rightPane.createDiv({ cls: 'markdown-db-input-group' });
-
-            // const valInput = addValContainer.createEl("input", {type: "text"});
-            // valInput.placeholder = "Add new value...";
-            // valInput.style.flex = "1";
+            const propConfig = this.plugin.settings.properties.find(p => p.name === prop);
             
-            // const valAddBtn = addValContainer.createEl("button", {text: "Add Value", cls: "mod-cta"});
-            // valAddBtn.onclick = async () => {
-            //     const val = valInput.value.trim();
-            //     const currentVals = this.plugin.settings.propertyValues[prop] || [];
-            //     if (val && !currentVals.includes(val)) {
-            //         if (!this.plugin.settings.propertyValues[prop]) {
-            //             this.plugin.settings.propertyValues[prop] = [];
-            //         }
-            //         this.plugin.settings.propertyValues[prop].push(val);
-            //         await this.plugin.saveSettings();
-            //         valInput.value = "";
-            //         this.display();
-            //     }
-            // };
-            // // Allow Enter key to add
-            // valInput.addEventListener("keypress", (e) => {
-            //     if (e.key === "Enter") {
-            //         valAddBtn.click();
-            //     }
-            // });
+            if (propConfig) {
+                rightPane.createDiv();
 
-            // Values List
-            const valuesList = rightPane.createDiv({ cls: 'markdown-db-value-list' });
-            const currentValues = this.plugin.settings.propertyValues[prop] || [];
+                // Values List
+                const valuesList = rightPane.createDiv({ cls: 'markdown-db-value-list' });
+                const currentValues = propConfig.values || [];
 
-            if (currentValues.length === 0) {
-                valuesList.createDiv({text: "No values saved yet.", style: "color: var(--text-faint); padding: 10px; font-style: italic;"});
-            } else {
-                currentValues.forEach((val, index) => {
-                    const valItem = valuesList.createDiv({ cls: 'markdown-db-value-item' });
+                if (currentValues.length === 0) {
+                    valuesList.createDiv({text: "No values saved yet."});
+                } else {
+                    currentValues.forEach((val, index) => {
+                        const valItem = valuesList.createDiv({ cls: 'markdown-db-value-item' });
 
-                    valItem.createSpan({text: val});
+                        valItem.createSpan({text: val});
 
-                    const removeValBtn = valItem.createEl("button", { cls: 'markdown-db-settings-item-delete' });
-                    // Override styles for always visible or different look if needed, but reusing is fine
-                    removeValBtn.style.opacity = "0.6"; 
-                    removeValBtn.onmouseenter = () => removeValBtn.style.opacity = "1";
-                    removeValBtn.onmouseleave = () => removeValBtn.style.opacity = "0.6";
+                        const removeValBtn = valItem.createEl("button", { cls: 'markdown-db-settings-item-delete' });
+                        removeValBtn.style.opacity = "0.6"; 
+                        removeValBtn.onmouseenter = () => removeValBtn.style.opacity = "1";
+                        removeValBtn.onmouseleave = () => removeValBtn.style.opacity = "0.6";
 
-                    setIcon(removeValBtn, "x");
-                    removeValBtn.title = "Remove Value";
-                    
-                    removeValBtn.onclick = async () => {
-                        this.plugin.settings.propertyValues[prop].splice(index, 1);
-                        await this.plugin.saveSettings();
-                        this.display();
-                    };
-                });
+                        setIcon(removeValBtn, "x");
+                        removeValBtn.title = "Remove Value";
+                        
+                        removeValBtn.onclick = async () => {
+                            // Remove from active values
+                            propConfig.values.splice(index, 1);
+                            
+                            // Add to ignored list
+                            if (!propConfig.ignoredValues) {
+                                propConfig.ignoredValues = [];
+                            }
+                            if (!propConfig.ignoredValues.includes(val)) {
+                                propConfig.ignoredValues.push(val);
+                            }
+
+                            await this.plugin.saveSettings();
+                            this.display();
+                        };
+                    });
+                }
+
+                // Ignored Values Section
+                const ignoredValues = propConfig.ignoredValues || [];
+                if (ignoredValues.length > 0) {
+                     rightPane.createDiv({
+                         text: "Ignored Values (Hidden from suggestions)",
+                         cls: "markdown-db-section-header",
+                         attr: { style: "margin-top: 20px; font-weight: bold; font-size: 0.9em; color: var(--text-muted);" }
+                     });
+
+                     const ignoredList = rightPane.createDiv({ cls: 'markdown-db-value-list', attr: { style: "opacity: 0.7;" } });
+                     
+                     ignoredValues.forEach((val, index) => {
+                         const valItem = ignoredList.createDiv({ cls: 'markdown-db-value-item' });
+                         valItem.createSpan({text: val, attr: { style: "text-decoration: line-through; color: var(--text-muted);" }});
+
+                         const restoreBtn = valItem.createEl("button", { cls: 'markdown-db-settings-item-delete' });
+                         setIcon(restoreBtn, "undo");
+                         restoreBtn.title = "Restore Value";
+                         
+                         restoreBtn.onclick = async () => {
+                             // Remove from ignored
+                             propConfig.ignoredValues.splice(index, 1);
+                             
+                             // Add back to active values if not already present
+                             if (!propConfig.values.includes(val)) {
+                                 propConfig.values.push(val);
+                                 propConfig.values.sort();
+                             }
+
+                             await this.plugin.saveSettings();
+                             this.display();
+                         };
+                     });
+                }
             }
         }
     }

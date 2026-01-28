@@ -1,8 +1,8 @@
 import { Plugin, WorkspaceLeaf, TFile, TFolder, debounce, FileView } from "obsidian";
-import { MarkdownDBView, VIEW_TYPE_MARKDOWN_DB } from "./view";
-import { RecordEditView, VIEW_TYPE_RECORD_EDIT } from "./views/RecordEditView";
-import { MarkdownDBSettings, DEFAULT_SETTINGS, MarkdownDBSettingTab } from "./settings";
+import { MarkdownDBView, VIEW_TYPE_MARKDOWN_DB } from "./views/view";
+import { MarkdownDBSettings, DEFAULT_SETTINGS, MarkdownDBSettingTab, PropertyConfig } from "./settings";
 import { parseFile } from "./database/parser";
+import { addCssClassToFiles, HIDDEN_CSS_CLASS } from "./database/writer";
 
 import { DashboardModal } from "./modals/DashboardModal";
 
@@ -12,18 +12,45 @@ export default class MarkdownDBPlugin extends Plugin {
 
     async onload() {
         await this.loadSettings();
+        await this.migrateSettings();
 
+        // Register View
         this.registerView(
             VIEW_TYPE_MARKDOWN_DB,
             (leaf) => new MarkdownDBView(leaf, this)
         );
 
-        this.registerView(
-            VIEW_TYPE_RECORD_EDIT,
-            (leaf) => new RecordEditView(leaf)
-        );
-
+        // Add Setting Tab
         this.addSettingTab(new MarkdownDBSettingTab(this.app, this));
+
+        // Listen for new file creation to auto-add cssclass if enabled
+        this.registerEvent(this.app.vault.on("create", async (file) => {
+             if (this.settings.hideProperties && file instanceof TFile && file.extension === 'md') {
+                  // Wait a bit for cache to populate or read content directly? 
+                  // "create" event might fire before content is fully populated if done programmatically.
+                  // But usually frontmatter check relies on metadata cache which updates async.
+                  // A safer bet is checking content or waiting.
+                  // For simplicity, we can try to read the file content or check cache after a delay.
+                  
+                  // Actually, let's hook into metadata cache updates, which is more reliable for detecting "markdown-db: true"
+             }
+        }));
+
+        this.registerEvent(this.app.metadataCache.on("changed", async (file) => {
+            if (this.settings.hideProperties) {
+                const cache = this.app.metadataCache.getFileCache(file);
+                if (cache?.frontmatter?.['markdown-db'] === true || cache?.frontmatter?.['markdown-db'] === 'true') {
+                     // Check if it already has the class
+                     const classes = cache.frontmatter['cssclasses'];
+                     const hasClass = Array.isArray(classes) ? classes.includes(HIDDEN_CSS_CLASS) : classes === HIDDEN_CSS_CLASS;
+                     
+                     if (!hasClass) {
+                         // Avoid infinite loops: verify we are adding it only if missing
+                         await addCssClassToFiles(this.app, [file], HIDDEN_CSS_CLASS);
+                     }
+                }
+            }
+        }));
 
         // Monkey patch WorkspaceLeaf.openFile to support seamless DB view opening
         this.monkeyPatchOpenFile();
@@ -164,6 +191,65 @@ export default class MarkdownDBPlugin extends Plugin {
         this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
     }
 
+    async migrateSettings() {
+        const data = await this.loadData();
+        // Check if we need migration: properties is empty but old data might exist
+        if ((!this.settings.properties || this.settings.properties.length === 0) && data) {
+            const old = data as any;
+            let migrated = false;
+
+            // Gather all known property names from old fields
+            const allProps = new Set<string>();
+            if (Array.isArray(old.knownProperties)) old.knownProperties.forEach((p: string) => allProps.add(p));
+            if (Array.isArray(old.propertyTypes)) old.propertyTypes.forEach((p: any) => allProps.add(p.name));
+            if (old.propertyValues && typeof old.propertyValues === 'object') Object.keys(old.propertyValues).forEach(p => allProps.add(p));
+
+            if (allProps.size > 0) {
+                console.log("Markdown DB: Migrating old settings...");
+                const newProperties: PropertyConfig[] = [];
+
+                for (const name of allProps) {
+                    // Find type
+                    const typeObj = Array.isArray(old.propertyTypes) ? old.propertyTypes.find((pt: any) => pt.name === name) : undefined;
+                    const type = typeObj?.type || 'text';
+
+                    // Find values
+                    const values = (old.propertyValues && old.propertyValues[name]) ? old.propertyValues[name] : [];
+
+                    // Find ignored values
+                    const ignoredValues = (old.ignoredPropertyValues && old.ignoredPropertyValues[name]) ? old.ignoredPropertyValues[name] : [];
+
+                    newProperties.push({
+                        name,
+                        type,
+                        values,
+                        ignoredValues
+                    });
+                }
+
+                this.settings.properties = newProperties;
+                
+                // We don't delete old fields from the object in memory immediately to avoid strict type issues if they were typed,
+                // but since we assigned to this.settings (which is typed as MarkdownDBSettings), the old fields are gone from the type view.
+                // When we save, only the fields in MarkdownDBSettings will be saved? 
+                // Object.assign merged them, so they are actually still there in the object!
+                // We should clean them up to avoid cluttering data.json
+                delete (this.settings as any).knownProperties;
+                delete (this.settings as any).propertyTypes;
+                delete (this.settings as any).propertyValues;
+                delete (this.settings as any).ignoredPropertyValues;
+                delete (this.settings as any).blockStyleProperties; // User mentioned this might be there
+
+                migrated = true;
+            }
+
+            if (migrated) {
+                await this.saveSettings();
+                console.log("Markdown DB: Migration complete.");
+            }
+        }
+    }
+
     async saveSettings() {
         await this.saveData(this.settings);
     }
@@ -177,20 +263,18 @@ export default class MarkdownDBPlugin extends Plugin {
 
             data.records.forEach(record => {
                 Object.entries(record.properties).forEach(([key, values]) => {
-                    if (this.settings.knownProperties.includes(key)) {
-                        // values is string[] (from parser)
-                        // parser splits multiple [Key::Val1] [Key::Val2], but we also want to split comma separated strings
-                        
+                    const propConfig = this.settings.properties.find(p => p.name === key);
+                    
+                    if (propConfig) {
                         values.forEach(rawVal => {
-                            const splitVals = rawVal.split(",").map(v => v.trim()).filter(v => v);
+                            const splitVals = String(rawVal.value).split(",").map(v => v.trim()).filter(v => v);
                             
-                            if (!this.settings.propertyValues[key]) {
-                                this.settings.propertyValues[key] = [];
-                            }
-
                             splitVals.forEach(val => {
-                                if (!this.settings.propertyValues[key].includes(val)) {
-                                    this.settings.propertyValues[key].push(val);
+                                // Check if ignored
+                                const ignored = propConfig.ignoredValues && propConfig.ignoredValues.includes(val);
+                                
+                                if (!ignored && !propConfig.values.includes(val)) {
+                                    propConfig.values.push(val);
                                     updated = true;
                                 }
                             });
@@ -222,17 +306,18 @@ export default class MarkdownDBPlugin extends Plugin {
 
                 data.records.forEach(record => {
                     Object.entries(record.properties).forEach(([key, values]) => {
-                        if (this.settings.knownProperties.includes(key)) {
+                        const propConfig = this.settings.properties.find(p => p.name === key);
+                        
+                        if (propConfig) {
                              values.forEach(rawVal => {
-                                const splitVals = rawVal.split(",").map(v => v.trim()).filter(v => v);
+                                const splitVals = String(rawVal.value).split(",").map(v => v.trim()).filter(v => v);
                                 
-                                if (!this.settings.propertyValues[key]) {
-                                    this.settings.propertyValues[key] = [];
-                                }
-
                                 splitVals.forEach(val => {
-                                    if (!this.settings.propertyValues[key].includes(val)) {
-                                        this.settings.propertyValues[key].push(val);
+                                    // Check if ignored
+                                    const ignored = propConfig.ignoredValues && propConfig.ignoredValues.includes(val);
+                                    
+                                    if (!ignored && !propConfig.values.includes(val)) {
+                                        propConfig.values.push(val);
                                         updated = true;
                                     }
                                 });
