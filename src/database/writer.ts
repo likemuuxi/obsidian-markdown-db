@@ -397,6 +397,22 @@ export const deleteRecord = async (app: App, file: TFile, record: DatabaseRecord
 
 export const addRecord = async (app: App, file: TFile, title: string) => {
     await app.vault.process(file, (data) => {
+        // Find all existing titles
+        const existingTitles = new Set<string>();
+        const lines = data.split(/\r?\n/);
+        for (const line of lines) {
+            if (line.startsWith("## ")) {
+                existingTitles.add(line.substring(3).trim());
+            }
+        }
+
+        let newTitle = title;
+        let counter = 1;
+        while (existingTitles.has(newTitle)) {
+            newTitle = `${title} ${counter}`;
+            counter++;
+        }
+
         // Append to end
         // Format:
         // ## Title
@@ -416,7 +432,7 @@ export const addRecord = async (app: App, file: TFile, title: string) => {
             prefix = "";
         }
         
-        const newRecord = `${prefix}## ${title}\n%%  %%\n`;
+        const newRecord = `${prefix}## ${newTitle}\n%%  %%\n`;
         return data + newRecord;
     });
 };

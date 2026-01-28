@@ -16,6 +16,12 @@ export interface MarkdownDBSettings {
     lastOpenedDbPath?: string;
     hideProperties: boolean;
     
+    // Github Auto-Sync Settings
+    autoSyncGithub: boolean;
+    githubUsername: string;
+    githubToken: string;
+    githubSyncTargetDb: string;
+    
     // Deprecated fields (kept for migration types, can be optional or handled via casting in main.ts)
     // We remove them from the interface to force update, but we'll cast `any` during migration.
 }
@@ -23,7 +29,11 @@ export interface MarkdownDBSettings {
 export const DEFAULT_SETTINGS: MarkdownDBSettings = {
     properties: [],
     defaultDbFolder: "",
-    hideProperties: false
+    hideProperties: false,
+    autoSyncGithub: false,
+    githubUsername: "",
+    githubToken: "",
+    githubSyncTargetDb: ""
 }
 
 export class MarkdownDBSettingTab extends PluginSettingTab {
@@ -76,6 +86,66 @@ export class MarkdownDBSettingTab extends PluginSettingTab {
                          await removeCssClassFromFiles(this.app, dbFiles, HIDDEN_CSS_CLASS);
                     }
                 }));
+
+        containerEl.createEl('h2', {text: 'Github Auto-Sync'});
+
+        new Setting(containerEl)
+            .setName('Enable Auto-Sync')
+            .setDesc('Automatically fetch Github stars on Obsidian startup.')
+            .addToggle(toggle => toggle
+                .setValue(this.plugin.settings.autoSyncGithub)
+                .onChange(async (value) => {
+                    this.plugin.settings.autoSyncGithub = value;
+                    await this.plugin.saveSettings();
+                    this.display(); // Refresh to show/hide dependent settings
+                }));
+
+        if (this.plugin.settings.autoSyncGithub) {
+            new Setting(containerEl)
+                .setName('Github Username')
+                .addText(text => text
+                    .setValue(this.plugin.settings.githubUsername)
+                    .onChange(async (value) => {
+                        this.plugin.settings.githubUsername = value;
+                        await this.plugin.saveSettings();
+                    }));
+
+            new Setting(containerEl)
+                .setName('Github Token (Optional)')
+                .setDesc('Required for private repos or to avoid rate limits.')
+                .addText(text => text
+                    .setPlaceholder('ghp_...')
+                    .setValue(this.plugin.settings.githubToken)
+                    .onChange(async (value) => {
+                        this.plugin.settings.githubToken = value;
+                        await this.plugin.saveSettings();
+                    }));
+
+            new Setting(containerEl)
+                .setName('Target Database')
+                .setDesc('Select the database file to save stars to.')
+                .addDropdown(dropdown => {
+                    const files = this.app.vault.getMarkdownFiles().filter(file => {
+                        const cache = this.app.metadataCache.getFileCache(file);
+                        return cache?.frontmatter?.['markdown-db'] === true || cache?.frontmatter?.['markdown-db'] === 'true';
+                    });
+
+                    if (files.length === 0) {
+                        dropdown.addOption("", "No databases found");
+                    } else {
+                        files.sort((a, b) => a.path.localeCompare(b.path));
+                        files.forEach((file) => {
+                            dropdown.addOption(file.path, file.path);
+                        });
+                    }
+
+                    dropdown.setValue(this.plugin.settings.githubSyncTargetDb);
+                    dropdown.onChange(async (value) => {
+                        this.plugin.settings.githubSyncTargetDb = value;
+                        await this.plugin.saveSettings();
+                    });
+                });
+        }
 
         containerEl.createEl('h2', {text: 'Properties Manage'});
 

@@ -7,7 +7,7 @@ import { Toolbar } from "../components/Toolbar";
 import { parseFile} from "../database/parser";
 import { DatabaseRecord, DatabaseConfig, PropertyType } from "../database/schema";
 import { updateProperty, renameRecord, addRecord, updateConfig, deleteRecord, updateContent, addPropertyToAllRecords, deletePropertyFromAllRecords, updateTitle, reorderRecords, renamePropertyInAllRecords } from "../database/writer";
-import { RecordModal } from "../components/RecordModal";
+import { RecordModal } from "../modals/RecordModal";
 import { RenameModal } from "../modals/RenameModal";
 import type MarkdownDBPlugin from "../main";
 

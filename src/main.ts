@@ -6,8 +6,8 @@ import { addCssClassToFiles, HIDDEN_CSS_CLASS } from "./database/writer";
 
 import { DashboardModal } from "./modals/DashboardModal";
 import { DBSwitcherModal } from "./modals/DBSwitcherModal";
-import { ImporterModal } from "./modals/ImporterModal";
-import { DataTypeModal } from "./modals/DataTypeModal";
+import { ImportModal } from "./modals/ImportModal";
+import { GithubSyncService } from "./services/github";
 
 export default class MarkdownDBPlugin extends Plugin {
     settings: MarkdownDBSettings;
@@ -16,6 +16,14 @@ export default class MarkdownDBPlugin extends Plugin {
     async onload() {
         await this.loadSettings();
         await this.migrateSettings();
+
+        // Check for Auto-Sync
+        if (this.settings.autoSyncGithub) {
+            this.app.workspace.onLayoutReady(() => {
+                const githubService = new GithubSyncService(this.app, this.settings);
+                githubService.syncStars();
+            });
+        }
 
         // Register View
         this.registerView(
@@ -77,11 +85,9 @@ export default class MarkdownDBPlugin extends Plugin {
 
         this.addCommand({
             id: "importer-db",
-            name: "Import as Database",
+            name: "Import to Database",
             callback: () => {
-                new DataTypeModal(this.app, (type) => {
-                    new ImporterModal(this.app, type).open();
-                }).open();
+                new ImportModal(this.app).open();
             }
         });
 

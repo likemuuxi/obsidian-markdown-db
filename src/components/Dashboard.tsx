@@ -3,12 +3,12 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { App, TFile, setIcon, Notice, Menu, normalizePath } from "obsidian";
 import { TableView } from "./TableView";
 import { Toolbar } from "./Toolbar";
-import { RecordModal } from "./RecordModal";
+import { RecordModal } from "../modals/RecordModal";
 import { DatabaseData, DatabaseRecord, DatabaseConfig } from "../database/schema";
 import { parseFile } from "../database/parser";
 import { PropertyType } from "../database/schema";
 import { PropertyConfig } from "../settings";
-import MyPlugin from "../main";
+import type MyPlugin from "../main";
 import { RenameModal } from "../modals/RenameModal";
 import { CreateDatabaseModal } from "../modals/CreateDatabaseModal";
 import { 

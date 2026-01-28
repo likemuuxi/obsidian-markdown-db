@@ -2,7 +2,7 @@ import { App, Modal } from "obsidian";
 import * as React from "react";
 import * as ReactDOM from "react-dom/client";
 import { Dashboard } from "../components/Dashboard";
-import MyPlugin from "../main";
+import type MyPlugin from "../main";
 
 export class DashboardModal extends Modal {
     root: ReactDOM.Root | null = null;
