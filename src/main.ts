@@ -6,6 +6,8 @@ import { addCssClassToFiles, HIDDEN_CSS_CLASS } from "./database/writer";
 
 import { DashboardModal } from "./modals/DashboardModal";
 import { DBSwitcherModal } from "./modals/DBSwitcherModal";
+import { ImporterModal } from "./modals/ImporterModal";
+import { DataTypeModal } from "./modals/DataTypeModal";
 
 export default class MarkdownDBPlugin extends Plugin {
     settings: MarkdownDBSettings;
@@ -73,6 +75,16 @@ export default class MarkdownDBPlugin extends Plugin {
             }
         });
 
+        this.addCommand({
+            id: "importer-db",
+            name: "Import as Database",
+            callback: () => {
+                new DataTypeModal(this.app, (type) => {
+                    new ImporterModal(this.app, type).open();
+                }).open();
+            }
+        });
+
         this.registerEvent(
             this.app.workspace.on("file-menu", (menu, file) => {
                 menu.addItem((item) => {
@@ -100,7 +112,7 @@ export default class MarkdownDBPlugin extends Plugin {
                                 i++;
                             }
 
-                            const initialContent = "---\nmarkdown-db: true\ndb-open-mode: modal\ndb-layout: table\n---\n\n# Database\n";
+                            const initialContent = "---\nmarkdown-db: true\n---\n\n# Database\n";
                             const newFile = await this.app.vault.create(filePath, initialContent);
 
                             const leaf = this.app.workspace.getLeaf(false);

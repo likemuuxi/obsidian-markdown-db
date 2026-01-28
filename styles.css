@@ -339,6 +339,7 @@
     border: none;
     color: var(--text-normal);
     width: 100%;
+    font-family: "inherit";
 }
 .markdown-db-title-input:focus {
     outline: none;
