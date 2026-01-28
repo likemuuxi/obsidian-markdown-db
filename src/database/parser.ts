@@ -18,17 +18,24 @@ export const parseFile = (content: string): DatabaseData => {
     // Regex to find %% block
     const commentBlockRegex = /%%(.*?)%%/;
 
+    let inCodeBlock = false;
+
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
 
+        // Toggle code block state
+        if (line.trim().startsWith("```")) {
+            inCodeBlock = !inCodeBlock;
+        }
+
         // Check for H1 (File Title)
-        if (line.startsWith("# ") && !title) {
+        if (!inCodeBlock && line.startsWith("# ") && !title) {
             title = line.substring(2).trim();
             continue;
         }
 
         // Check for H2 (Record)
-        if (line.startsWith("## ")) {
+        if (!inCodeBlock && line.startsWith("## ")) {
             // Close previous record
             if (currentRecord) {
                 currentRecord.lineEnd = i - 1;

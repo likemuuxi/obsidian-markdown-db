@@ -5,6 +5,7 @@ import { parseFile } from "./database/parser";
 import { addCssClassToFiles, HIDDEN_CSS_CLASS } from "./database/writer";
 
 import { DashboardModal } from "./modals/DashboardModal";
+import { DBSwitcherModal } from "./modals/DBSwitcherModal";
 
 export default class MarkdownDBPlugin extends Plugin {
     settings: MarkdownDBSettings;
@@ -61,6 +62,14 @@ export default class MarkdownDBPlugin extends Plugin {
             name: "Open Database Dashboard",
             callback: () => {
                 new DashboardModal(this.app, this).open();
+            }
+        });
+
+        this.addCommand({
+            id: "quick-switch-db",
+            name: "Quick Switch Database",
+            callback: () => {
+                new DBSwitcherModal(this.app, this).open();
             }
         });
 

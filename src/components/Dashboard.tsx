@@ -417,7 +417,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
                 return;
             }
             
-            const initialContent = "---\nmarkdown-db: true\ndb-open-mode: split\ndb-layout: table\n---\n\n# Database\n";
+            const initialContent = "---\nmarkdown-db: true\n---\n\n# Database\n";
             try {
                 const newFile = await app.vault.create(filePath, initialContent);
                 setFiles(prev => [...prev, newFile]);
