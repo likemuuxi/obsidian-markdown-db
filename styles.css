@@ -18,7 +18,7 @@
 .markdown-db-table {
 	border-collapse: collapse;
 	width: 100%;
-	table-layout: fixed; /* Fix column widths */
+	table-layout: auto; /* Adaptive column widths */
 	font-size: 14px;
 	color: var(--text-normal);
 }
@@ -48,12 +48,32 @@
 	position: sticky;
 	top: 0;
 	z-index: 10;
-	width: 200px; /* Default width */
+	width: auto;
+	min-width: 100px;
+	max-width: 200px; /* Maintain max width */
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 /* Name Column Specific Width */
+.markdown-db-table th:nth-child(2) {
+	width: auto;
+	min-width: 150px;
+	max-width: 250px;
+}
+
+/* Drag Handle Column */
 .markdown-db-table th:first-child {
-	width: 250px;
+	width: 32px;
+	min-width: 32px;
+	max-width: 32px;
+}
+
+/* Add Property Column */
+.markdown-db-table th:last-child {
+	width: 40px;
+	min-width: 40px;
+	max-width: 40px;
 }
 
 /* Cell Styling */
@@ -64,6 +84,24 @@
 	/* Let inner content handle padding for click area */
 	vertical-align: top;
 	height: auto; /* Allow height to adapt */
+	max-width: 200px; /* Limit property columns */
+}
+
+/* Name Column Specific Width */
+.markdown-db-table td:nth-child(2) {
+	max-width: 250px;
+}
+
+/* Drag Handle Column */
+.markdown-db-table td:first-child {
+	width: 32px;
+	max-width: 32px;
+}
+
+/* Add Property Column */
+.markdown-db-table td:last-child {
+	width: 40px;
+	max-width: 40px;
 }
 
 .markdown-db-table tr:hover td {
