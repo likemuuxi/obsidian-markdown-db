@@ -1,5 +1,6 @@
 import { App, Modal, Setting, Notice, requestUrl, RequestUrlParam, TFile, TFolder, normalizePath } from "obsidian";
 import { FolderSuggest } from "../suggest/suggest";
+import type MarkdownDBPlugin from "../main";
 
 interface StarredRepo {
     id: number;
@@ -18,8 +19,34 @@ interface StarredRepo {
     };
 }
 
+interface GithubPRItem {
+    number: number;
+    title: string;
+    state: string;
+    html_url: string;
+    repository_url: string;
+    created_at: string;
+    updated_at: string;
+    draft: boolean;
+    author_association: string;
+    pull_request?: {
+        merged_at?: string | null;
+        html_url?: string;
+    };
+    user: {
+        login: string;
+    };
+    body?: string;
+}
+
+interface GithubSearchResponse {
+    total_count: number;
+    incomplete_results: boolean;
+    items: GithubPRItem[];
+}
+
 export class ImportModal extends Modal {
-    sourceType: "obsidian" | "github-stars" = "obsidian";
+    sourceType: "obsidian" | "github-stars" | "github-pull" = "obsidian";
 
     // Obsidian Source State
     folderPath: string = "";
@@ -34,8 +61,13 @@ export class ImportModal extends Modal {
     dbName: string = "";
     existingDbPath: string = "";
 
-    constructor(app: App) {
+    plugin: MarkdownDBPlugin;
+
+    constructor(app: App, plugin: MarkdownDBPlugin) {
         super(app);
+        this.plugin = plugin;
+        this.githubUsername = this.plugin.settings.githubUsername || "";
+        this.githubToken = this.plugin.settings.githubToken || "";
     }
 
     onOpen() {
@@ -68,9 +100,10 @@ export class ImportModal extends Modal {
             .addDropdown((dropdown) => {
                 dropdown.addOption("obsidian", "Obsidian Folder");
                 dropdown.addOption("github-stars", "Github Stars");
+                dropdown.addOption("github-pull", "Github Pull Requests");
                 dropdown.setValue(this.sourceType);
                 dropdown.onChange((value) => {
-                    this.sourceType = value as "obsidian" | "github-stars";
+                    this.sourceType = value as "obsidian" | "github-stars" | "github-pull";
                     this.display(); // Refresh to show relevant source options
                 });
             });
@@ -220,13 +253,17 @@ export class ImportModal extends Modal {
                 new Notice("Github username is required");
                 return;
             }
-            await this.importFromGithub();
+            if (this.sourceType === "github-stars") {
+                await this.importFromGithub();
+            } else {
+                await this.importFromGithubPR();
+            }
         }
     }
 
-    async saveToDatabase(contentToAppend: string, report: { total: number, skipped: number }) {
+    async saveToDatabase(contentToAppend: string, report: { total: number, skipped?: number, updated?: number }, isFullContent: boolean = false) {
         if (contentToAppend === "") {
-             if (report.skipped === report.total && report.total > 0) {
+             if (report.skipped && report.skipped === report.total && report.total > 0) {
                  new Notice("All items were duplicates. Nothing new to import.");
              } else if (report.total === 0) {
                  new Notice("No items found to import.");
@@ -242,10 +279,15 @@ export class ImportModal extends Modal {
         } else {
             const file = this.app.vault.getAbstractFileByPath(this.existingDbPath);
             if (file && file instanceof TFile) {
-                await this.app.vault.process(file, (data) => {
-                    return data + "\n" + contentToAppend;
-                });
-                new Notice(`Imported ${report.total - report.skipped} items to "${file.basename}" (Skipped ${report.skipped} duplicates).`);
+                if (isFullContent) {
+                    await this.app.vault.modify(file, contentToAppend);
+                    new Notice(`Imported ${report.total} items to "${file.basename}" (Updated: ${report.updated || 0}, New: ${report.total - (report.updated || 0)}).`);
+                } else {
+                    await this.app.vault.process(file, (data) => {
+                        return data + "\n" + contentToAppend;
+                    });
+                    new Notice(`Imported ${report.total - (report.skipped || 0)} items to "${file.basename}" (Skipped ${report.skipped || 0} duplicates).`);
+                }
             } else {
                 throw new Error("Existing database file not found: " + this.existingDbPath);
             }
@@ -391,18 +433,12 @@ export class ImportModal extends Modal {
                 }
             }
 
-            let contentToAppend = "";
-            let skippedCount = 0;
+            let updatedContent = existingContent;
+            let newContent = "";
+            let updatedCount = 0;
 
             for (const repo of stars) {
                 const title = repo.name.replace(/[\\/:*?"<>|]/g, "-"); 
-                
-                // Deduplication check: check if Title (Name) already exists in content
-                const titleRegex = new RegExp(`^##\\s+${title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`, 'm');
-                if (existingContent && titleRegex.test(existingContent)) {
-                    skippedCount++;
-                    continue;
-                }
                 
                 // Map fields
                 const aliases = `[aliases::multi(${repo.name})]`; 
@@ -427,10 +463,28 @@ export class ImportModal extends Modal {
 
                 const properties = `%% ${aliases} ${starsCount} ${url} ${owner} ${language} ${description} ${created} ${modified} ${tags} %%`;
 
-                contentToAppend += `## ${title}\n${properties}\n\n${repo.description || ""}\n\n`;
+                const itemContent = `## ${title}\n${properties}\n\n${repo.description || ""}\n\n`;
+
+                // Deduplication check: hot update if exists
+                const titleRegex = new RegExp(`^##\\s+${title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`, 'm');
+                
+                // Full block regex: matches ## Title ... until next ## or EOF
+                // We use lookahead (?=^##\s|$) to stop before next header
+                const recordRegex = new RegExp(`^##\\s+${title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$(?:\\r?\\n|\\r)(?:[\\s\\S]*?)(?=(?:^##\\s)|$)`, 'm');
+
+                if (existingContent && recordRegex.test(updatedContent)) {
+                    updatedContent = updatedContent.replace(recordRegex, itemContent.trimEnd() + "\n\n");
+                    updatedCount++;
+                } else {
+                    newContent += itemContent;
+                }
             }
 
-            await this.saveToDatabase(contentToAppend, { total: stars.length, skipped: skippedCount });
+            if (this.mode === "append") {
+                await this.saveToDatabase(updatedContent + newContent, { total: stars.length, updated: updatedCount }, true);
+            } else {
+                await this.saveToDatabase(newContent, { total: stars.length, updated: 0 }, false);
+            }
 
         } catch (e) {
             console.error(e);
@@ -478,5 +532,138 @@ export class ImportModal extends Modal {
             }
         }
         return allStars;
+    }
+
+    async importFromGithubPR() {
+        this.close();
+        new Notice(`Starting PR import for user: ${this.githubUsername}...`);
+
+        try {
+            const allPrs = await this.fetchGithubPRs(this.githubUsername);
+            // Filter out closed and unmerged PRs (discarded)
+            const prs = allPrs.filter(pr => !(pr.state === 'closed' && !pr.pull_request?.merged_at));
+
+            new Notice(`Fetched ${allPrs.length} PRs. Processing ${prs.length} valid items...`);
+            
+            // Read existing content if appending
+            let existingContent = "";
+            if (this.mode === "append" && this.existingDbPath) {
+                const file = this.app.vault.getAbstractFileByPath(this.existingDbPath);
+                if (file && file instanceof TFile) {
+                    existingContent = await this.app.vault.read(file);
+                }
+            }
+
+            let updatedContent = existingContent;
+            let newContent = "";
+            let updatedCount = 0;
+
+            for (const pr of prs) {
+                const title = pr.title.replace(/[\\/:*?"<>|]/g, "-");
+
+                // Map fields
+                const repoNameRaw = pr.repository_url.split("/").pop() || "";
+                
+                const repoName = `[repo_name::text(${repoNameRaw})]`;
+                
+                const stateStr = pr.state.charAt(0).toUpperCase() + pr.state.slice(1);
+                const state = `[state::select(${stateStr})]`;
+                
+                const reviewStateStr = pr.draft ? "Draft" : "Ready";
+                const reviewState = `[review_state::select(${reviewStateStr})]`;
+                
+                const isMerged = !!(pr.pull_request?.merged_at);
+                const merged = `[merged::boolean(${isMerged})]`;
+                
+                const roleRaw = pr.author_association.toLowerCase();
+                const roleStr = roleRaw.charAt(0).toUpperCase() + roleRaw.slice(1);
+                const authorRole = `[author_role::select(${roleStr})]`;
+                
+                const updatedDate = new Date(pr.updated_at);
+                const updatedFormatted = `${updatedDate.getFullYear()}-${String(updatedDate.getMonth() + 1).padStart(2, '0')}-${String(updatedDate.getDate()).padStart(2, '0')}`;
+                const updatedAt = `[updated_at::date(${updatedFormatted})]`;
+
+                const url = `[url::link(${pr.html_url})]`;
+
+                const properties = `%% ${state} ${reviewState} ${merged} ${repoName} ${url} ${authorRole} ${updatedAt} %%`;
+
+                let bodyContent = pr.body || "";
+                if (bodyContent) {
+                  bodyContent = bodyContent.replace(/^(#+)/gm, "##$1");
+                }
+                
+                const itemContent = `## ${title}\n${properties}\n\n${bodyContent}\n\n`;
+
+                // Deduplication check: hot update if exists
+                const titleRegex = new RegExp(`^##\\s+${title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`, 'm');
+                
+                // Full block regex
+                const recordRegex = new RegExp(`^##\\s+${title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$(?:\\r?\\n|\\r)(?:[\\s\\S]*?)(?=(?:^##\\s)|$)`, 'm');
+
+                if (existingContent && recordRegex.test(updatedContent)) {
+                    updatedContent = updatedContent.replace(recordRegex, itemContent.trimEnd() + "\n\n");
+                    updatedCount++;
+                } else {
+                    newContent += itemContent;
+                }
+            }
+
+            if (this.mode === "append") {
+                await this.saveToDatabase(updatedContent + newContent, { total: prs.length, updated: updatedCount }, true);
+            } else {
+                await this.saveToDatabase(newContent, { total: prs.length, updated: 0 }, false);
+            }
+
+        } catch (e) {
+            console.error(e);
+            new Notice("Import failed: " + e.message);
+        }
+    }
+
+    async fetchGithubPRs(username: string): Promise<GithubPRItem[]> {
+        let page = 1;
+        const perPage = 100;
+        let allItems: GithubPRItem[] = [];
+        let hasMore = true;
+
+        while (hasMore) {
+            const query = `author:${username} type:pr`;
+            const url = `https://api.github.com/search/issues?q=${encodeURIComponent(query)}&per_page=${perPage}&page=${page}&sort=created&order=desc`;
+            
+            const params: RequestUrlParam = {
+                url: url,
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/vnd.github.v3+json',
+                    'User-Agent': 'Obsidian-Markdown-DB-Plugin'
+                }
+            };
+
+            if (this.githubToken) {
+                params.headers['Authorization'] = `token ${this.githubToken}`;
+            }
+
+            try {
+                const response = await requestUrl(params);
+                const data = response.json as GithubSearchResponse;
+                const items = data.items;
+
+                if (!items || items.length === 0) {
+                    hasMore = false;
+                } else {
+                    allItems = allItems.concat(items);
+                    if (items.length < perPage) {
+                        hasMore = false;
+                    } else {
+                        page++;
+                        if (page > 10) hasMore = false; 
+                    }
+                }
+            } catch (e) {
+                console.error("Failed to fetch page " + page, e);
+                throw e;
+            }
+        }
+        return allItems;
     }
 }

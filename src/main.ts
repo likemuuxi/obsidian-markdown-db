@@ -22,6 +22,7 @@ export default class MarkdownDBPlugin extends Plugin {
             this.app.workspace.onLayoutReady(() => {
                 const githubService = new GithubSyncService(this.app, this.settings);
                 githubService.syncStars();
+                githubService.syncPRs();
             });
         }
 
@@ -87,7 +88,7 @@ export default class MarkdownDBPlugin extends Plugin {
             id: "importer-db",
             name: "Import to Database",
             callback: () => {
-                new ImportModal(this.app).open();
+                new ImportModal(this.app, this).open();
             }
         });
 

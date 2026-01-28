@@ -21,10 +21,8 @@ export interface MarkdownDBSettings {
     autoSyncGithub: boolean;
     githubUsername: string;
     githubToken: string;
-    githubSyncTargetDb: string;
-    
-    // Deprecated fields (kept for migration types, can be optional or handled via casting in main.ts)
-    // We remove them from the interface to force update, but we'll cast `any` during migration.
+    githubSyncStarsDb: string;
+    githubSyncPrsDb: string;
 }
 
 export const DEFAULT_SETTINGS: MarkdownDBSettings = {
@@ -34,7 +32,8 @@ export const DEFAULT_SETTINGS: MarkdownDBSettings = {
     autoSyncGithub: false,
     githubUsername: "",
     githubToken: "",
-    githubSyncTargetDb: ""
+    githubSyncStarsDb: "",
+    githubSyncPrsDb: ""
 }
 
 export class MarkdownDBSettingTab extends PluginSettingTab {
@@ -94,6 +93,83 @@ export class MarkdownDBSettingTab extends PluginSettingTab {
         containerEl.createEl('h2', {text: 'Github Auto-Sync'});
 
         new Setting(containerEl)
+            .setName('Github Username')
+            .addText(text => text
+                .setValue(this.plugin.settings.githubUsername)
+                .onChange(async (value) => {
+                    this.plugin.settings.githubUsername = value;
+                    await this.plugin.saveSettings();
+                }));
+
+        new Setting(containerEl)
+            .setName('Github Token')
+            .setDesc('Optional, but recommended for private repos and higher rate limits.')
+            .addText(text => text
+                .setPlaceholder('ghp_...')
+                .setValue(this.plugin.settings.githubToken)
+                .onChange(async (value) => {
+                    this.plugin.settings.githubToken = value;
+                    await this.plugin.saveSettings();
+                }));
+
+        // DB File Picker for Stars
+        new Setting(containerEl)
+            .setName('Target Database (Stars)')
+            .setDesc('Select the database file to sync Stars into.')
+            .addDropdown((dropdown) => {
+                const files = this.app.vault.getMarkdownFiles().filter(file => {
+                    const cache = this.app.metadataCache.getFileCache(file);
+                    return cache?.frontmatter?.["markdown-db"] === true || cache?.frontmatter?.["markdown-db"] === "true";
+                });
+
+                if (files.length === 0) {
+                    dropdown.addOption("", "No databases found");
+                } else {
+                    files.sort((a, b) => a.path.localeCompare(b.path));
+                    files.forEach((file) => {
+                        dropdown.addOption(file.path, file.path);
+                    });
+                    
+                    // Default if empty
+                    if (!this.plugin.settings.githubSyncStarsDb && files.length > 0) {
+                         // Don't auto-set, let user choose
+                    }
+                }
+
+                dropdown.setValue(this.plugin.settings.githubSyncStarsDb);
+                dropdown.onChange(async (value) => {
+                    this.plugin.settings.githubSyncStarsDb = value;
+                    await this.plugin.saveSettings();
+                });
+            });
+
+        // DB File Picker for PRs
+        new Setting(containerEl)
+            .setName('Target Database (PRs)')
+            .setDesc('Select the database file to sync PRs into.')
+            .addDropdown((dropdown) => {
+                const files = this.app.vault.getMarkdownFiles().filter(file => {
+                    const cache = this.app.metadataCache.getFileCache(file);
+                    return cache?.frontmatter?.["markdown-db"] === true || cache?.frontmatter?.["markdown-db"] === "true";
+                });
+
+                if (files.length === 0) {
+                    dropdown.addOption("", "No databases found");
+                } else {
+                    files.sort((a, b) => a.path.localeCompare(b.path));
+                    files.forEach((file) => {
+                        dropdown.addOption(file.path, file.path);
+                    });
+                }
+
+                dropdown.setValue(this.plugin.settings.githubSyncPrsDb);
+                dropdown.onChange(async (value) => {
+                    this.plugin.settings.githubSyncPrsDb = value;
+                    await this.plugin.saveSettings();
+                });
+            });
+
+        new Setting(containerEl)
             .setName('Enable Auto-Sync')
             .setDesc('Automatically fetch Github stars on Obsidian startup.')
             .addToggle(toggle => toggle
@@ -101,57 +177,14 @@ export class MarkdownDBSettingTab extends PluginSettingTab {
                 .onChange(async (value) => {
                     this.plugin.settings.autoSyncGithub = value;
                     await this.plugin.saveSettings();
-                    this.display(); // Refresh to show/hide dependent settings
                 }));
+        
+        // Property Management Section (Existing code...)
+        this.renderPropertySettings(containerEl);
+    }
 
-        if (this.plugin.settings.autoSyncGithub) {
-            new Setting(containerEl)
-                .setName('Github Username')
-                .addText(text => text
-                    .setValue(this.plugin.settings.githubUsername)
-                    .onChange(async (value) => {
-                        this.plugin.settings.githubUsername = value;
-                        await this.plugin.saveSettings();
-                    }));
-
-            new Setting(containerEl)
-                .setName('Github Token (Optional)')
-                .setDesc('Required for private repos or to avoid rate limits.')
-                .addText(text => text
-                    .setPlaceholder('ghp_...')
-                    .setValue(this.plugin.settings.githubToken)
-                    .onChange(async (value) => {
-                        this.plugin.settings.githubToken = value;
-                        await this.plugin.saveSettings();
-                    }));
-
-            new Setting(containerEl)
-                .setName('Target Database')
-                .setDesc('Select the database file to save stars to.')
-                .addDropdown(dropdown => {
-                    const files = this.app.vault.getMarkdownFiles().filter(file => {
-                        const cache = this.app.metadataCache.getFileCache(file);
-                        return cache?.frontmatter?.['markdown-db'] === true || cache?.frontmatter?.['markdown-db'] === 'true';
-                    });
-
-                    if (files.length === 0) {
-                        dropdown.addOption("", "No databases found");
-                    } else {
-                        files.sort((a, b) => a.path.localeCompare(b.path));
-                        files.forEach((file) => {
-                            dropdown.addOption(file.path, file.path);
-                        });
-                    }
-
-                    dropdown.setValue(this.plugin.settings.githubSyncTargetDb);
-                    dropdown.onChange(async (value) => {
-                        this.plugin.settings.githubSyncTargetDb = value;
-                        await this.plugin.saveSettings();
-                    });
-                });
-        }
-
-        containerEl.createEl('h2', {text: 'Properties Manage'});
+    renderPropertySettings(containerEl: HTMLElement) {
+        containerEl.createEl('h2', {text: 'Database Properties'});
 
         const mainContainer = containerEl.createDiv({ cls: 'markdown-db-settings-container' });
 
