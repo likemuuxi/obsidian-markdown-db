@@ -124,6 +124,12 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
     // Pagination state
     const [pageSize, setPageSize] = useState(25);
     const [currentPage, setCurrentPage] = useState(1);
+    const [pageInputValue, setPageInputValue] = useState("1");
+
+    // Sync input value when currentPage changes
+    React.useEffect(() => {
+        setPageInputValue(currentPage.toString());
+    }, [currentPage]);
 
     // Reset to page 1 when data changes (filters/sort)
     React.useEffect(() => {
@@ -547,9 +553,38 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                                             }}
                                             dangerouslySetInnerHTML={{ __html: prevIcon }}
                                         />
-                                        <span style={{ color: "var(--text-muted)" }}>
-                                            {currentPage} / {totalPages || 1}
-                                        </span>
+                                        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                                            <input 
+                                                type="text"
+                                                value={pageInputValue}
+                                                onChange={(e) => setPageInputValue(e.target.value)}
+                                                onBlur={() => setPageInputValue(currentPage.toString())}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === "Enter") {
+                                                        let p = parseInt(pageInputValue);
+                                                        if (isNaN(p)) p = 1;
+                                                        if (p < 1) p = 1;
+                                                        if (p > totalPages) p = totalPages;
+                                                        setCurrentPage(p);
+                                                    }
+                                                }}
+                                                onClick={(e) => e.stopPropagation()}
+                                                style={{
+                                                    width: "30px",
+                                                    textAlign: "center",
+                                                    background: "var(--background-primary)",
+                                                    border: "1px solid var(--background-modifier-border)",
+                                                    borderRadius: "4px",
+                                                    color: "var(--text-normal)",
+                                                    padding: "0 2px",
+                                                    fontSize: "12px",
+                                                    height: "20px"
+                                                }}
+                                            />
+                                            <span style={{ color: "var(--text-muted)" }}>
+                                                / {totalPages || 1}
+                                            </span>
+                                        </div>
                                         <button 
                                             onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                                             disabled={currentPage === totalPages || totalPages === 0}
