@@ -115,6 +115,23 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
         return records;
     }, [data.records, data.config.filters, data.config.sort]);
 
+    // Pagination state
+    const [pageSize, setPageSize] = useState(25);
+    const [currentPage, setCurrentPage] = useState(1);
+
+    // Reset to page 1 when data changes (filters/sort)
+    React.useEffect(() => {
+        setCurrentPage(1);
+    }, [processedRecords]);
+
+    const paginatedRecords = useMemo(() => {
+        const start = (currentPage - 1) * pageSize;
+        const end = start + pageSize;
+        return processedRecords.slice(start, end);
+    }, [processedRecords, currentPage, pageSize]);
+
+    const totalPages = Math.ceil(processedRecords.length / pageSize);
+
     const columns = ["Name", ...propertyKeys, ...(data.config.showContent !== false ? ["Content"] : [])];
     const displayTitle = fileName || data.title;
 
@@ -268,6 +285,26 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
         return "";
     }, []);
 
+    const prevIcon = useMemo(() => {
+        const icon = getIcon("chevron-left");
+        if (icon) {
+            icon.style.width = "14px";
+            icon.style.height = "14px";
+            return icon.outerHTML;
+        }
+        return "&lt;";
+    }, []);
+
+    const nextIcon = useMemo(() => {
+        const icon = getIcon("chevron-right");
+        if (icon) {
+            icon.style.width = "14px";
+            icon.style.height = "14px";
+            return icon.outerHTML;
+        }
+        return "&gt;";
+    }, []);
+
     return (
         <div className="markdown-db-table-container">
             <table className="markdown-db-table" style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -344,7 +381,7 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                     </tr>
                 </thead>
                 <tbody>
-                    {processedRecords.map((record, index) => (
+                    {paginatedRecords.map((record, index) => (
                         <tr 
                             key={index} 
                             style={{
@@ -468,8 +505,63 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                             borderBottom: "1px solid var(--background-modifier-border)"
                         }}
                     >
-                        <td colSpan={columns.length + 2} style={{ padding: "8px 12px", color: "var(--text-muted)", cursor: "pointer", borderRight: "none" }}>
-                            + New
+                        <td colSpan={columns.length + 2} style={{ padding: "0", color: "var(--text-muted)", cursor: "pointer", borderRight: "none" }}>
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px" }}>
+                                <span style={{
+                                    position: "sticky",
+                                    background: "none",
+                                    left: "0px",
+                                    paddingRight: "8px"
+                                }}>+ New</span>
+                                {totalPages > 1 && (
+                                    <div 
+                                        onClick={(e) => e.stopPropagation()}
+                                        style={{
+                                            position: "sticky",
+                                            right: "0px",
+                                            display: "flex",
+                                            alignItems: "center",
+                                            gap: "8px",
+                                            paddingLeft: "8px",
+                                            fontSize: "12px"
+                                        }}
+                                    >
+                                        <button 
+                                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                            disabled={currentPage === 1}
+                                            style={{ 
+                                                background: "none",
+                                                border: "none",
+                                                padding: "2px 6px",
+                                                cursor: currentPage === 1 ? "default" : "pointer",
+                                                opacity: currentPage === 1 ? 0.3 : 0.7,
+                                                color: "var(--text-normal)",
+                                                display: "flex",
+                                                alignItems: "center"
+                                            }}
+                                            dangerouslySetInnerHTML={{ __html: prevIcon }}
+                                        />
+                                        <span style={{ color: "var(--text-muted)" }}>
+                                            {currentPage} / {totalPages || 1}
+                                        </span>
+                                        <button 
+                                            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                            disabled={currentPage === totalPages || totalPages === 0}
+                                            style={{ 
+                                                background: "none",
+                                                border: "none",
+                                                padding: "2px 6px",
+                                                cursor: currentPage === totalPages || totalPages === 0 ? "default" : "pointer",
+                                                opacity: currentPage === totalPages || totalPages === 0 ? 0.3 : 0.7,
+                                                color: "var(--text-normal)",
+                                                display: "flex",
+                                                alignItems: "center"
+                                            }}
+                                            dangerouslySetInnerHTML={{ __html: nextIcon }}
+                                        />
+                                    </div>
+                                )}
+                            </div>
                         </td>
                     </tr>
                 </tbody>
