@@ -212,6 +212,13 @@ export class MarkdownDBView extends TextFileView {
 
         // Only add to file
         await addPropertyToAllRecords(this.app, this.file, name, type);
+
+        const dbData = parseFile(this.fileContent);
+        
+        // Update column types
+        const newTypes = { ...(dbData.config.columnTypes || {}), [name]: type };
+        await updateConfig(this.app, this.file, "db-column-types", JSON.stringify(newTypes));
+
     }
 
     handleSaveToGlobal = async (name: string, type?: PropertyType) => {
@@ -396,6 +403,46 @@ export class MarkdownDBView extends TextFileView {
                         this.refresh();
                     });
             });
+        }
+
+        menu.addItem((item) => {
+            item
+                .setTitle("Hide property")
+                .setIcon("eye-off")
+                .onClick(async () => {
+                    if (this.file && config) {
+                        const currentHidden = config.hiddenColumns || [];
+                        const newHidden = [...currentHidden, key];
+                        
+                        await updateConfig(this.app, this.file, "db-hide-columns", JSON.stringify(newHidden));
+                    }
+                });
+        });
+
+        if (config) {
+            const hiddenColumns = config.hiddenColumns || [];
+            if (hiddenColumns.length > 0) {
+                 menu.addItem((item) => {
+                     item
+                         .setTitle("Unhide property")
+                         .setIcon("eye")
+                         .setSection("view");
+                     
+                     const submenu = (item as any).setSubmenu() as Menu;
+                     
+                     hiddenColumns.forEach(hiddenKey => {
+                         submenu.addItem((subItem) => {
+                             subItem.setTitle(hiddenKey)
+                                    .onClick(async () => {
+                                        if (this.file) {
+                                            const newHidden = hiddenColumns.filter(k => k !== hiddenKey);
+                                            await updateConfig(this.app, this.file, "db-hide-columns", JSON.stringify(newHidden));
+                                        }
+                                    });
+                         });
+                     });
+                 });
+            }
         }
 
         menu.addSeparator();

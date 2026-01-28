@@ -48,6 +48,7 @@ export interface DatabaseConfig {
     sort?: SortRule[];
     filters?: FilterRule[];
     columnTypes?: Record<string, PropertyType>;
+    hiddenColumns?: string[];
 }
 
 export interface TypedValue {

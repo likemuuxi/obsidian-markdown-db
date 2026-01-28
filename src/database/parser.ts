@@ -161,5 +161,17 @@ function handleConfigProperty(key: string, typedValue: TypedValue, config: Datab
                  config.columnTypes = JSON.parse(value);
              } catch(e) {}
          }
+    } else if (key === "db-hide-columns") {
+        if (value.startsWith("[") && value.endsWith("]")) {
+            try {
+                config.hiddenColumns = JSON.parse(value);
+            } catch (e) {
+                 // Fallback to simple split if JSON parse fails (e.g. manual edit without quotes)
+                 try {
+                    const inner = value.substring(1, value.length - 1);
+                    config.hiddenColumns = inner.split(",").map(s => s.trim().replace(/^['"]|['"]$/g, ""));
+                 } catch(e2) {}
+            }
+        }
     }
 }

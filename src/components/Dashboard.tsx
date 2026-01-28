@@ -306,6 +306,48 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
             });
         }
 
+        menu.addItem((item) => {
+            item
+                .setTitle("Hide property")
+                .setIcon("eye-off")
+                .onClick(async () => {
+                    if (selectedFile && dbData) {
+                        const currentHidden = dbData.config.hiddenColumns || [];
+                        const newHidden = [...currentHidden, key];
+                        
+                        await updateConfig(app, selectedFile, "db-hide-columns", JSON.stringify(newHidden));
+                        await reloadCurrentFile();
+                    }
+                });
+        });
+
+        if (dbData) {
+            const hiddenColumns = dbData.config.hiddenColumns || [];
+            if (hiddenColumns.length > 0) {
+                 menu.addItem((item) => {
+                     item
+                         .setTitle("Unhide property")
+                         .setIcon("eye")
+                         .setSection("view");
+                     
+                     const submenu = (item as any).setSubmenu() as Menu;
+                     
+                     hiddenColumns.forEach(hiddenKey => {
+                         submenu.addItem((subItem) => {
+                             subItem.setTitle(hiddenKey)
+                                    .onClick(async () => {
+                                        if (selectedFile) {
+                                            const newHidden = hiddenColumns.filter(k => k !== hiddenKey);
+                                            await updateConfig(app, selectedFile, "db-hide-columns", JSON.stringify(newHidden));
+                                            await reloadCurrentFile();
+                                        }
+                                    });
+                         });
+                     });
+                 });
+            }
+        }
+
         menu.addSeparator();
 
         menu.addItem((item) => {

@@ -31,15 +31,21 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
     
     const propertyKeys = useMemo(() => {
         const all = Array.from(data.allKeys);
-        const order = data.config.columnOrder || [];
+        const order = data.config.columnOrder;
+        const hidden = data.config.hiddenColumns || [];
         
-        // Keys present in order
-        const ordered = order.filter(k => all.includes(k));
-        // Keys not present in order
-        const remaining = all.filter(k => !ordered.includes(k));
+        let keys = all;
         
-        return [...ordered, ...remaining];
-    }, [data.allKeys, data.config.columnOrder]);
+        if (order) {
+            const ordered = order.filter(k => all.includes(k));
+            const remaining = all.filter(k => !order.includes(k));
+            keys = [...ordered, ...remaining];
+        } else {
+             keys = all;
+        }
+        
+        return keys.filter(k => !hidden.includes(k));
+    }, [data.allKeys, data.config.columnOrder, data.config.hiddenColumns]);
 
     const processedRecords = useMemo(() => {
         let records = [...data.records];
@@ -348,7 +354,7 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                                     userSelect: "none"
                                 }}
                                 onContextMenu={(e) => {
-                                    if (isProperty) {
+                                    if (isProperty || col === "Name") {
                                         onHeaderContextMenu(col, e);
                                     }
                                 }}
