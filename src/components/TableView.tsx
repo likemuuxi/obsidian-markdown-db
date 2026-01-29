@@ -149,6 +149,7 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
 
     const [menuOpen, setMenuOpen] = useState(false);
     const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 });
+    const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
 
     const handleAddClick = (e: React.MouseEvent) => {
         const rect = (e.target as HTMLElement).getBoundingClientRect();
@@ -159,15 +160,24 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
     const handleDragStart = (e: React.DragEvent, key: string) => {
         e.dataTransfer.setData("text/plain", key);
         e.dataTransfer.effectAllowed = "move";
+        setDragOverColumn(null);
     };
 
-    const handleDragOver = (e: React.DragEvent) => {
+    const handleDragOver = (e: React.DragEvent, key: string) => {
         e.preventDefault();
         e.dataTransfer.dropEffect = "move";
+        if (dragOverColumn !== key) {
+            setDragOverColumn(key);
+        }
+    };
+
+    const handleDragEnd = () => {
+        setDragOverColumn(null);
     };
 
     const handleDrop = (e: React.DragEvent, targetKey: string) => {
         e.preventDefault();
+        setDragOverColumn(null);
         const sourceKey = e.dataTransfer.getData("text/plain");
         
         if (sourceKey === targetKey) return;
@@ -346,12 +356,16 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                             <th key={col} 
                                 draggable={isProperty}
                                 onDragStart={(e) => isProperty && handleDragStart(e, col)}
-                                onDragOver={(e) => isProperty && handleDragOver(e)}
+                                onDragOver={(e) => isProperty && handleDragOver(e, col)}
                                 onDrop={(e) => isProperty && handleDrop(e, col)}
+                                onDragEnd={handleDragEnd}
                                 style={{
                                     textAlign: "left",
                                     padding: "8px",
                                     borderBottom: "2px solid var(--background-modifier-border)",
+                                    boxShadow: dragOverColumn === col ? "inset 3px 0 0 0 var(--interactive-accent)" : "none",
+                                    backgroundColor: dragOverColumn === col ? "var(--background-modifier-hover)" : undefined,
+                                    transition: "box-shadow 0.1s, background-color 0.1s",
                                     fontWeight: "600",
                                     color: "var(--text-muted)",
                                     fontSize: "12px",
