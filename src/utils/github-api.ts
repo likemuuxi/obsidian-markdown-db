@@ -210,15 +210,16 @@ export function formatPRToMarkdown(pr: GithubPRItem): { title: string, content: 
 
     const properties = `%% ${repoName} ${merged} ${state} ${reviewState} ${authorRole} ${url} ${updatedAt} ${labels} %%`;
 
-    let bodyContent = pr.body || "";
-    if (bodyContent) {
-        // Downgrade headings to start from level 3 (H3) if they are H1 or H2? 
-        // The original code does: replace(/^(#+)/gm, "##$1"); which adds ## to everything.
-        // So # -> ###, ## -> ####
-        bodyContent = bodyContent.replace(/^(#+)/gm, "##$1");
-    }
+    // let bodyContent = pr.body || "";
+    // if (bodyContent) {
+    //     // Downgrade headings to start from level 3 (H3) if they are H1 or H2? 
+    //     // The original code does: replace(/^(#+)/gm, "##$1"); which adds ## to everything.
+    //     // So # -> ###, ## -> ####
+    //     bodyContent = bodyContent.replace(/^(#+)/gm, "##$1");
+    // }
     
-    const content = `## ${title}\n${properties}\n\n${bodyContent}\n\n`;
+    // const content = `## ${title}\n${properties}\n\n${bodyContent}\n\n`;
+    const content = `## ${title}\n${properties}\n\n`;
 
     return { title, content };
 }

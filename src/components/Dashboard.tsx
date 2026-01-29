@@ -9,6 +9,7 @@ import { parseFile } from "../database/parser";
 import { PropertyType } from "../database/schema";
 import { PropertyConfig } from "../settings";
 import type MyPlugin from "../main";
+import { VIEW_TYPE_MARKDOWN_DB } from "../views/view";
 import { RenameModal } from "../modals/RenameModal";
 import { CreateDatabaseModal } from "../modals/CreateDatabaseModal";
 import { 
@@ -411,10 +412,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
             item
                 .setTitle("Jump to file")
                 .setIcon("external-link")
-                .onClick(() => {
-                    const leaf = app.workspace.getLeaf("tab");
-                    leaf.openFile(file);
+                .onClick(async () => {
                     onClose();
+                    const leaf = app.workspace.getLeaf("tab");
+                    await leaf.openFile(file);
+                    await leaf.setViewState({
+                        type: VIEW_TYPE_MARKDOWN_DB,
+                        state: { file: file.path }
+                    });
                 })
         );
         
@@ -499,6 +504,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
                             key={file.path} 
                             className={`markdown-db-file-item ${selectedFile?.path === file.path ? "active" : ""}`}
                             onClick={() => setSelectedFile(file)}
+                            onDoubleClick={async () => {
+                                onClose();
+                                const leaf = app.workspace.getLeaf("tab");
+                                await leaf.openFile(file);
+                                await leaf.setViewState({
+                                    type: VIEW_TYPE_MARKDOWN_DB,
+                                    state: { file: file.path }
+                                });
+                            }}
                             onContextMenu={(e) => handleFileContextMenu(file, e)}
                         >
                             <Icon name="table-properties" className="markdown-db-file-icon" />

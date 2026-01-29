@@ -125,16 +125,30 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
     const [pageSize, setPageSize] = useState(25);
     const [currentPage, setCurrentPage] = useState(1);
     const [pageInputValue, setPageInputValue] = useState("1");
+    
+    const isAddingRow = React.useRef(false);
 
     // Sync input value when currentPage changes
     React.useEffect(() => {
         setPageInputValue(currentPage.toString());
     }, [currentPage]);
 
-    // Reset to page 1 when data changes (filters/sort)
+    // Reset to page 1 when filters or sort change
     React.useEffect(() => {
         setCurrentPage(1);
-    }, [processedRecords]);
+    }, [JSON.stringify(data.config.filters), JSON.stringify(data.config.sort)]);
+
+    // Adjust pagination when data length changes (Add/Remove)
+    React.useEffect(() => {
+        const newTotal = Math.ceil(processedRecords.length / pageSize) || 1;
+        
+        if (isAddingRow.current) {
+            setCurrentPage(newTotal);
+            isAddingRow.current = false;
+        } else if (currentPage > newTotal) {
+            setCurrentPage(newTotal);
+        }
+    }, [processedRecords.length, pageSize, currentPage]);
 
     const paginatedRecords = useMemo(() => {
         const start = (currentPage - 1) * pageSize;
@@ -526,7 +540,10 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                     ))}
                     <tr 
                         className="markdown-db-new-row" 
-                        onClick={onAddRecord}
+                        onClick={() => {
+                            isAddingRow.current = true;
+                            onAddRecord();
+                        }}
                         style={{
                             borderBottom: "1px solid var(--background-modifier-border)"
                         }}

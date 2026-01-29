@@ -52,8 +52,6 @@ export class MarkdownDBSettingTab extends PluginSettingTab {
         const {containerEl} = this;
         containerEl.empty();
 
-        containerEl.createEl('h2', {text: 'Markdown DB Settings'});
-
         // Tab Header
         const tabHeader = containerEl.createDiv({ cls: 'markdown-db-settings-tabs' });
         
