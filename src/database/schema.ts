@@ -71,6 +71,7 @@ export interface DatabaseRecord {
 export interface DatabaseData {
     title: string;
     config: DatabaseConfig;
+    views: Record<string, DatabaseConfig>;
     records: DatabaseRecord[];
     allKeys: Set<string>;
 }

@@ -5,8 +5,12 @@ import { createRoot, Root } from "react-dom/client";
 import { TableView } from "../components/TableView";
 import { Toolbar } from "../components/Toolbar";
 import { parseFile} from "../database/parser";
-import { DatabaseRecord, DatabaseConfig, PropertyType } from "../database/schema";
-import { updateProperty, renameRecord, addRecord, updateConfig, deleteRecord, updateContent, addPropertyToAllRecords, deletePropertyFromAllRecords, updateTitle, reorderRecords, renamePropertyInAllRecords } from "../database/writer";
+import { DatabaseRecord, DatabaseConfig, PropertyType, FilterRule, SortRule } from "../database/schema";
+import { updateProperty, renameRecord, addRecord, updateConfig, deleteRecord, updateContent, addPropertyToAllRecords, deletePropertyFromAllRecords, updateTitle, reorderRecords, renamePropertyInAllRecords,
+    deleteView,
+    renameView,
+    reorderViews
+} from "../database/writer";
 import { RecordModal } from "../modals/RecordModal";
 import { RenameModal } from "../modals/RenameModal";
 import type MarkdownDBPlugin from "../main";
@@ -32,6 +36,14 @@ const MarkdownDBApp = (props: {
     }, [props.fileContent, props.file]);
 
     const [searchTerm, setSearchTerm] = useState("");
+    const [currentViewName, setCurrentViewName] = useState<string | null>(null);
+
+    const currentConfig = useMemo(() => {
+        if (currentViewName && dbData.views && dbData.views[currentViewName]) {
+            return dbData.views[currentViewName];
+        }
+        return dbData.config;
+    }, [dbData, currentViewName]);
 
     const filteredRecords = useMemo(() => {
         if (!searchTerm) return dbData.records;
@@ -56,7 +68,7 @@ const MarkdownDBApp = (props: {
     };
 
     const handleOpenRecord = (record: DatabaseRecord) => {
-        props.view.handleOpenRecord(record, dbData.config);
+        props.view.handleOpenRecord(record, currentConfig);
     };
 
     const handleAddRecord = () => {
@@ -68,7 +80,45 @@ const MarkdownDBApp = (props: {
     };
 
     const handleUpdateConfig = (key: string, value: string) => {
-        if (props.file) props.view.handleUpdateConfig(key, value);
+        if (props.file) props.view.handleUpdateConfig(key, value, currentViewName || undefined);
+    };
+
+    const handleSwitchView = (name: string | null) => {
+        setCurrentViewName(name);
+    };
+
+    const handleAddView = async (name: string, config: { openMode: string, showContent: boolean, contentHeight: string, filters: FilterRule[], sorts: SortRule[] }) => {
+        if (!name) return;
+        
+        // Check for duplicate names
+        let newName = name;
+        const existingViews = dbData.views ? Object.keys(dbData.views) : [];
+        let index = 1;
+        const originalName = newName;
+        
+        while (existingViews.includes(newName)) {
+            newName = `${originalName} ${index}`;
+            index++;
+        }
+        
+        if (props.file) {
+             // Initialize with user selected configs sequentially to avoid race conditions on view creation
+             await props.view.handleUpdateConfig("db-open-mode", config.openMode, newName);
+             await props.view.handleUpdateConfig("db-show-content", config.showContent ? "true" : "false", newName);
+             await props.view.handleUpdateConfig("db-content-height", config.contentHeight, newName);
+             
+             // Save filters (use explicit config from popup)
+             if (config.filters && config.filters.length > 0) {
+                 await props.view.handleUpdateConfig("db-filter", JSON.stringify(config.filters), newName);
+             }
+             
+             // Save sorts (use explicit config from popup)
+             if (config.sorts && config.sorts.length > 0) {
+                 await props.view.handleUpdateConfig("db-sort", JSON.stringify(config.sorts), newName);
+             }
+
+             setCurrentViewName(newName);
+        }
     };
 
     const handleUpdateTitle = (newTitle: string) => {
@@ -80,26 +130,59 @@ const MarkdownDBApp = (props: {
     };
 
     const handleHeaderContextMenu = (key: string, event: React.MouseEvent) => {
-        props.view.handleHeaderContextMenu(key, event, dbData.config, dbData.records);
+        props.view.handleHeaderContextMenu(key, event, currentConfig, displayData.records, currentViewName || undefined);
     };
 
     const handleReorderRecord = (fromIndex: number, toIndex: number) => {
         if (props.file) props.view.handleReorderRecord(fromIndex, toIndex);
     };
 
+    const handleRenameView = async (oldName: string, newName: string) => {
+        if (props.file) await props.view.handleRenameView(oldName, newName);
+        // Also update current view name if we renamed the active one
+        if (currentViewName === oldName) {
+            setCurrentViewName(newName);
+        }
+    };
+
+    const handleDeleteView = async (name: string) => {
+        if (props.file) await props.view.handleDeleteView(name);
+        // Switch to default view if we deleted the active one
+        if (currentViewName === name) {
+            setCurrentViewName(null);
+        }
+    };
+
+    const handleReorderViews = async (names: string[]) => {
+        if (props.file) await props.view.handleReorderViews(names);
+    };
+
+    const handleUpdateViewConfig = (viewName: string, key: string, value: string) => {
+        if (props.file) props.view.handleUpdateConfig(key, value, viewName);
+    };
+
     // Override data records with filtered ones for display
-    const displayData = { ...dbData, records: filteredRecords };
+    const displayData = { ...dbData, config: currentConfig, records: filteredRecords };
 
     return (
         <div className="markdown-db-container">
             <Toolbar
                 title={dbData.title}
-                config={dbData.config}
+                config={currentConfig}
                 onSearch={setSearchTerm}
                 onUpdateConfig={handleUpdateConfig}
                 onAddRecord={handleAddRecord}
                 onUpdateTitle={handleUpdateTitle}
                 allProperties={Array.from(dbData.allKeys)}
+                views={dbData.views ? Object.keys(dbData.views) : []}
+                currentView={currentViewName}
+                onSwitchView={handleSwitchView}
+                onAddView={handleAddView}
+                onRenameView={handleRenameView}
+                onDeleteView={handleDeleteView}
+                onReorderViews={handleReorderViews}
+                viewsConfig={dbData.views}
+                onUpdateViewConfig={handleUpdateViewConfig}
             />
             <TableView
                 app={props.view.app}
@@ -259,9 +342,9 @@ export class MarkdownDBView extends TextFileView {
         }
     }
 
-    handleUpdateConfig = async (key: string, value: string) => {
+    handleUpdateConfig = async (key: string, value: string, viewName?: string) => {
         if (this.file) {
-            await updateConfig(this.app, this.file, key, value);
+            await updateConfig(this.app, this.file, key, value, viewName);
         }
     }
 
@@ -274,6 +357,24 @@ export class MarkdownDBView extends TextFileView {
     handleReorderRecord = async (fromIndex: number, toIndex: number) => {
         if (this.file) {
             await reorderRecords(this.app, this.file, fromIndex, toIndex);
+        }
+    }
+
+    handleDeleteView = async (viewName: string) => {
+        if (this.file) {
+            await deleteView(this.app, this.file, viewName);
+        }
+    }
+
+    handleRenameView = async (oldName: string, newName: string) => {
+        if (this.file) {
+            await renameView(this.app, this.file, oldName, newName);
+        }
+    }
+
+    handleReorderViews = async (viewNames: string[]) => {
+        if (this.file) {
+            await reorderViews(this.app, this.file, viewNames);
         }
     }
 
@@ -336,7 +437,7 @@ export class MarkdownDBView extends TextFileView {
         menu.showAtPosition({ x: event.clientX, y: event.clientY });
     }
 
-    handleHeaderContextMenu = (key: string, event: React.MouseEvent, config?: DatabaseConfig, records?: DatabaseRecord[]) => {
+    handleHeaderContextMenu = (key: string, event: React.MouseEvent, config?: DatabaseConfig, records?: DatabaseRecord[], viewName?: string) => {
         // Prevent default browser context menu
         event.preventDefault();
 
@@ -357,13 +458,13 @@ export class MarkdownDBView extends TextFileView {
                                  const newTypes = { ...config.columnTypes };
                                  delete newTypes[key];
                                  newTypes[newName] = type;
-                                 await updateConfig(this.app, this.file, "db-column-types", JSON.stringify(newTypes));
+                                 await updateConfig(this.app, this.file, "db-column-types", JSON.stringify(newTypes), viewName);
                              }
                              
                              // Update config columnOrder
                              if (config?.columnOrder && config.columnOrder.includes(key)) {
                                  const newOrder = config.columnOrder.map(k => k === key ? newName : k);
-                                 await updateConfig(this.app, this.file, "db-columns", JSON.stringify(newOrder));
+                                 await updateConfig(this.app, this.file, "db-columns", JSON.stringify(newOrder), viewName);
                              }
                              
                              new Notice(`Property renamed to "${newName}"`);
@@ -414,7 +515,7 @@ export class MarkdownDBView extends TextFileView {
                         const currentHidden = config.hiddenColumns || [];
                         const newHidden = [...currentHidden, key];
                         
-                        await updateConfig(this.app, this.file, "db-hide-columns", JSON.stringify(newHidden));
+                        await updateConfig(this.app, this.file, "db-hide-columns", JSON.stringify(newHidden), viewName);
                     }
                 });
         });
@@ -436,7 +537,7 @@ export class MarkdownDBView extends TextFileView {
                                     .onClick(async () => {
                                         if (this.file) {
                                             const newHidden = hiddenColumns.filter(k => k !== hiddenKey);
-                                            await updateConfig(this.app, this.file, "db-hide-columns", JSON.stringify(newHidden));
+                                            await updateConfig(this.app, this.file, "db-hide-columns", JSON.stringify(newHidden), viewName);
                                         }
                                     });
                          });

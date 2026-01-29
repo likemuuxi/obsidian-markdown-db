@@ -25,6 +25,19 @@ import {
     renamePropertyInAllRecords
 } from "../database/writer";
 
+const Icon = ({ name, className }: { name: string; className?: string }) => {
+    const ref = useRef<HTMLSpanElement>(null);
+
+    useEffect(() => {
+        if (ref.current) {
+            ref.current.empty();
+            setIcon(ref.current, name);
+        }
+    }, [name]);
+
+    return <span ref={ref} className={className} style={{ display: "flex", alignItems: "center" }} />;
+};
+
 interface DashboardProps {
     app: App;
     plugin: MyPlugin;
@@ -488,7 +501,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
                             onClick={() => setSelectedFile(file)}
                             onContextMenu={(e) => handleFileContextMenu(file, e)}
                         >
-                            <span className="markdown-db-file-icon">📄</span>
+                            <Icon name="table-properties" className="markdown-db-file-icon" />
                             <span className="markdown-db-file-name">{file.basename}</span>
                             {/* <span className="markdown-db-file-count">12</span> */}
                         </div>
@@ -514,6 +527,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
                             onUpdateTitle={handleUpdateTitle}
                             allProperties={Array.from(displayData.allKeys)}
                             portalContainer={portalContainer}
+                            views={[]}
+                            currentView={null}
+                            onSwitchView={() => {}}
+                            onAddView={() => {}}
                         />
                         <div className="markdown-db-dashboard-view">
                             <TableView

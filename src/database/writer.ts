@@ -450,34 +450,136 @@ export const updateTitle = async (app: App, file: TFile, newTitle: string) => {
     });
 };
 
-export const updateConfig = async (app: App, file: TFile, key: string, value: string) => {
+export const updateConfig = async (app: App, file: TFile, key: string, value: string, viewName?: string) => {
     await app.vault.process(file, (data) => {
-        // Configs are now stored in %% ... %% at the top (before first ##)
-        
         const lines = data.split(/\r?\n/);
         
-        // Find H1
-        let h1Index = -1;
+        // Find Title H1
+        let titleLineIndex = -1;
+        let title = "";
+        let inCodeBlock = false;
+        
         for (let i = 0; i < lines.length; i++) {
-            if (lines[i].startsWith("# ")) {
-                h1Index = i;
-                break;
+             if (lines[i].trim().startsWith("```")) {
+                inCodeBlock = !inCodeBlock;
+             }
+             const trimmedLine = lines[i].trimStart();
+             if (!inCodeBlock && trimmedLine.startsWith("# ")) {
+                if (titleLineIndex === -1) {
+                    titleLineIndex = i;
+                    title = trimmedLine.substring(2).trim();
+                    break; // Only care about the main title
+                }
             }
         }
         
-        // Find first H2
-        let firstRecordIndex = lines.length;
-        for (let i = 0; i < lines.length; i++) {
-            if (lines[i].startsWith("## ")) {
-                firstRecordIndex = i;
-                break;
+        let targetLineIndex = -1; // The header line index after which we look for config
+        let searchEndIndex = lines.length; // Limit for searching existing properties
+
+        if (viewName && title) {
+            // Find View Header
+            let viewHeaderIndex = -1;
+            
+            // Reset code block tracking
+            inCodeBlock = false;
+            for (let i = 0; i < lines.length; i++) {
+                if (lines[i].trim().startsWith("```")) {
+                    inCodeBlock = !inCodeBlock;
+                }
+                
+                const trimmedLine = lines[i].trimStart();
+                if (!inCodeBlock && trimmedLine.startsWith("# ")) {
+                    const h1Content = trimmedLine.substring(2).trim();
+                    let foundName = null;
+                    
+                    if (h1Content.startsWith(title)) {
+                         const remainder = h1Content.substring(title.length).trim();
+                         if (remainder.startsWith("-")) {
+                             foundName = remainder.substring(1).trim();
+                         } else if (remainder.startsWith("(") && remainder.endsWith(")")) {
+                             foundName = remainder.substring(1, remainder.length - 1).trim();
+                         } else if (remainder.startsWith("（") && remainder.endsWith("）")) {
+                             foundName = remainder.substring(1, remainder.length - 1).trim();
+                         }
+                    }
+                    
+                    if (foundName === viewName) {
+                        viewHeaderIndex = i;
+                        break;
+                    }
+                }
+            }
+            
+            if (viewHeaderIndex !== -1) {
+                targetLineIndex = viewHeaderIndex;
+                // Search limit is next H1 or H2
+                inCodeBlock = false;
+                for (let i = viewHeaderIndex + 1; i < lines.length; i++) {
+                     if (lines[i].trim().startsWith("```")) {
+                        inCodeBlock = !inCodeBlock;
+                     }
+                     const trimmed = lines[i].trimStart();
+                    if (!inCodeBlock && (trimmed.startsWith("# ") || trimmed.startsWith("## "))) {
+                        searchEndIndex = i;
+                        break;
+                    }
+                }
+            } else {
+                // Create View Header
+                // Insert before the first record (## ) or at end of file
+                let insertAt = lines.length;
+                for (let i = 0; i < lines.length; i++) {
+                    const trimmed = lines[i].trim();
+                    if (trimmed.startsWith("## ")) {
+                        insertAt = i;
+                        break;
+                    }
+                }
+
+                // Add empty line before if needed
+                if (insertAt > 0 && lines[insertAt-1].trim() !== "") {
+                    lines.splice(insertAt, 0, "");
+                    insertAt++;
+                }
+                
+                let viewHeader = `# ${title}(${viewName})`;
+                // Smart formatting: if viewName starts with parens, assume user wants attached style
+                if (viewName.startsWith("（") || viewName.startsWith("(")) {
+                    viewHeader = `# ${title}${viewName}`;
+                }
+                
+                lines.splice(insertAt, 0, viewHeader);
+                
+                // Now target is the new header line
+                targetLineIndex = insertAt;
+                searchEndIndex = targetLineIndex + 1; 
+            }
+        } else {
+            // Global Config (Default View)
+            // Target is Title H1 (or top if none)
+            targetLineIndex = titleLineIndex; // Can be -1
+            
+            // Search limit is first H2 or next H1 (start of next view)
+            const startSearch = titleLineIndex !== -1 ? titleLineIndex + 1 : 0;
+            inCodeBlock = false;
+            for (let i = startSearch; i < lines.length; i++) {
+                 if (lines[i].trim().startsWith("```")) {
+                    inCodeBlock = !inCodeBlock;
+                 }
+                 const trimmed = lines[i].trimStart();
+                if (!inCodeBlock && (trimmed.startsWith("# ") || trimmed.startsWith("## "))) {
+                    searchEndIndex = i;
+                    break;
+                }
             }
         }
         
-        // Look for %% block between H1 and firstRecordIndex
+        // Look for %% block between targetLineIndex and searchEndIndex
         let configBlockIndex = -1;
-        for (let i = 0; i < firstRecordIndex; i++) {
-            if (lines[i].trim().startsWith("%%") && lines[i].trim().endsWith("%%")) {
+        const startSearch = targetLineIndex !== -1 ? targetLineIndex + 1 : 0;
+        
+        for (let i = startSearch; i < searchEndIndex; i++) {
+             if (lines[i].trim().startsWith("%%") && lines[i].trim().endsWith("%%")) {
                 configBlockIndex = i;
                 break;
             }
@@ -491,9 +593,364 @@ export const updateConfig = async (app: App, file: TFile, key: string, value: st
             lines[configBlockIndex] = `%% ${inner} %%`;
         } else {
             // Create block
-            // Insert after H1 if exists, else at 0
-            const insertAt = h1Index !== -1 ? h1Index + 1 : 0;
+            // Insert after targetLineIndex
+            const insertAt = targetLineIndex !== -1 ? targetLineIndex + 1 : 0;
             lines.splice(insertAt, 0, `%% ${newPropertyStr} %%`);
+            // Ensure newline after config block
+    if (insertAt + 1 >= lines.length || lines[insertAt + 1].trim() !== "") {
+        lines.splice(insertAt + 1, 0, "");
+    }
+}
+
+return lines.join("\n");
+});
+};
+
+export const deleteView = async (app: App, file: TFile, viewName: string) => {
+    await app.vault.process(file, (content) => {
+        const lines = content.split(/\r?\n/);
+        let title = "";
+        let titleLineIndex = -1;
+
+        // Find file title
+        let inCodeBlock = false;
+        for (let i = 0; i < lines.length; i++) {
+            if (lines[i].trim().startsWith("```")) {
+                inCodeBlock = !inCodeBlock;
+            }
+            const trimmed = lines[i].trimStart();
+            if (!inCodeBlock && trimmed.startsWith("# ")) {
+                title = trimmed.substring(2).trim();
+                titleLineIndex = i;
+                break;
+            }
+        }
+
+        if (!title) return content;
+
+        let viewStartIndex = -1;
+        let viewEndIndex = -1;
+
+        // Find view header: # Title(ViewName)
+        inCodeBlock = false;
+        for (let i = 0; i < lines.length; i++) {
+            if (lines[i].trim().startsWith("```")) {
+                inCodeBlock = !inCodeBlock;
+            }
+            const trimmed = lines[i].trimStart();
+            if (!inCodeBlock && trimmed.startsWith("# ")) {
+                const h1Content = trimmed.substring(2).trim();
+                if (h1Content.startsWith(title)) {
+                    const remainder = h1Content.substring(title.length).trim();
+                    let foundName = null;
+                    if (remainder.startsWith("(") && remainder.endsWith(")")) {
+                        foundName = remainder.substring(1, remainder.length - 1).trim();
+                    } else if (remainder.startsWith("（") && remainder.endsWith("）")) {
+                        foundName = remainder.substring(1, remainder.length - 1).trim();
+                    }
+
+                    if (foundName === viewName) {
+                        viewStartIndex = i;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (viewStartIndex !== -1) {
+            // Find end of view (next # or ##)
+            viewEndIndex = lines.length;
+            inCodeBlock = false;
+            for (let i = viewStartIndex + 1; i < lines.length; i++) {
+                if (lines[i].trim().startsWith("```")) {
+                    inCodeBlock = !inCodeBlock;
+                }
+                const trimmed = lines[i].trimStart();
+                if (!inCodeBlock && (trimmed.startsWith("# ") || trimmed.startsWith("## "))) {
+                    viewEndIndex = i;
+                    break;
+                }
+            }
+            
+            // Remove lines
+            lines.splice(viewStartIndex, viewEndIndex - viewStartIndex);
+        }
+
+        return lines.join("\n");
+    });
+};
+
+export const renameView = async (app: App, file: TFile, oldName: string, newName: string) => {
+    await app.vault.process(file, (content) => {
+        const lines = content.split(/\r?\n/);
+        let title = "";
+        
+        // Find file title
+        let inCodeBlock = false;
+        for (let i = 0; i < lines.length; i++) {
+            if (lines[i].trim().startsWith("```")) {
+                inCodeBlock = !inCodeBlock;
+            }
+            const trimmed = lines[i].trimStart();
+            if (!inCodeBlock && trimmed.startsWith("# ")) {
+                title = trimmed.substring(2).trim();
+                break;
+            }
+        }
+
+        if (!title) return content;
+
+        // Find view header and replace it
+        inCodeBlock = false;
+        for (let i = 0; i < lines.length; i++) {
+            if (lines[i].trim().startsWith("```")) {
+                inCodeBlock = !inCodeBlock;
+            }
+            const trimmed = lines[i].trimStart();
+            if (!inCodeBlock && trimmed.startsWith("# ")) {
+                const h1Content = trimmed.substring(2).trim();
+                if (h1Content.startsWith(title)) {
+                    const remainder = h1Content.substring(title.length).trim();
+                    let foundName = null;
+                    if (remainder.startsWith("(") && remainder.endsWith(")")) {
+                        foundName = remainder.substring(1, remainder.length - 1).trim();
+                    } else if (remainder.startsWith("（") && remainder.endsWith("）")) {
+                        foundName = remainder.substring(1, remainder.length - 1).trim();
+                    }
+
+                    if (foundName === oldName) {
+                        // Replace line
+                        lines[i] = `# ${title}(${newName})`;
+                        break;
+                    }
+                }
+            }
+        }
+        
+        return lines.join("\n");
+    });
+};
+
+export const reorderViews = async (app: App, file: TFile, viewNames: string[]) => {
+    await app.vault.process(file, (content) => {
+        const lines = content.split(/\r?\n/);
+        let title = "";
+        
+        // Find file title
+        let inCodeBlock = false;
+        for (let i = 0; i < lines.length; i++) {
+            if (lines[i].trim().startsWith("```")) {
+                inCodeBlock = !inCodeBlock;
+            }
+            const trimmed = lines[i].trimStart();
+            if (!inCodeBlock && trimmed.startsWith("# ")) {
+                title = trimmed.substring(2).trim();
+                break;
+            }
+        }
+
+        if (!title) return content;
+
+        // Extract all view blocks
+        const viewBlocks: { name: string, lines: string[] }[] = [];
+        const viewIndices: number[] = []; // To track where views were located to replace them
+        
+        let currentViewName: string | null = null;
+        let currentViewLines: string[] = [];
+        let currentViewStart = -1;
+
+        inCodeBlock = false;
+        for (let i = 0; i < lines.length; i++) {
+            if (lines[i].trim().startsWith("```")) {
+                inCodeBlock = !inCodeBlock;
+            }
+            const trimmed = lines[i].trimStart();
+            
+            // Check for View Header
+            if (!inCodeBlock && trimmed.startsWith("# ")) {
+                const h1Content = trimmed.substring(2).trim();
+                if (h1Content.startsWith(title)) {
+                    const remainder = h1Content.substring(title.length).trim();
+                    let foundName = null;
+                    if (remainder.startsWith("(") && remainder.endsWith(")")) {
+                        foundName = remainder.substring(1, remainder.length - 1).trim();
+                    } else if (remainder.startsWith("（") && remainder.endsWith("）")) {
+                        foundName = remainder.substring(1, remainder.length - 1).trim();
+                    }
+                    
+                    if (foundName) {
+                        // End previous view if any
+                        if (currentViewName) {
+                            viewBlocks.push({ name: currentViewName, lines: [...currentViewLines] });
+                        }
+                        
+                        currentViewName = foundName;
+                        currentViewLines = [lines[i]];
+                        currentViewStart = i;
+                        viewIndices.push(i);
+                        continue;
+                    }
+                }
+            }
+            
+            // If inside a view, collect lines until next view or record
+            if (currentViewName) {
+                 if (!inCodeBlock && (trimmed.startsWith("## ") || (trimmed.startsWith("# ") && i !== currentViewStart))) {
+                     // End of view block
+                     viewBlocks.push({ name: currentViewName, lines: [...currentViewLines] });
+                     currentViewName = null;
+                     currentViewLines = [];
+                     // Don't continue, reprocess this line
+                     // Actually logic is tricky here because we loop linearly.
+                     // The loop condition handles "next view". 
+                     // But "## " (record) also ends a view.
+                 } else {
+                     currentViewLines.push(lines[i]);
+                 }
+            }
+        }
+        
+        // Handle last view
+        if (currentViewName) {
+             viewBlocks.push({ name: currentViewName, lines: [...currentViewLines] });
+        }
+        
+        // Remove all view blocks from lines
+        // We need to be careful with indices shifting.
+        // Easiest way: filter out all lines that belong to views, then insert them back in order?
+        // But views might be scattered (unlikely but possible). 
+        // Typically views are after H1 and before H2.
+        
+        // Better approach: 
+        // 1. Identify all view blocks and their ranges.
+        // 2. Sort ranges by start index.
+        // 3. Construct new content: 
+        //    - Keep content before first view.
+        //    - Append views in `viewNames` order.
+        //    - Keep content after last view (usually records).
+        //    - What if views are interleaved with other stuff? (Unlikely for this plugin)
+        //    - Assumption: Views are contiguous or we force them to be contiguous after the Title?
+        
+        // Let's stick to "Find and Extract" strategy.
+        
+        // Re-scan to capture ranges accurately
+        const viewRanges: { name: string, start: number, end: number, content: string[] }[] = [];
+        
+        inCodeBlock = false;
+        let scanStart = -1;
+        let scanName: string | null = null;
+        
+        for (let i = 0; i < lines.length; i++) {
+             if (lines[i].trim().startsWith("```")) {
+                inCodeBlock = !inCodeBlock;
+            }
+            const trimmed = lines[i].trimStart();
+            
+            const isViewHeader = !inCodeBlock && trimmed.startsWith("# ") && trimmed.substring(2).trim().startsWith(title) && (trimmed.includes("(") || trimmed.includes("（"));
+            const isRecord = !inCodeBlock && trimmed.startsWith("## ");
+            
+            if (isViewHeader) {
+                const h1Content = trimmed.substring(2).trim();
+                const remainder = h1Content.substring(title.length).trim();
+                let foundName = null;
+                if (remainder.startsWith("(") && remainder.endsWith(")")) {
+                    foundName = remainder.substring(1, remainder.length - 1).trim();
+                } else if (remainder.startsWith("（") && remainder.endsWith("）")) {
+                    foundName = remainder.substring(1, remainder.length - 1).trim();
+                }
+                
+                if (foundName) {
+                    if (scanName) {
+                        // Close previous
+                        viewRanges.push({ name: scanName, start: scanStart, end: i, content: lines.slice(scanStart, i) });
+                    }
+                    scanName = foundName;
+                    scanStart = i;
+                }
+            } else if (isRecord) {
+                 if (scanName) {
+                     viewRanges.push({ name: scanName, start: scanStart, end: i, content: lines.slice(scanStart, i) });
+                     scanName = null;
+                 }
+            }
+        }
+        
+        if (scanName) {
+            viewRanges.push({ name: scanName, start: scanStart, end: lines.length, content: lines.slice(scanStart, lines.length) });
+        }
+        
+        if (viewRanges.length === 0) return content;
+        
+        // Check if we found all views
+        // Filter viewBlocks based on viewNames order
+        const orderedBlocks: string[][] = [];
+        const remainingBlocks: string[][] = [];
+        
+        const mappedRanges = new Map<string, string[]>();
+        viewRanges.forEach(r => mappedRanges.set(r.name, r.content));
+        
+        viewNames.forEach(name => {
+            if (mappedRanges.has(name)) {
+                orderedBlocks.push(mappedRanges.get(name)!);
+                mappedRanges.delete(name);
+            }
+        });
+        
+        // Append any remaining views (not in list)
+        mappedRanges.forEach((content) => {
+            remainingBlocks.push(content);
+        });
+        
+        const allNewViewLines = [...orderedBlocks, ...remainingBlocks].flat();
+        
+        // Replace in original lines
+        // We assume views are somewhat contiguous or we just replace the chunk from first view start to last view end?
+        // If there's text between views, it will be lost if we do simple replacement.
+        // But the parser ignores text between views unless it's a new view or record.
+        // Let's assume a continuous block of views for safety, or replace individually?
+        // Replacing individually is hard if order changes.
+        
+        // Strategy: 
+        // 1. Remove all detected view ranges from lines (backwards to keep indices valid)
+        // 2. Insert allNewViewLines at the position of the *first* view.
+        
+        if (viewRanges.length > 0) {
+            const firstViewStart = viewRanges[0].start;
+            
+            // Remove backwards
+            for (let i = viewRanges.length - 1; i >= 0; i--) {
+                const range = viewRanges[i];
+                lines.splice(range.start, range.end - range.start);
+            }
+            
+            // Insert at firstViewStart
+            // Adjust firstViewStart? No, lines above it haven't changed.
+            // But if we removed multiple chunks, the insertion point is where the first chunk was.
+            // Wait, if views are scattered, we effectively gather them together at the first view's location. This is actually good for cleanup.
+            
+            // However, we need to handle the case where we removed multiple disjoint ranges.
+            // If ranges are disjoint (e.g. text in between), that text remains.
+            // If we insert everything at firstViewStart, the text that was between view 1 and 2 will now be after all views.
+            // This seems acceptable for this plugin's file structure.
+            
+            // Actually, `lines` is modified in place. 
+            // If we delete range 2 (index 100-110), then range 1 (index 10-20) is unaffected.
+            // If we delete range 1, indices shift.
+            // So we MUST delete from end to start.
+            
+            // But we need to remember the insertion point (start of the first view in original file).
+            // Since we delete everything else, the insertion point is `viewRanges[0].start`.
+            
+            // Correct logic:
+            // 1. Sort viewRanges by start index (they should be already).
+            // 2. Insertion point = viewRanges[0].start.
+            // 3. Delete all ranges from right to left.
+            // 4. Insert new lines at Insertion point.
+            
+            lines.splice(firstViewStart, 0, ...allNewViewLines);
+            
+            // Ensure spacing?
+            // Existing lines likely have newlines.
         }
         
         return lines.join("\n");
