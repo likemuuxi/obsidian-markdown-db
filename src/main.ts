@@ -1,5 +1,8 @@
-import { Plugin, WorkspaceLeaf, TFile, TFolder, debounce, FileView } from "obsidian";
-import { MarkdownDBView, VIEW_TYPE_MARKDOWN_DB } from "./views/view";
+import { Plugin, WorkspaceLeaf, TFile, TFolder, debounce, FileView, MarkdownRenderChild } from "obsidian";
+import * as React from "react";
+import { createRoot, Root } from "react-dom/client";
+import { MarkdownDBApp, MarkdownDBView, VIEW_TYPE_MARKDOWN_DB } from "./views/view";
+import { EmbedDBView } from "./views/EmbedDBView";
 import { MarkdownDBSettings, DEFAULT_SETTINGS, MarkdownDBSettingTab, PropertyConfig } from "./settings";
 import { parseFile } from "./database/parser";
 import { addCssClassToFiles, HIDDEN_CSS_CLASS } from "./database/writer";
@@ -213,6 +216,11 @@ export default class MarkdownDBPlugin extends Plugin {
         this.registerEvent(this.app.vault.on('rename', () => this.updateFileExplorerBadges()));
         this.registerEvent(this.app.vault.on('create', () => this.updateFileExplorerBadges()));
         this.registerEvent(this.app.vault.on('delete', () => this.updateFileExplorerBadges()));
+
+        // Register Markdown Post Processor for Embeds
+        this.registerMarkdownPostProcessor((element, context) => {
+            EmbedDBView.markdownPostProcessor(this, element, context);
+        })
     }
 
     async loadSettings() {

@@ -1183,3 +1183,52 @@
     border-bottom-color: var(--interactive-accent);
     background-color: var(--background-primary);
 }
+
+/* Embed View Styling */
+.internal-embed.markdown-db-embed {
+    height: auto !important;
+    width: 100%;
+    border-radius: 8px;
+    overflow: hidden;
+    background-color: var(--background-primary);
+    margin: 1em 0;
+}
+
+/* Ensure container inside embed takes full height */
+.internal-embed.markdown-db-embed .markdown-db-container {
+    height: 100%;
+    max-height: 500px;
+}
+
+.internal-embed.is-loaded.markdown-db-embed .markdown-db-table thead th {
+  background-color: var(--background-primary);
+  white-space: nowrap;
+}
+
+.internal-embed.is-loaded.markdown-db-embed .markdown-db-table tr td:first-child,
+.internal-embed.is-loaded.markdown-db-embed .markdown-db-table tr th:first-child {
+  display: none;
+}
+
+.internal-embed .markdown-db-view-switcher .markdown-db-view-tab:not(.active) {
+  display: none;
+}
+
+.internal-embed .markdown-db-view-switcher .markdown-db-view-separator {
+  display: none;
+}
+
+/* Read-only mode styles */
+.markdown-db-readonly input[type="checkbox"],
+.markdown-db-readonly .task-list-item-checkbox {
+    pointer-events: none !important;
+    opacity: 0.6;
+}
+
+.markdown-db-readonly .markdown-db-toolbar-right,
+.markdown-db-readonly .markdown-db-view-add,
+.markdown-db-readonly .markdown-db-add-column-header,
+.markdown-db-readonly .markdown-db-add-column-cell,
+.markdown-db-readonly .markdown-db-add-record-button {
+    display: none !important;
+}

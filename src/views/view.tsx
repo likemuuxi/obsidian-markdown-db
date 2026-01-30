@@ -1,4 +1,4 @@
-import { TextFileView, WorkspaceLeaf, TFile, WorkspaceSplit, MarkdownView, Menu, Notice } from "obsidian";
+import { TextFileView, WorkspaceLeaf, TFile, WorkspaceSplit, MarkdownView, Menu, Notice, App } from "obsidian";
 import * as React from "react";
 import { useState, useMemo } from "react";
 import { createRoot, Root } from "react-dom/client";
@@ -19,13 +19,36 @@ import { PropertyConfig } from "../settings";
 
 export const VIEW_TYPE_MARKDOWN_DB = "markdown-db-view";
 
-const MarkdownDBApp = (props: {
+export interface IMarkdownDBView {
+    plugin: MarkdownDBPlugin;
+    app: App;
+    file: TFile | null;
+    handleUpdateProperty: (record: DatabaseRecord, key: string, value: string, explicitType?: string) => Promise<void>;
+    handleUpdateContent: (record: DatabaseRecord, newContent: string) => Promise<void>;
+    handleRenameRecord: (record: DatabaseRecord, newName: string) => Promise<void>;
+    handleOpenRecord: (record: DatabaseRecord, config: DatabaseConfig) => Promise<void>;
+    handleAddRecord: () => Promise<void>;
+    handleAddProperty: (name: string, type?: string) => Promise<void>;
+    handleUpdateConfig: (key: string, value: string, viewName?: string) => Promise<void>;
+    handleUpdateTitle: (newTitle: string) => Promise<void>;
+    handleReorderRecord: (fromIndex: number, toIndex: number) => Promise<void>;
+    handleDeleteView: (viewName: string) => Promise<void>;
+    handleRenameView: (oldName: string, newName: string) => Promise<void>;
+    handleReorderViews: (viewNames: string[]) => Promise<void>;
+    handleRowContextMenu: (record: DatabaseRecord, event: React.MouseEvent) => void;
+    handleHeaderContextMenu: (key: string, event: React.MouseEvent, config?: DatabaseConfig, records?: DatabaseRecord[], viewName?: string) => void;
+}
+
+export const MarkdownDBApp = (props: {
     fileContent: string,
     file: TFile | null,
-    view: MarkdownDBView,
+    view: IMarkdownDBView,
     globalProperties: PropertyConfig[],
     onSaveToGlobal: (name: string, type?: PropertyType) => void,
-    onRemoveGlobalValue: (key: string, value: string) => void
+    onRemoveGlobalValue: (key: string, value: string) => void,
+    component?: any,
+    readonly?: boolean,
+    initialView?: string
 }) => {
     const dbData = useMemo(() => {
         const data = parseFile(props.fileContent);
@@ -35,8 +58,44 @@ const MarkdownDBApp = (props: {
         return data;
     }, [props.fileContent, props.file]);
 
+    const resolvedInitialView = useMemo(() => {
+        if (!props.initialView) return null;
+        
+        // 1. Direct match
+        if (dbData.views && dbData.views[props.initialView]) {
+            return props.initialView;
+        }
+
+        // 2. Try to match Title(ViewName) pattern
+        // The parser extracts "ViewName" from "Title(ViewName)"
+        if (dbData.title && props.initialView.startsWith(dbData.title)) {
+            const remainder = props.initialView.substring(dbData.title.length).trim();
+            let potentialName: string | null = null;
+            
+            if (remainder.startsWith("(") && remainder.endsWith(")")) {
+                potentialName = remainder.substring(1, remainder.length - 1).trim();
+            } else if (remainder.startsWith("（") && remainder.endsWith("）")) {
+                potentialName = remainder.substring(1, remainder.length - 1).trim();
+            }
+            
+            if (potentialName && dbData.views && dbData.views[potentialName]) {
+                return potentialName;
+            }
+        }
+        
+        return props.initialView;
+    }, [dbData, props.initialView]);
+
     const [searchTerm, setSearchTerm] = useState("");
-    const [currentViewName, setCurrentViewName] = useState<string | null>(null);
+    const [currentViewName, setCurrentViewName] = useState<string | null>(resolvedInitialView);
+
+    const viewNotFound = useMemo(() => {
+        if (props.initialView) {
+            // Check if resolved view exists
+            return !resolvedInitialView || !dbData.views || !dbData.views[resolvedInitialView];
+        }
+        return false;
+    }, [dbData, resolvedInitialView, props.initialView]);
 
     const currentConfig = useMemo(() => {
         if (currentViewName && dbData.views && dbData.views[currentViewName]) {
@@ -164,31 +223,42 @@ const MarkdownDBApp = (props: {
     // Override data records with filtered ones for display
     const displayData = { ...dbData, config: currentConfig, records: filteredRecords };
 
+    if (viewNotFound) {
+        return (
+            <div className={`markdown-db-container ${props.readonly ? "markdown-db-readonly" : ""}`}>
+                <div style={{ padding: "20px", textAlign: "center", color: "var(--text-muted)" }}>
+                    View "{props.initialView}" not found.
+                </div>
+            </div>
+        );
+    }
+
     return (
-        <div className="markdown-db-container">
+        <div className={`markdown-db-container ${props.readonly ? "markdown-db-readonly" : ""}`}>
             <Toolbar
                 title={dbData.title}
-                config={currentConfig}
-                onSearch={setSearchTerm}
-                onUpdateConfig={handleUpdateConfig}
-                onAddRecord={handleAddRecord}
-                onUpdateTitle={handleUpdateTitle}
-                allProperties={Array.from(dbData.allKeys)}
-                views={dbData.views ? Object.keys(dbData.views) : []}
-                currentView={currentViewName}
-                onSwitchView={handleSwitchView}
-                onAddView={handleAddView}
-                onRenameView={handleRenameView}
-                onDeleteView={handleDeleteView}
-                onReorderViews={handleReorderViews}
-                viewsConfig={dbData.views}
-                onUpdateViewConfig={handleUpdateViewConfig}
-            />
+                    config={currentConfig}
+                    onSearch={setSearchTerm}
+                    onUpdateConfig={handleUpdateConfig}
+                    onAddRecord={handleAddRecord}
+                    onUpdateTitle={handleUpdateTitle}
+                    allProperties={Array.from(dbData.allKeys)}
+                    views={dbData.views ? Object.keys(dbData.views) : []}
+                    currentView={currentViewName}
+                    onSwitchView={handleSwitchView}
+                    onAddView={handleAddView}
+                    onRenameView={handleRenameView}
+                    onDeleteView={handleDeleteView}
+                    onReorderViews={handleReorderViews}
+                    viewsConfig={dbData.views}
+                    onUpdateViewConfig={handleUpdateViewConfig}
+                />
             <TableView
                 app={props.view.app}
                 data={displayData}
                 fileName={props.file?.basename}
                 sourcePath={props.file?.path}
+                component={props.component}
                 globalProperties={props.globalProperties}
                 onUpdateProperty={handleUpdateProperty}
                 onUpdateContent={handleUpdateContent}
@@ -202,12 +272,13 @@ const MarkdownDBApp = (props: {
                 onHeaderContextMenu={handleHeaderContextMenu}
                 onUpdateConfig={handleUpdateConfig}
                 onReorderRecord={handleReorderRecord}
+                readonly={props.readonly}
             />
         </div>
     );
 };
 
-export class MarkdownDBView extends TextFileView {
+export class MarkdownDBView extends TextFileView implements IMarkdownDBView {
     root: Root | null = null;
     fileContent: string = "";
     plugin: MarkdownDBPlugin;
@@ -573,7 +644,8 @@ export class MarkdownDBView extends TextFileView {
                     view: this,
                     globalProperties: this.plugin.settings.properties,
                     onSaveToGlobal: this.handleSaveToGlobal,
-                    onRemoveGlobalValue: this.handleRemoveGlobalValue
+                    onRemoveGlobalValue: this.handleRemoveGlobalValue,
+                    component: this
                 })
             );
         }

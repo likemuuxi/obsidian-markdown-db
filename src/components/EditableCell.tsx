@@ -22,6 +22,7 @@ interface EditableCellProps {
     contentHeight?: "compact" | "adaptive";
     portalContainer?: HTMLElement;
     type?: PropertyType;
+    readonly?: boolean;
 }
 
 const TAG_COLORS = [
@@ -44,7 +45,7 @@ const getTagColor = (text: string) => {
     return TAG_COLORS[index];
 };
 
-export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, onSave, placeholder, className, app, component, sourcePath, onLinkClick, isContentColumn, suggestions = [], isPropertyColumn, propertyKey, onRemoveGlobalValue, contentHeight = "compact", portalContainer, type }) => {
+export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, onSave, placeholder, className, app, component, sourcePath, onLinkClick, isContentColumn, suggestions = [], isPropertyColumn, propertyKey, onRemoveGlobalValue, contentHeight = "compact", portalContainer, type, readonly }) => {
     const [isEditing, setIsEditing] = useState(false);
     const contentRef = useRef<HTMLDivElement>(null);
     const viewRef = useRef<HTMLDivElement>(null);
@@ -225,12 +226,41 @@ export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, on
 
     useEffect(() => {
         if (viewRef.current) {
+            // Optimization: Render simple types directly in JSX to avoid MarkdownRenderer overhead and issues in Embed views
+            if (isDateMode || isNumberMode || isCheckboxMode) {
+                return;
+            }
+
             viewRef.current.empty();
             // Always render with MarkdownRenderer to support formatting in Content column too
             // CSS handles truncation for single-line view
-            MarkdownRenderer.render(app, value || "", viewRef.current, sourcePath, component);
+            
+            const runRender = async () => {
+                try {
+                    await MarkdownRenderer.render(app, value || "", viewRef.current!, sourcePath, component);
+                } catch (e) {
+                    // Ignore errors
+                }
+                
+                // Fallback: If MarkdownRenderer fails to render anything (common in Embed views if context is missing),
+                // display the raw value as text so it's not blank.
+                if (viewRef.current && viewRef.current.childNodes.length === 0 && value) {
+                    viewRef.current.innerText = value;
+                    // Try to render simple links manually if fallback is triggered
+                    // This is a basic "other way" to support links when MarkdownRenderer fails
+                    if (value.startsWith("[[") && value.endsWith("]]")) {
+                         const linkContent = value.slice(2, -2);
+                         const parts = linkContent.split("|");
+                         const linkText = parts.length > 1 ? parts[1] : parts[0];
+                         // Simple anchor to make it look like a link (click handling is on parent)
+                         viewRef.current.innerHTML = `<a class="internal-link" href="${parts[0]}">${linkText}</a>`;
+                    }
+                }
+            };
+            
+            runRender();
         }
-    }, [value, app, sourcePath, component, isContentColumn, isPropertyColumn]);
+    }, [value, app, sourcePath, component, isContentColumn, isPropertyColumn, isDateMode, isNumberMode, isCheckboxMode]);
 
     useEffect(() => {
         if (!isPropertyColumn && isEditing && contentRef.current) {
@@ -610,6 +640,7 @@ export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, on
             }
             return;
         }
+        if (readonly) return;
         if (viewRef.current) {
             const rect = viewRef.current.getBoundingClientRect();
             setEditCoords({ top: rect.top, left: rect.left, width: rect.width });
@@ -904,7 +935,9 @@ export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, on
                     cursor: "text",
                     visibility: isEditing ? "hidden" : "visible"
                 }}
-            />
+            >
+                {(isDateMode || isNumberMode || isCheckboxMode) ? value : null}
+            </div>
 
             {/* Edit Layer - Portal positioned over the view layer */}
             {isEditing && editCoords && ReactDOM.createPortal(

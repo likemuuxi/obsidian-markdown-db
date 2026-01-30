@@ -25,9 +25,11 @@ interface TableViewProps {
     onUpdateConfig: (key: string, value: string) => void;
     onReorderRecord?: (fromIndex: number, toIndex: number) => void;
     portalContainer?: HTMLElement;
+    component?: any; // Component type from obsidian
+    readonly?: boolean;
 }
 
-export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourcePath, globalProperties, onUpdateProperty, onUpdateContent, onRenameRecord, onOpenRecord, onAddRecord, onAddProperty, onSaveToGlobal, onRemoveGlobalValue, onRowContextMenu, onHeaderContextMenu, onUpdateConfig, onReorderRecord, portalContainer }) => {
+export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourcePath, globalProperties, onUpdateProperty, onUpdateContent, onRenameRecord, onOpenRecord, onAddRecord, onAddProperty, onSaveToGlobal, onRemoveGlobalValue, onRowContextMenu, onHeaderContextMenu, onUpdateConfig, onReorderRecord, portalContainer, component, readonly }) => {
     
     const propertyKeys = useMemo(() => {
         const all = Array.from(data.allKeys);
@@ -368,10 +370,10 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                             
                             return (
                             <th key={col} 
-                                draggable={isProperty}
-                                onDragStart={(e) => isProperty && handleDragStart(e, col)}
-                                onDragOver={(e) => isProperty && handleDragOver(e, col)}
-                                onDrop={(e) => isProperty && handleDrop(e, col)}
+                                draggable={isProperty && !readonly}
+                                onDragStart={(e) => isProperty && !readonly && handleDragStart(e, col)}
+                                onDragOver={(e) => isProperty && !readonly && handleDragOver(e, col)}
+                                onDrop={(e) => isProperty && !readonly && handleDrop(e, col)}
                                 onDragEnd={handleDragEnd}
                                 style={{
                                     textAlign: "left",
@@ -384,11 +386,11 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                                     color: "var(--text-muted)",
                                     fontSize: "12px",
                                     textTransform: "uppercase",
-                                    cursor: isProperty ? "grab" : "default",
+                                    cursor: (isProperty && !readonly) ? "grab" : "default",
                                     userSelect: "none"
                                 }}
                                 onContextMenu={(e) => {
-                                    if (isProperty || col === "Name") {
+                                    if (!readonly && (isProperty || col === "Name")) {
                                         onHeaderContextMenu(col, e);
                                     }
                                 }}
@@ -407,7 +409,9 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                                 {col}
                             </th>
                         )})}
-                        <th style={{
+                        <th 
+                            className="markdown-db-add-column-header"
+                            style={{
                             width: "40px",
                             padding: "8px",
                             borderBottom: "2px solid var(--background-modifier-border)",
@@ -415,7 +419,7 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                             textAlign: "center",
                             cursor: "pointer",
                             color: "var(--text-muted)"
-                        }} onClick={handleAddClick} title="Add Property Column">
+                        }} onClick={(e) => !readonly && handleAddClick(e)} title="Add Property Column">
                             +
                         </th>
                     </tr>
@@ -433,15 +437,15 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                                         : "none"
                             }} 
                             className="markdown-db-row" 
-                            onContextMenu={(e) => onRowContextMenu(record, e)}
+                            onContextMenu={(e) => !readonly && onRowContextMenu(record, e)}
                             onMouseEnter={() => setHoveredRowIndex(index)}
                             onMouseLeave={() => setHoveredRowIndex(null)}
-                            onDragOver={isManualSort ? (e) => handleRowDragOver(e, index) : undefined}
-                            onDrop={isManualSort ? (e) => handleRowDrop(e, index) : undefined}
+                            onDragOver={(isManualSort && !readonly) ? (e) => handleRowDragOver(e, index) : undefined}
+                            onDrop={(isManualSort && !readonly) ? (e) => handleRowDrop(e, index) : undefined}
                             onDragEnd={handleRowDragEnd}
                         >
                             <td style={{ padding: "0", verticalAlign: "top", textAlign: "center" }}>
-                                {isManualSort && (
+                                {isManualSort && !readonly && (
                                     <div
                                         draggable
                                         onDragStart={(e) => handleRowDragStart(e, index)}
@@ -475,7 +479,7 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                                 <div style={{ position: "relative", width: "100%" }}>
                                     <EditableCell
                                         app={app}
-                                        component={null}
+                                        component={component || null}
                                         sourcePath={sourcePath || displayTitle}
                                         value={`[[${displayTitle}#${record.title}|${record.title}]]`}
                                         editValue={record.title}
@@ -501,7 +505,7 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                                     }}>
                                         <EditableCell
                                             app={app}
-                                            component={null}
+                                            component={component || null}
                                             sourcePath={sourcePath || displayTitle}
                                             value={val?.map(v => String(v.value)).join(", ") || ""}
                                             onSave={(newVal) => onUpdateProperty(record, key, newVal, type)}
@@ -511,6 +515,7 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                                             onRemoveGlobalValue={onRemoveGlobalValue}
                                             portalContainer={portalContainer}
                                             type={type}
+                                            readonly={readonly}
                                         />
                                     </td>
                                 );
@@ -524,23 +529,25 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                                 }}>
                                     <EditableCell
                                         app={app}
-                                        component={null}
+                                        component={component || null}
                                         sourcePath={sourcePath || displayTitle}
                                         value={record.content?.trim() || ""}
                                         onSave={(newVal) => onUpdateContent(record, newVal)}
                                         isContentColumn={true}
                                         contentHeight={data.config.contentHeight}
                                         portalContainer={portalContainer}
+                                        readonly={readonly}
                                     />
                                 </td>
                             )}
                             {/* Empty cell for the add column button column */}
-                            <td style={{ borderBottom: "1px solid var(--background-modifier-border)", borderRight: "none" }}></td>
+                            <td className="markdown-db-add-column-cell" style={{ borderBottom: "1px solid var(--background-modifier-border)", borderRight: "none" }}></td>
                         </tr>
                     ))}
                     <tr 
                         className="markdown-db-new-row" 
                         onClick={() => {
+                            if (readonly) return;
                             isAddingRow.current = true;
                             onAddRecord();
                         }}
@@ -548,9 +555,9 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                             borderBottom: "1px solid var(--background-modifier-border)"
                         }}
                     >
-                        <td colSpan={columns.length + 2} style={{ padding: "0", color: "var(--text-muted)", cursor: "pointer", borderRight: "none" }}>
+                        <td colSpan={columns.length + 2} style={{ padding: "0", color: "var(--text-muted)", cursor: readonly ? "default" : "pointer", borderRight: "none" }}>
                             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px" }}>
-                                <span style={{
+                                <span className="markdown-db-add-record-button" style={{
                                     position: "sticky",
                                     background: "none",
                                     left: "0px",
