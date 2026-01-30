@@ -4,7 +4,7 @@ import { App, TFile, setIcon, Notice, Menu, normalizePath } from "obsidian";
 import { TableView } from "./TableView";
 import { Toolbar } from "./Toolbar";
 import { RecordModal } from "../modals/RecordModal";
-import { DatabaseData, DatabaseRecord, DatabaseConfig } from "../database/schema";
+import { DatabaseData, DatabaseRecord, DatabaseConfig, FilterRule, SortRule } from "../database/schema";
 import { parseFile } from "../database/parser";
 import { PropertyType } from "../database/schema";
 import { PropertyConfig } from "../settings";
@@ -23,7 +23,10 @@ import {
     deletePropertyFromAllRecords, 
     updateTitle,
     reorderRecords,
-    renamePropertyInAllRecords
+    renamePropertyInAllRecords,
+    deleteView,
+    renameView,
+    reorderViews
 } from "../database/writer";
 
 const Icon = ({ name, className }: { name: string; className?: string }) => {
@@ -92,6 +95,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
     const [dbData, setDbData] = useState<DatabaseData | null>(null);
     const [loading, setLoading] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
+    const [currentView, setCurrentView] = useState<string | null>(null);
+
+    // Reset view when file changes
+    useEffect(() => {
+        setCurrentView(null);
+    }, [selectedFile]);
 
     // Load DB files on mount
     useEffect(() => {
@@ -169,6 +178,69 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
         setDbData(data);
     };
 
+    // --- View Handlers ---
+    const handleSwitchView = (name: string | null) => {
+        setCurrentView(name);
+    };
+
+    const handleAddView = async (name: string, config: { openMode: string, showContent: boolean, contentHeight: string, filters: FilterRule[], sorts: SortRule[] }) => {
+        if (!selectedFile || !dbData || !name) return;
+        
+        // Check for duplicate names
+        let newName = name;
+        const existingViews = dbData.views ? Object.keys(dbData.views) : [];
+        let index = 1;
+        const originalName = newName;
+        
+        while (existingViews.includes(newName)) {
+            newName = `${originalName} ${index}`;
+            index++;
+        }
+        
+        // Initialize with user selected configs sequentially
+        await updateConfig(app, selectedFile, "db-open-mode", config.openMode, newName);
+        await updateConfig(app, selectedFile, "db-show-content", config.showContent ? "true" : "false", newName);
+        await updateConfig(app, selectedFile, "db-content-height", config.contentHeight, newName);
+        
+        if (config.filters && config.filters.length > 0) {
+            await updateConfig(app, selectedFile, "db-filter", JSON.stringify(config.filters), newName);
+        }
+        
+        if (config.sorts && config.sorts.length > 0) {
+            await updateConfig(app, selectedFile, "db-sort", JSON.stringify(config.sorts), newName);
+        }
+
+        await reloadCurrentFile();
+        setCurrentView(newName);
+    };
+
+    const handleRenameView = async (oldName: string, newName: string) => {
+        if (selectedFile) {
+            await renameView(app, selectedFile, oldName, newName);
+            await reloadCurrentFile();
+            if (currentView === oldName) {
+                setCurrentView(newName);
+            }
+        }
+    };
+
+    const handleDeleteView = async (name: string) => {
+        if (selectedFile) {
+            await deleteView(app, selectedFile, name);
+            await reloadCurrentFile();
+            if (currentView === name) {
+                setCurrentView(null);
+            }
+        }
+    };
+
+    const handleReorderViews = async (names: string[]) => {
+        if (selectedFile) {
+            await reorderViews(app, selectedFile, names);
+            await reloadCurrentFile();
+        }
+    };
+
     // --- Writer Handlers ---
     const handleUpdateProperty = async (record: DatabaseRecord, key: string, value: string, explicitType?: string) => {
         if (selectedFile) {
@@ -222,7 +294,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
 
     const handleUpdateConfig = async (key: string, value: string) => {
         if (selectedFile) {
-            await updateConfig(app, selectedFile, key, value);
+            await updateConfig(app, selectedFile, key, value, currentView || undefined);
             await reloadCurrentFile();
         }
     };
@@ -254,7 +326,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
         menu.showAtPosition({ x: event.clientX, y: event.clientY });
     };
 
-    // Filtered records for view
+    const currentConfig = useMemo(() => {
+        if (!dbData) return {} as DatabaseConfig;
+        if (!currentView) return dbData.config;
+        return dbData.views?.[currentView] || dbData.config;
+    }, [dbData, currentView]);
+
+    // Filtered records for view (Search only, filters/sorts applied by TableView based on config)
     const filteredRecords = useMemo(() => {
         if (!dbData) return [];
         if (!searchTerm) return dbData.records;
@@ -266,7 +344,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
         );
     }, [dbData, searchTerm]);
 
-    const displayData = dbData ? { ...dbData, records: filteredRecords } : null;
+    const displayData = useMemo(() => {
+        if (!dbData) return null;
+        return { 
+            ...dbData, 
+            config: currentConfig,
+            records: filteredRecords 
+        };
+    }, [dbData, currentConfig, filteredRecords]);
 
     const handleHeaderContextMenu = (key: string, event: React.MouseEvent) => {
         const menu = new Menu();
@@ -541,10 +626,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
                             onUpdateTitle={handleUpdateTitle}
                             allProperties={Array.from(displayData.allKeys)}
                             portalContainer={portalContainer}
-                            views={[]}
-                            currentView={null}
-                            onSwitchView={() => {}}
-                            onAddView={() => {}}
+                            views={dbData.views ? Object.keys(dbData.views) : []}
+                            currentView={currentView}
+                            onSwitchView={handleSwitchView}
+                            onAddView={handleAddView}
+                            onRenameView={handleRenameView}
+                            onDeleteView={handleDeleteView}
+                            onReorderViews={handleReorderViews}
                         />
                         <div className="markdown-db-dashboard-view">
                             <TableView
