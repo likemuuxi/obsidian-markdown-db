@@ -48,59 +48,73 @@ export class EmbedDBView implements IMarkdownDBView {
     }
 
     static async markdownPostProcessor(plugin: MarkdownDBPlugin, el: HTMLElement, ctx: MarkdownPostProcessorContext) {
-        // Debugging: Log element type
-        // console.log("[MarkdownDB] PostProcessor called", { el, sourcePath: ctx.sourcePath });
+        const findCandidates = () => {
+            const candidates: Set<HTMLElement> = new Set();
 
-        const candidates: Set<HTMLElement> = new Set();
-
-        // 1. Check if 'el' itself is an embed
-        if (el.hasClass("internal-embed")) {
-            candidates.add(el);
-        }
-
-        // 2. Check for children embeds
-        const children = el.querySelectorAll(".internal-embed");
-        if (children.length > 0) {
-            children.forEach((child) => candidates.add(child as HTMLElement));
-        }
-
-        // 3. Check parent (Strict Upward Traversal for Live Preview)
-        // Always check parent if we haven't found anything yet.
-        // Also check for SIBLINGS by checking children of parents (e.g. if parent is a cm-line)
-        if (candidates.size === 0) {
-            let parent = el.parentElement;
-            let depth = 0;
-            const MAX_DEPTH = 5; // Safety limit
-
-            while (parent && depth < MAX_DEPTH) {
-                // STOP immediately if we hit a boundary
-                if (parent.hasClass("markdown-source-view") || 
-                    parent.hasClass("markdown-reading-view") ||
-                    parent.hasClass("cm-editor") ||
-                    parent.hasClass("view-content") ||
-                    parent.hasClass("workspace-leaf")) {
-                    break;
-                }
-
-                // A. Is parent the embed?
-                if (parent.hasClass("internal-embed")) {
-                    candidates.add(parent);
-                    break; // Found it
-                }
-
-                // B. Does parent CONTAIN embeds? (e.g. if parent is a line wrapper like .cm-line)
-                // Only do this for specific 'safe' containers to avoid scanning the whole doc
-                if (parent.hasClass("cm-line") || parent.tagName === "P" || parent.tagName === "DIV") {
-                    const siblings = parent.querySelectorAll(".internal-embed");
-                    if (siblings.length > 0) {
-                        siblings.forEach((sib) => candidates.add(sib as HTMLElement));
-                        if (candidates.size > 0) break;
-                    }
-                }
-
-                parent = parent.parentElement;
-                depth++;
+            // 1. Check if 'el' itself is an embed
+            if (el.hasClass("internal-embed")) {
+                candidates.add(el);
             }
+
+            // 2. Check for children embeds
+            const children = el.querySelectorAll(".internal-embed");
+            if (children.length > 0) {
+                children.forEach((child) => candidates.add(child as HTMLElement));
+            }
+            
+            // Check for span with markdown-embed-link (sometimes used in Live Preview)
+            const spans = el.querySelectorAll("span.markdown-embed-link");
+            spans.forEach(span => {
+                if (span.getAttribute("src")) candidates.add(span as HTMLElement);
+            });
+
+            // 3. Check parent (Strict Upward Traversal for Live Preview)
+            // Always check parent if we haven't found anything yet.
+            // Also check for SIBLINGS by checking children of parents (e.g. if parent is a cm-line)
+            if (candidates.size === 0) {
+                let parent = el.parentElement;
+                let depth = 0;
+                const MAX_DEPTH = 5; // Safety limit
+
+                while (parent && depth < MAX_DEPTH) {
+                    // STOP immediately if we hit a boundary
+                    if (parent.hasClass("markdown-source-view") || 
+                        parent.hasClass("markdown-reading-view") ||
+                        parent.hasClass("cm-editor") ||
+                        parent.hasClass("view-content") ||
+                        parent.hasClass("workspace-leaf")) {
+                        break;
+                    }
+
+                    // A. Is parent the embed?
+                    if (parent.hasClass("internal-embed")) {
+                        candidates.add(parent);
+                        break; // Found it
+                    }
+
+                    // B. Does parent CONTAIN embeds? (e.g. if parent is a line wrapper like .cm-line)
+                    // Only do this for specific 'safe' containers to avoid scanning the whole doc
+                    if (parent.hasClass("cm-line") || parent.tagName === "P" || parent.tagName === "DIV") {
+                        const siblings = parent.querySelectorAll(".internal-embed");
+                        if (siblings.length > 0) {
+                            siblings.forEach((sib) => candidates.add(sib as HTMLElement));
+                            if (candidates.size > 0) break;
+                        }
+                    }
+
+                    parent = parent.parentElement;
+                    depth++;
+                }
+            }
+            return candidates;
+        };
+
+        let candidates = findCandidates();
+
+        // Retry logic: If element is not ready (e.g. Live Preview async rendering), wait a bit and try again.
+        if (candidates.size === 0) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+            candidates = findCandidates();
         }
 
         const root = el.closest(".markdown-source-view, .markdown-reading-view");
@@ -135,31 +149,45 @@ export class EmbedDBView implements IMarkdownDBView {
                  // In some race conditions, element might be detached. 
                  // But in Live Preview post-processing, it might be a detached fragment before insertion?
                  // Let's allow it, but be careful.
-                 console.warn("[MarkdownDB] Element is detached from DOM", embedEl);
+                 // console.warn("[MarkdownDB-Debug] Element is detached from DOM", embedEl);
             }
 
             if (embedEl.hasAttribute("data-rendering")) {
+                // console.log("[MarkdownDB-Debug] Skipping: Already rendering", embedEl);
                 return true;
             }
 
             const src = embedEl.getAttribute("src");
-            if (!src) return false;
+            if (!src) {
+                // console.log("[MarkdownDB-Debug] Skipping: No src attribute", embedEl);
+                return false;
+            }
 
             const file = plugin.app.metadataCache.getFirstLinkpathDest(src.split('#')[0], ctx.sourcePath);
-            if (!file || !(file instanceof TFile) || file.extension !== "md") return false;
+            if (!file || !(file instanceof TFile) || file.extension !== "md") {
+                // console.log("[MarkdownDB-Debug] Skipping: Invalid file or not markdown", { src, file });
+                return false;
+            }
             
             const cache = plugin.app.metadataCache.getFileCache(file);
             const isDB = cache?.frontmatter?.["markdown-db"] === true || cache?.frontmatter?.["markdown-db"] === "true";
             
-            if (!isDB) return false;
+            if (!isDB) {
+                // console.log("[MarkdownDB-Debug] Skipping: Not a DB file", { path: file.path, frontmatter: cache?.frontmatter });
+                return false;
+            }
 
             // If already processed/ready with the SAME source AND has content, consider it handled.
             // Obsidian might clear innerHTML but keep attributes, so we must check childElementCount.
             // Also check for our specific class to ensure it's our content.
             const currentReady = embedEl.getAttribute("ready");
             const hasClass = embedEl.hasClass("markdown-db-embed");
-            if (currentReady && currentReady === src && embedEl.childElementCount > 0 && hasClass) return true;
+            if (currentReady && currentReady === src && embedEl.childElementCount > 0 && hasClass) {
+                // console.log("[MarkdownDB-Debug] Skipping: Already processed and valid", { src });
+                return true;
+            }
 
+            // console.log("[MarkdownDB-Debug] Processing embed...", { src, file: file.path });
             embedEl.setAttribute("data-rendering", "true");
 
             try {
@@ -203,6 +231,7 @@ export class EmbedDBView implements IMarkdownDBView {
     static async processReadingMode(plugin: MarkdownDBPlugin, embeddedItems: NodeListOf<HTMLElement>, ctx: MarkdownPostProcessorContext) {}
 
     static async renderEmbed(plugin: MarkdownDBPlugin, container: HTMLElement, src: string, alt: string, ctx: MarkdownPostProcessorContext) {
+        // console.log("[MarkdownDB-Debug] renderEmbed called", { src, alt, container });
         const parts = src.split("#");
         const filePath = parts[0];
         // Decode URI component for the view name in case it contains special characters

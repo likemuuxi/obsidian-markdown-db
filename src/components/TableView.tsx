@@ -345,7 +345,7 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
 
     return (
         <div className="markdown-db-table-container">
-            <table className="markdown-db-table" style={{ width: "100%", borderCollapse: "collapse" }}>
+            <table className="markdown-db-table" style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0 }}>
                 <thead>
                     <tr>
                         <th style={{ width: "32px", padding: "8px 4px", borderBottom: "2px solid var(--background-modifier-border)" }}></th>
@@ -488,6 +488,7 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                                         }}
                                         onLinkClick={() => onOpenRecord(record)}
                                         portalContainer={portalContainer}
+                                        readonly={readonly}
                                     />
                                 </div>
                             </td>

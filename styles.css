@@ -17,7 +17,8 @@
 
 /* Table Layout */
 .markdown-db-table {
-	border-collapse: collapse;
+	border-collapse: separate;
+	border-spacing: 0;
 	width: 100%;
 	table-layout: auto; /* Adaptive column widths */
 	font-size: 14px;
@@ -1197,8 +1198,9 @@
     max-height: 500px;
 }
 
-.internal-embed.is-loaded.markdown-db-embed .markdown-db-table thead th {
+.internal-embed.is-loaded.markdown-db-embed .markdown-db-table thead tr th {
   background-color: var(--background-primary);
+  border-top: 1px solid var(--background-modifier-border);
   white-space: nowrap;
 }
 
@@ -1207,12 +1209,46 @@
   display: none;
 }
 
+.internal-embed.is-loaded.markdown-db-embed th:nth-child(2),
+.internal-embed.is-loaded.markdown-db-embed td:nth-child(2) {
+  border-left: 1px solid var(--divider-color);
+}
+
 .internal-embed .markdown-db-view-switcher .markdown-db-view-tab:not(.active) {
   display: none;
 }
 
-.internal-embed .markdown-db-view-switcher .markdown-db-view-separator {
+.internal-embed.is-loaded.markdown-db-embed .markdown-db-toolbar{
   display: none;
+}
+
+.internal-embed.is-loaded.markdown-db-embed .markdown-db-title-input-large {
+  pointer-events: none !important
+}
+
+.internal-embed.is-loaded.markdown-db-embed .markdown-db-header-title-row {
+  padding-bottom: 10px !important;
+}
+
+.internal-embed.is-loaded.markdown-db-embed .markdown-db-table {
+    margin-top: 0px;
+    border-top: none;
+}
+
+/* Scrollbar visibility on hover (Mac-like behavior enhancement) */
+.markdown-db-table-container::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+    background-color: transparent;
+}
+
+.markdown-db-table-container::-webkit-scrollbar-thumb {
+    background-color: transparent; /* 默认隐藏 */
+    border-radius: 4px;
+}
+
+.markdown-db-table-container:hover::-webkit-scrollbar-thumb {
+    background-color: var(--scrollbar-thumb-bg); /* 悬浮时显示 */
 }
 
 /* Read-only mode styles */

@@ -640,7 +640,10 @@ export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, on
             }
             return;
         }
-        if (readonly) return;
+        if (readonly) {
+            e.stopPropagation();
+            return;
+        }
         if (viewRef.current) {
             const rect = viewRef.current.getBoundingClientRect();
             setEditCoords({ top: rect.top, left: rect.left, width: rect.width });
@@ -675,7 +678,8 @@ export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, on
                     type="checkbox" 
                     checked={value === "true"} 
                     onChange={(e) => onSave(String(e.target.checked))}
-                    style={{ cursor: "pointer" }}
+                    style={{ cursor: readonly ? "default" : "pointer" }}
+                    disabled={readonly}
                  />
              </div>
         );
@@ -688,7 +692,7 @@ export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, on
                 <div 
                     className={`markdown-db-cell-property rendered ${className || ""}`}
                     title={tags.join(", ")}
-                    onClick={(e) => {
+                    onClick={readonly ? undefined : (e) => {
                         const rect = e.currentTarget.getBoundingClientRect();
                         setEditCoords({ top: rect.top, left: rect.left, width: rect.width });
                         setIsEditing(true);
@@ -704,7 +708,7 @@ export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, on
                         gap: "4px",
                         padding: "0 8px",
                         alignItems: "center",
-                        cursor: "text",
+                        cursor: readonly ? "default" : "text",
                         visibility: isEditing ? "hidden" : "visible"
                     }}
                 >
@@ -929,10 +933,18 @@ export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, on
                 ref={viewRef}
                 className={`markdown-db-cell-content rendered ${className || ""} ${contentHeight === "adaptive" ? "adaptive-height" : ""}`}
                 title={value}
-                onClick={handleViewClick}
+                onClick={readonly ? (e) => {
+                    if ((e.target as HTMLElement).tagName === "A" || (e.target as HTMLElement).closest("a")) {
+                        if (onLinkClick) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            onLinkClick();
+                        }
+                    }
+                } : handleViewClick}
                 onMouseOver={handleMouseOver}
                 style={{
-                    cursor: "text",
+                    cursor: readonly ? "default" : "text",
                     visibility: isEditing ? "hidden" : "visible"
                 }}
             >
