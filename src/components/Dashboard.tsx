@@ -47,9 +47,10 @@ interface DashboardProps {
     plugin: MyPlugin;
     onClose: () => void;
     portalContainer?: HTMLElement;
+    component?: any;
 }
 
-export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, portalContainer }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, portalContainer, component }) => {
     const [globalProperties, setGlobalProperties] = useState<PropertyConfig[]>(plugin.settings.properties);
 
     const onSaveToGlobal = async (name: string, type?: PropertyType) => {
@@ -646,6 +647,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
                                 onRenameRecord={handleRenameRecord}
                                 onReorderRecord={handleReorderRecord}
                                 portalContainer={portalContainer}
+                                component={component}
                                 onOpenRecord={(record) => {
                                     if (selectedFile) {
                                         // Always use modal as requested, ignoring db-open-mode

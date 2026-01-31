@@ -15,7 +15,7 @@ import { RenameModal } from "../modals/RenameModal";
 import { IMarkdownDBView, MarkdownDBApp } from "./view";
 
 class ReactEmbedChild extends MarkdownRenderChild {
-    root: Root;
+    root: Root | null = null;
     component: React.ReactElement;
 
     constructor(containerEl: HTMLElement, component: React.ReactElement) {
@@ -29,7 +29,10 @@ class ReactEmbedChild extends MarkdownRenderChild {
     }
 
     onunload() {
-        this.root.unmount();
+        if (this.root) {
+            this.root.unmount();
+            this.root = null;
+        }
     }
 }
 
@@ -45,160 +48,159 @@ export class EmbedDBView implements IMarkdownDBView {
     }
 
     static async markdownPostProcessor(plugin: MarkdownDBPlugin, el: HTMLElement, ctx: MarkdownPostProcessorContext) {
-        // Check if we are in editing mode (Live Preview) or reading mode
-        const embeddedItems = el.querySelectorAll(".internal-embed");
-        
-        if (embeddedItems.length === 0) {
-            // Potentially Live Preview (editing mode)
-            await EmbedDBView.processLivePreview(plugin, el, ctx);
-            return;
+        // Debugging: Log element type
+        // console.log("[MarkdownDB] PostProcessor called", { el, sourcePath: ctx.sourcePath });
+
+        const candidates: Set<HTMLElement> = new Set();
+
+        // 1. Check if 'el' itself is an embed
+        if (el.hasClass("internal-embed")) {
+            candidates.add(el);
         }
 
-        // Reading Mode
-        await EmbedDBView.processReadingMode(plugin, embeddedItems as NodeListOf<HTMLElement>, ctx);
-    }
-
-    static async processLivePreview(plugin: MarkdownDBPlugin, el: HTMLElement, ctx: MarkdownPostProcessorContext) {
-        const file = plugin.app.vault.getAbstractFileByPath(ctx.sourcePath);
-        if (!(file instanceof TFile)) return;
-
-        // Check if current file is a DB file
-        const cache = plugin.app.metadataCache.getFileCache(file);
-        const isDB = cache?.frontmatter?.["markdown-db"] === true || cache?.frontmatter?.["markdown-db"] === "true";
-
-        // Traverse up to find the container
-        // @ts-ignore
-        let internalEmbedDiv: HTMLElement = ctx.containerEl;
-        
-        // This traversal logic mimics the reference to find the correct container
-        // in Live Preview
-        while (
-            !internalEmbedDiv.hasClass("dataview") &&
-            !internalEmbedDiv.hasClass("cm-preview-code-block") &&
-            !internalEmbedDiv.hasClass("cm-embed-block") &&
-            !internalEmbedDiv.hasClass("internal-embed") &&
-            !internalEmbedDiv.hasClass("markdown-reading-view") &&
-            !internalEmbedDiv.hasClass("markdown-embed") &&
-            internalEmbedDiv.parentElement
-        ) {
-            internalEmbedDiv = internalEmbedDiv.parentElement;
+        // 2. Check for children embeds
+        const children = el.querySelectorAll(".internal-embed");
+        if (children.length > 0) {
+            children.forEach((child) => candidates.add(child as HTMLElement));
         }
 
-        if (
-            internalEmbedDiv.hasClass("dataview") ||
-            internalEmbedDiv.hasClass("cm-preview-code-block") ||
-            internalEmbedDiv.hasClass("cm-embed-block")
-        ) {
-            return;
+        // 3. Check parent (Strict Upward Traversal for Live Preview)
+        // Always check parent if we haven't found anything yet.
+        // Also check for SIBLINGS by checking children of parents (e.g. if parent is a cm-line)
+        if (candidates.size === 0) {
+            let parent = el.parentElement;
+            let depth = 0;
+            const MAX_DEPTH = 5; // Safety limit
+
+            while (parent && depth < MAX_DEPTH) {
+                // STOP immediately if we hit a boundary
+                if (parent.hasClass("markdown-source-view") || 
+                    parent.hasClass("markdown-reading-view") ||
+                    parent.hasClass("cm-editor") ||
+                    parent.hasClass("view-content") ||
+                    parent.hasClass("workspace-leaf")) {
+                    break;
+                }
+
+                // A. Is parent the embed?
+                if (parent.hasClass("internal-embed")) {
+                    candidates.add(parent);
+                    break; // Found it
+                }
+
+                // B. Does parent CONTAIN embeds? (e.g. if parent is a line wrapper like .cm-line)
+                // Only do this for specific 'safe' containers to avoid scanning the whole doc
+                if (parent.hasClass("cm-line") || parent.tagName === "P" || parent.tagName === "DIV") {
+                    const siblings = parent.querySelectorAll(".internal-embed");
+                    if (siblings.length > 0) {
+                        siblings.forEach((sib) => candidates.add(sib as HTMLElement));
+                        if (candidates.size > 0) break;
+                    }
+                }
+
+                parent = parent.parentElement;
+                depth++;
+            }
         }
 
-        const markdownEmbed = internalEmbedDiv.hasClass("markdown-embed");
-        const markdownReadingView = internalEmbedDiv.hasClass("markdown-reading-view");
-
-        // If we found the main reading view and it is NOT explicitly an embed wrapper, abort.
-        // This prevents hijacking the main file rendering in Reading Mode.
-        if (markdownReadingView && !markdownEmbed && !internalEmbedDiv.hasClass("internal-embed")) {
-            return;
-        }
-
-        // Processing the preview of an actual DB file
-        if (!internalEmbedDiv.hasClass("internal-embed") && (markdownEmbed || markdownReadingView)) {
-            if (!isDB) return;
-
-            const isFrontmatterDiv = Boolean(el.querySelector(".frontmatter"));
-             el.empty();
-             if (!isFrontmatterDiv) {
-                 // @ts-ignore
-                 if (el.parentElement === ctx.containerEl) ctx.containerEl.removeChild(el);
-                 return;
-             }
-             internalEmbedDiv.empty();
-             internalEmbedDiv.addClass("markdown-db-embed");
-
-             // Get source and alt
-             let src = internalEmbedDiv.getAttribute("src") ?? "";
-             const alt = internalEmbedDiv.getAttribute("alt") ?? "";
-             
-             if (!src) {
-                src = ctx.sourcePath;
-             }
-             
-             await EmbedDBView.renderEmbed(plugin, internalEmbedDiv, src, alt, ctx);
-             
-             if (markdownEmbed) {
-                 internalEmbedDiv.removeClass("markdown-embed");
-                 internalEmbedDiv.removeClass("inline-embed");
-             }
-             return;
-        }
-
-        // Check if we are inside an embed container
-        if (!internalEmbedDiv.hasClass("internal-embed")) {
-            return;
-        }
-
-        // Check if the linked file is a DB file before proceeding
-        const src = internalEmbedDiv.getAttribute("src");
-        if (!src) return;
-
-        const targetFile = plugin.app.metadataCache.getFirstLinkpathDest(src.split('#')[0], ctx.sourcePath);
-        if (!targetFile || !(targetFile instanceof TFile)) return;
-        
-        const targetCache = plugin.app.metadataCache.getFileCache(targetFile);
-        const targetIsDB = targetCache?.frontmatter?.["markdown-db"] === true || targetCache?.frontmatter?.["markdown-db"] === "true";
-
-        if (!targetIsDB) return;
-
-        el.empty();
-        
-        if (internalEmbedDiv.hasAttribute("ready")) {
-            return;
-        }
-        internalEmbedDiv.setAttribute("ready", "");
-        internalEmbedDiv.empty();
-        internalEmbedDiv.addClass("markdown-db-embed");
-
-        const alt = internalEmbedDiv.getAttribute("alt") ?? "";
-
-        await EmbedDBView.renderEmbed(plugin, internalEmbedDiv, src, alt, ctx);
-
-        if (markdownEmbed) {
-            internalEmbedDiv.removeClass("markdown-embed");
-            internalEmbedDiv.removeClass("inline-embed");
-        }
-    }
-
-    static async processReadingMode(plugin: MarkdownDBPlugin, embeddedItems: NodeListOf<HTMLElement>, ctx: MarkdownPostProcessorContext) {
-        for (let i = 0; i < embeddedItems.length; i++) {
-            const embed = embeddedItems[i];
-            const src = embed.getAttribute("src");
-            if (!src) continue;
-
-            const file = plugin.app.metadataCache.getFirstLinkpathDest(src, ctx.sourcePath);
-            if (file instanceof TFile && file.extension === "md") {
-                const cache = plugin.app.metadataCache.getFileCache(file);
-                const isDB = cache?.frontmatter?.["markdown-db"] === true || cache?.frontmatter?.["markdown-db"] === "true";
-                
-                if (isDB) {
-                    const alt = embed.getAttribute("alt") ?? "";
-                    
-                    // Replace the embed with our custom view
-                    // We need to find the parent if we want to replace, or just empty and append
-                    // The reference implementation replaces the parent element's child
-                    
-                    // In reading mode, 'embed' is the span.internal-embed
-                    embed.empty();
-                    embed.addClass("is-loaded");
-                    embed.addClass("markdown-db-embed");
-                    
-                    // Prevent click propagation
-                    embed.addEventListener("click", (e) => e.stopPropagation());
-                    
-                    await EmbedDBView.renderEmbed(plugin, embed, src, alt, ctx);
+        const root = el.closest(".markdown-source-view, .markdown-reading-view");
+        if (root) {
+            const now = Date.now();
+            const lastScan = Number(root.getAttribute("data-markdown-db-scan") ?? "0");
+            if (now - lastScan > 200) {
+                root.setAttribute("data-markdown-db-scan", String(now));
+                const allEmbeds = root.querySelectorAll(".internal-embed");
+                if (allEmbeds.length > 0) {
+                    allEmbeds.forEach((node) => candidates.add(node as HTMLElement));
                 }
             }
         }
+
+        // Only process if we actually found something
+        if (candidates.size > 0) {
+            for (const candidate of candidates) {
+                await EmbedDBView.tryProcessEmbed(plugin, candidate, ctx);
+            }
+        }
     }
+
+    /**
+     * Tries to process a specific element as an embed.
+     * Returns true if it was a valid DB embed and was processed.
+     */
+    static async tryProcessEmbed(plugin: MarkdownDBPlugin, embedEl: HTMLElement, ctx: MarkdownPostProcessorContext): Promise<boolean> {
+        try {
+            // Safety check: Ensure we are still in the DOM and valid
+            if (!embedEl.isConnected && !document.contains(embedEl)) {
+                 // In some race conditions, element might be detached. 
+                 // But in Live Preview post-processing, it might be a detached fragment before insertion?
+                 // Let's allow it, but be careful.
+                 console.warn("[MarkdownDB] Element is detached from DOM", embedEl);
+            }
+
+            if (embedEl.hasAttribute("data-rendering")) {
+                return true;
+            }
+
+            const src = embedEl.getAttribute("src");
+            if (!src) return false;
+
+            const file = plugin.app.metadataCache.getFirstLinkpathDest(src.split('#')[0], ctx.sourcePath);
+            if (!file || !(file instanceof TFile) || file.extension !== "md") return false;
+            
+            const cache = plugin.app.metadataCache.getFileCache(file);
+            const isDB = cache?.frontmatter?.["markdown-db"] === true || cache?.frontmatter?.["markdown-db"] === "true";
+            
+            if (!isDB) return false;
+
+            // If already processed/ready with the SAME source AND has content, consider it handled.
+            // Obsidian might clear innerHTML but keep attributes, so we must check childElementCount.
+            // Also check for our specific class to ensure it's our content.
+            const currentReady = embedEl.getAttribute("ready");
+            const hasClass = embedEl.hasClass("markdown-db-embed");
+            if (currentReady && currentReady === src && embedEl.childElementCount > 0 && hasClass) return true;
+
+            embedEl.setAttribute("data-rendering", "true");
+
+            try {
+                const alt = embedEl.getAttribute("alt") ?? "";
+                
+                // Prepare element
+                embedEl.empty();
+                embedEl.setAttribute("ready", src); // Store src to handle recycling
+                embedEl.addClass("markdown-db-embed");
+                embedEl.addClass("is-loaded"); // Ensure it looks loaded
+                
+                // Prevent click propagation (important for Reading Mode)
+                embedEl.addEventListener("click", (e) => e.stopPropagation());
+
+                // Handle markdown-embed class (Live Preview)
+                const markdownEmbed = embedEl.hasClass("markdown-embed");
+                
+                await EmbedDBView.renderEmbed(plugin, embedEl, src, alt, ctx);
+
+                if (markdownEmbed) {
+                    embedEl.removeClass("markdown-embed");
+                    embedEl.removeClass("inline-embed");
+                }
+            } finally {
+                embedEl.removeAttribute("data-rendering");
+            }
+
+            return true;
+        } catch (e) {
+            console.error("Markdown DB: Error processing embed", e);
+            embedEl.removeAttribute("data-rendering");
+            return false;
+        }
+    }
+
+    // Legacy methods removed
+    static async processLivePreviewUpward(plugin: MarkdownDBPlugin, el: HTMLElement, ctx: MarkdownPostProcessorContext): Promise<boolean> {
+        return false;
+    }
+    static async processLivePreview(plugin: MarkdownDBPlugin, el: HTMLElement, ctx: MarkdownPostProcessorContext) {}
+    static async processReadingMode(plugin: MarkdownDBPlugin, embeddedItems: NodeListOf<HTMLElement>, ctx: MarkdownPostProcessorContext) {}
 
     static async renderEmbed(plugin: MarkdownDBPlugin, container: HTMLElement, src: string, alt: string, ctx: MarkdownPostProcessorContext) {
         const parts = src.split("#");
@@ -228,46 +230,46 @@ export class EmbedDBView implements IMarkdownDBView {
         }
         
         const content = await plugin.app.vault.read(file);
-            const embedView = new EmbedDBView(plugin, file);
+        const embedView = new EmbedDBView(plugin, file);
 
-            // Create a dedicated MarkdownRenderChild for the app to use for Markdown rendering
-            // This ensures proper lifecycle management for MarkdownRenderer.render
-            const renderComponent = new MarkdownRenderChild(container);
+        // Create a dedicated MarkdownRenderChild for the app to use for Markdown rendering
+        // This ensures proper lifecycle management for MarkdownRenderer.render
+        const renderComponent = new MarkdownRenderChild(container);
 
-            const appComponent = React.createElement(MarkdownDBApp, {
-                fileContent: content,
-                file: file,
-                view: embedView,
-                globalProperties: plugin.settings.properties,
-                component: renderComponent,
-                readonly: true,
-                initialView: viewName,
-                onSaveToGlobal: (name, type) => {
-                    const newProps = [...plugin.settings.properties];
-                    const existing = newProps.find(p => p.name === name);
-                    if (existing) {
-                        existing.type = type || 'text';
-                    } else {
-                        newProps.push({ 
-                            name, 
-                            type: type || 'text',
-                            values: [],
-                            ignoredValues: []
-                        });
-                    }
-                    plugin.settings.properties = newProps;
-                    plugin.saveSettings();
-                },
-                onRemoveGlobalValue: (key, value) => {
-                    // Optional implementation
+        const appComponent = React.createElement(MarkdownDBApp, {
+            fileContent: content,
+            file: file,
+            view: embedView,
+            globalProperties: plugin.settings.properties,
+            component: renderComponent,
+            readonly: true,
+            initialView: viewName,
+            onSaveToGlobal: (name, type) => {
+                const newProps = [...plugin.settings.properties];
+                const existing = newProps.find(p => p.name === name);
+                if (existing) {
+                    existing.type = type || 'text';
+                } else {
+                    newProps.push({ 
+                        name, 
+                        type: type || 'text',
+                        values: [],
+                        ignoredValues: []
+                    });
                 }
-            });
+                plugin.settings.properties = newProps;
+                plugin.saveSettings();
+            },
+            onRemoveGlobalValue: (key, value) => {
+                // Optional implementation
+            }
+        });
 
-            const child = new ReactEmbedChild(container, appComponent);
-            child.addChild(renderComponent); // Manage lifecycle
-            ctx.addChild(child);
-            child.load();
-        }
+        const child = new ReactEmbedChild(container, appComponent);
+        child.addChild(renderComponent); // Manage lifecycle
+        ctx.addChild(child);
+        // child.load(); // Let Obsidian/ctx manage the load lifecycle
+    }
 
 
     handleUpdateProperty = async (record: DatabaseRecord, key: string, value: string, explicitType?: string) => {

@@ -405,20 +405,24 @@ export default class MarkdownDBPlugin extends Plugin {
             // We need a fast check here.
             let isDB = false;
             
-            if (file.extension === "md") {
-                 const cache = plugin.app.metadataCache.getFileCache(file);
-                 if (cache?.frontmatter?.["markdown-db"]) {
-                     isDB = true;
-                 } else if (!cache) {
-                     // If no cache (new file or startup), try reading a bit of content
-                     // This might be slightly slow but necessary for "seamless" feeling on cold start
-                     try {
-                        const content = await plugin.app.vault.read(file);
-                        if (/^---\s*[\s\S]*?markdown-db:\s*true/.test(content)) {
-                            isDB = true;
-                        }
-                     } catch {}
-                 }
+            try {
+                if (file.extension === "md") {
+                     const cache = plugin.app.metadataCache.getFileCache(file);
+                     if (cache?.frontmatter?.["markdown-db"]) {
+                         isDB = true;
+                     } else if (!cache) {
+                         // If no cache (new file or startup), try reading a bit of content
+                         // This might be slightly slow but necessary for "seamless" feeling on cold start
+                         try {
+                            const content = await plugin.app.vault.read(file);
+                            if (/^---\s*[\s\S]*?markdown-db:\s*true/.test(content)) {
+                                isDB = true;
+                            }
+                         } catch {}
+                     }
+                }
+            } catch (e) {
+                console.error("Markdown DB: Error checking if file is DB", e);
             }
 
             if (isDB) {
