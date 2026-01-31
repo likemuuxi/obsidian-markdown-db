@@ -313,6 +313,49 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
         return types;
     }, [data]);
 
+    const propertySuggestions = useMemo(() => {
+        const map: Record<string, string[]> = {};
+
+        const addValue = (key: string, rawValue: unknown) => {
+            if (rawValue === null || rawValue === undefined) return;
+            const str = String(rawValue).trim();
+            if (!str) return;
+            if (!map[key]) map[key] = [];
+            map[key].push(str);
+        };
+
+        globalProperties.forEach((p) => {
+            if (!map[p.name]) map[p.name] = [];
+            p.values.forEach((val) => addValue(p.name, val));
+        });
+
+        data.records.forEach((record) => {
+            Object.entries(record.properties).forEach(([key, values]) => {
+                values.forEach((typed) => {
+                    if (typed.type === "multi") {
+                        if (Array.isArray(typed.value)) {
+                            typed.value.forEach((val) => addValue(key, val));
+                        } else {
+                            String(typed.value)
+                                .split(/[,，]/)
+                                .map((s) => s.trim())
+                                .filter(Boolean)
+                                .forEach((val) => addValue(key, val));
+                        }
+                    } else {
+                        addValue(key, typed.value);
+                    }
+                });
+            });
+        });
+
+        Object.keys(map).forEach((key) => {
+            map[key] = Array.from(new Set(map[key]));
+        });
+
+        return map;
+    }, [data.records, globalProperties]);
+
     const dragHandleIcon = useMemo(() => {
         const icon = getIcon("grip-vertical");
         if (icon) {
@@ -385,7 +428,6 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                                     fontWeight: "600",
                                     color: "var(--text-muted)",
                                     fontSize: "12px",
-                                    textTransform: "uppercase",
                                     cursor: (isProperty && !readonly) ? "grab" : "default",
                                     userSelect: "none"
                                 }}
@@ -510,9 +552,9 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                                             sourcePath={sourcePath || displayTitle}
                                             value={val?.map(v => String(v.value)).join(", ") || ""}
                                             onSave={(newVal) => onUpdateProperty(record, key, newVal, type)}
-                                        suggestions={globalProperties.find(p => p.name === key)?.values || []}
-                                        isPropertyColumn={type === "multi" || type === "select" || type === "boolean" || type === "date" || type === "number"}
-                                        propertyKey={key}
+                                            suggestions={propertySuggestions[key] || []}
+                                            isPropertyColumn={type === "multi" || type === "select" || type === "boolean" || type === "date" || type === "number"}
+                                            propertyKey={key}
                                             onRemoveGlobalValue={onRemoveGlobalValue}
                                             portalContainer={portalContainer}
                                             type={type}
