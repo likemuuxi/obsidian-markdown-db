@@ -1233,18 +1233,18 @@
 }
 
 /* Scrollbar visibility on hover (Mac-like behavior enhancement) */
-.markdown-db-table-container::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+.internal-embed.is-loaded.markdown-db-embed .markdown-db-table-container::-webkit-scrollbar {
+    width: 12px; /* Windows 下可调大一点 */
+    height: 12px;
     background-color: transparent;
 }
 
-.markdown-db-table-container::-webkit-scrollbar-thumb {
+.internal-embed.is-loaded.markdown-db-embed .markdown-db-table-container::-webkit-scrollbar-thumb {
     background-color: transparent; /* 默认隐藏 */
-    border-radius: 4px;
+    border-radius: 8px;
 }
 
-.markdown-db-table-container:hover::-webkit-scrollbar-thumb {
+.internal-embed.is-loaded.markdown-db-embed .markdown-db-table-container:hover::-webkit-scrollbar-thumb {
     background-color: var(--scrollbar-thumb-bg); /* 悬浮时显示 */
 }
 
