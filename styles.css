@@ -427,9 +427,6 @@
     overflow-x: auto;
     scrollbar-width: none;
 }
-.markdown-db-view-switcher::-webkit-scrollbar {
-    display: none;
-}
 
 .markdown-db-view-tab {
     display: flex;
