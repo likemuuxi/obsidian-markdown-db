@@ -533,4 +533,8 @@ export class EmbedDBView implements IMarkdownDBView {
 
         menu.showAtPosition({ x: event.clientX, y: event.clientY });
     }
+
+    handleSyncItem = async (record: DatabaseRecord) => {
+        // No-op for embed view
+    }
 }

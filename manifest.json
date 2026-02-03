@@ -4,7 +4,7 @@
     "version": "1.0.0",
     "minAppVersion": "0.15.0",
     "description": "Turn your Markdown files into a database.",
-    "author": "Antigravity",
-    "authorUrl": "https://github.com/yourname/markdown-db-plugin",
+    "author": "Muuxi",
+    "authorUrl": "https://github.com/likemuuxi/markdown-db-plugin",
     "isDesktopOnly": false
 }

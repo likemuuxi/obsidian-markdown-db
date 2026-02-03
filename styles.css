@@ -17,96 +17,116 @@
 
 /* Table Layout */
 .markdown-db-table {
-	border-collapse: separate;
-	border-spacing: 0;
-	width: 100%;
-	table-layout: auto; /* Adaptive column widths */
-	font-size: 14px;
-	color: var(--text-normal);
+    border-collapse: separate;
+    border-spacing: 0;
+    width: 100%;
+    table-layout: auto;
+    /* Adaptive column widths */
+    font-size: 14px;
+    color: var(--text-normal);
 }
 
 /* New Record Row */
 .markdown-db-new-row {
-	transition: background-color 0.1s;
+    transition: background-color 0.1s;
 }
 
 .markdown-db-new-row:hover {
-	background-color: var(--background-modifier-hover);
+    background-color: var(--background-modifier-hover);
 }
 
 /* Header Styling */
 .markdown-db-table th {
-	background-color: var(--background-primary);
-	border-bottom: 2px solid var(--background-modifier-border);
-	border-right: 1px solid var(--background-modifier-border);
-	padding: 8px 12px;
-	text-align: left;
-	color: var(--text-muted);
-	font-weight: 600;
-	font-size: 12px;
-	letter-spacing: 0.5px;
-	white-space: nowrap;
-	position: sticky;
-	top: 0;
-	z-index: 10;
-	width: auto;
-	min-width: 100px;
-	max-width: 200px; /* Maintain max width */
-	overflow: hidden;
-	text-overflow: ellipsis;
+    background-color: var(--background-primary);
+    border-bottom: 2px solid var(--background-modifier-border);
+    border-right: 1px solid var(--background-modifier-border);
+    padding: 8px 12px;
+    text-align: left;
+    color: var(--text-muted);
+    font-weight: 600;
+    font-size: 12px;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    width: auto;
+    min-width: 100px;
+    max-width: 200px;
+    /* Maintain max width */
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 /* Name Column Specific Width */
 .markdown-db-table th:nth-child(2) {
-	width: auto;
-	min-width: 150px;
-	max-width: 250px;
+    width: auto;
+    min-width: 150px;
+    max-width: 250px;
 }
 
 /* Drag Handle Column */
 .markdown-db-table th:first-child {
-	width: 32px;
-	min-width: 32px;
-	max-width: 32px;
+    width: 32px;
+    min-width: 32px;
+    max-width: 32px;
 }
 
 /* Add Property Column */
 .markdown-db-table th:last-child {
-	width: 40px;
-	min-width: 40px;
-	max-width: 40px;
+    width: 40px;
+    min-width: 40px;
+    max-width: 40px;
 }
 
 /* Cell Styling */
 .markdown-db-table td {
-	border-bottom: 1px solid var(--background-modifier-border);
-	border-right: 1px solid var(--background-modifier-border);
-	padding: 0;
-	/* Let inner content handle padding for click area */
-	vertical-align: top;
-	height: auto; /* Allow height to adapt */
-	max-width: 200px; /* Limit property columns */
+    border-bottom: 1px solid var(--background-modifier-border);
+    border-right: 1px solid var(--background-modifier-border);
+    padding: 0;
+    /* Let inner content handle padding for click area */
+    vertical-align: top;
+    height: auto;
+    /* Allow height to adapt */
+    max-width: 200px;
+    /* Limit property columns */
 }
 
 /* Name Column Specific Width */
 .markdown-db-table td:nth-child(2) {
-	max-width: 250px;
+    max-width: 250px;
 }
 
 /* Drag Handle Column */
 .markdown-db-table td:first-child {
-	width: 32px;
-	max-width: 32px;
+    width: 32px;
+    max-width: 32px;
+}
+
+@keyframes spin {
+    0% {
+        transform: rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+.markdown-db-syncing-icon {
+    animation: spin 1s linear infinite;
+    display: inline-flex;
+    align-items: center;
 }
 
 /* Add Property Column */
 .markdown-db-table td:last-child {
-	width: 40px;
-	max-width: 40px;
+    width: 40px;
+    max-width: 40px;
 }
 
 .markdown-db-table tr:hover td {
-	background-color: var(--background-secondary);
+    background-color: var(--background-secondary);
 }
 
 /* Editable Cell */
@@ -115,79 +135,84 @@
 /* The content div inside td */
 .markdown-db-cell-content,
 .markdown-db-cell-property {
-	width: 100%;
-	min-height: 32px !important;
-	box-sizing: border-box;
-	color: var(--text-normal);
-	border: 2px solid transparent;
-	/* Placeholder for focus ring */
-	border-radius: 3px;
-	transition: background 0.1s, border-color 0.1s;
-	font-size: 14px;
+    width: 100%;
+    min-height: 32px !important;
+    box-sizing: border-box;
+    color: var(--text-normal);
+    border: 2px solid transparent;
+    /* Placeholder for focus ring */
+    border-radius: 3px;
+    transition: background 0.1s, border-color 0.1s;
+    font-size: 14px;
 }
 
 /* Rendered view - Single line mode */
 .markdown-db-cell-content.rendered {
-	height: 100%;
-	max-height: 32px;
-	display: block; /* Changed from flex to block for simpler line-height centering */
-	line-height: 32px;
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
+    height: 100%;
+    max-height: 32px;
+    display: block;
+    /* Changed from flex to block for simpler line-height centering */
+    line-height: 32px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 /* Adaptive height mode */
 .markdown-db-cell-content.rendered.adaptive-height {
-	height: auto;
-	max-height: 300px; /* Optional cap */
-	white-space: pre-wrap;
-	overflow-y: auto;
-	line-height: 1.5;
-	padding: 6px 8px;
+    height: auto;
+    max-height: 300px;
+    /* Optional cap */
+    white-space: pre-wrap;
+    overflow-y: auto;
+    line-height: 1.5;
+    padding: 6px 8px;
 }
 
-.markdown-db-cell-content.rendered.adaptive-height > * {
-	display: block !important;
-	white-space: pre-wrap !important;
-	line-height: 1.5 !important;
+.markdown-db-cell-content.rendered.adaptive-height>* {
+    display: block !important;
+    white-space: pre-wrap !important;
+    line-height: 1.5 !important;
 }
 
-.markdown-db-cell-content.rendered > * {
-	display: inline !important; /* Force inline to prevent block stacking */
-	margin: 0 !important;
-	padding: 0 !important;
-	line-height: inherit !important; /* Inherit 32px from parent */
-	white-space: nowrap !important;
-	vertical-align: baseline;
+.markdown-db-cell-content.rendered>* {
+    display: inline !important;
+    /* Force inline to prevent block stacking */
+    margin: 0 !important;
+    padding: 0 !important;
+    line-height: inherit !important;
+    /* Inherit 32px from parent */
+    white-space: nowrap !important;
+    vertical-align: baseline;
 }
 
 .markdown-db-cell-content.rendered p {
-	display: inline !important;
-	margin: 0 !important;
-	padding: 0 !important;
-	line-height: inherit !important;
+    display: inline !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    line-height: inherit !important;
 }
 
 /* Editing view - Multiline mode */
 .markdown-db-cell-content.editing {
-	height: auto;
-	max-height: none;
-	display: block;
-	line-height: 1.5;
-	white-space: pre-wrap;
-	overflow: visible;
-	padding: 6px 8px; /* Restore padding for editing */
+    height: auto;
+    max-height: none;
+    display: block;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    overflow: visible;
+    padding: 6px 8px;
+    /* Restore padding for editing */
 }
 
 .markdown-db-cell-content:hover {
-	background-color: var(--background-modifier-hover);
+    background-color: var(--background-modifier-hover);
 }
 
 .markdown-db-cell-content:focus {
-	background-color: var(--background-primary);
-	border-color: var(--interactive-accent);
-	cursor: text;
+    background-color: var(--background-primary);
+    border-color: var(--interactive-accent);
+    cursor: text;
 }
 
 /* Modal Styling for Content Editing */
@@ -201,7 +226,7 @@
     overflow: hidden;
     background: var(--background-primary);
     border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 .markdown-db-record-modal .modal-content {
@@ -235,6 +260,7 @@
     color: var(--text-normal);
     line-height: 1.2;
 }
+
 .markdown-db-record-title-input:focus {
     box-shadow: none;
     border-bottom: 1px solid var(--background-modifier-border);
@@ -285,50 +311,51 @@
     resize: none;
     outline: none;
 }
+
 .markdown-db-record-content textarea:focus {
     box-shadow: none;
 }
 
 .markdown-db-content-modal-textarea {
     /* Legacy override or specific usage */
-	width: 100%;
-	resize: none;
-	background: var(--background-primary);
-	color: var(--text-normal);
-	border: 1px solid var(--background-modifier-border);
-	padding: 10px;
+    width: 100%;
+    resize: none;
+    background: var(--background-primary);
+    color: var(--text-normal);
+    border: 1px solid var(--background-modifier-border);
+    padding: 10px;
 }
 
 .markdown-db-cell-placeholder {
-	color: var(--text-faint);
-	pointer-events: none;
-	/* Let clicks pass to editable div */
+    color: var(--text-faint);
+    pointer-events: none;
+    /* Let clicks pass to editable div */
 }
 
 /* Open Button */
 .markdown-db-row:hover .markdown-db-open-btn {
-	opacity: 1;
+    opacity: 1;
 }
 
 .markdown-db-open-btn {
-	position: absolute;
-	right: 4px;
-	top: 50%;
-	transform: translateY(-50%);
-	opacity: 0;
-	transition: opacity 0.2s;
-	background: var(--interactive-accent);
-	color: var(--text-on-accent);
-	border: none;
-	border-radius: 4px;
-	padding: 2px 8px;
-	font-size: 11px;
-	cursor: pointer;
-	z-index: 5;
+    position: absolute;
+    right: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    opacity: 0;
+    transition: opacity 0.2s;
+    background: var(--interactive-accent);
+    color: var(--text-on-accent);
+    border: none;
+    border-radius: 4px;
+    padding: 2px 8px;
+    font-size: 11px;
+    cursor: pointer;
+    z-index: 5;
 }
 
 .markdown-db-open-btn:hover {
-	background: var(--interactive-accent-hover);
+    background: var(--interactive-accent-hover);
 }
 
 /* Hide Properties Mode - Scoped to cssclass */
@@ -338,35 +365,36 @@
 
 /* Toolbar */
 .markdown-db-toolbar {
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	padding: 0 16px;
-	/* Adjust padding */
-	border-bottom: 1px solid var(--background-modifier-border);
-	background: var(--background-primary);
-	height: 48px;
-    flex-shrink: 0; /* Prevent shrinking */
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 16px;
+    /* Adjust padding */
+    border-bottom: 1px solid var(--background-modifier-border);
+    background: var(--background-primary);
+    height: 48px;
+    flex-shrink: 0;
+    /* Prevent shrinking */
 }
 
 .modal.markdown-db-dashboard-modal .markdown-db-toolbar {
-	padding: 0;
+    padding: 0;
 }
 
 .markdown-db-toolbar-left {
-	display: flex;
-	align-items: center;
-	flex: 1;
-	overflow: hidden;
+    display: flex;
+    align-items: center;
+    flex: 1;
+    overflow: hidden;
 }
 
 .markdown-db-title {
-	margin: 0;
-	font-size: 16px;
-	font-weight: 600;
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .markdown-db-title-input {
@@ -379,15 +407,16 @@
     width: 100%;
     font-family: "inherit";
 }
+
 .markdown-db-title-input:focus {
     outline: none;
     border-bottom: 1px solid var(--interactive-accent);
 }
 
 .markdown-db-toolbar-right {
-	display: flex;
-	align-items: center;
-	gap: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 /* Header Layout */
@@ -449,7 +478,8 @@
 }
 
 .markdown-db-view-tab.active {
-    background-color: var(--background-modifier-hover); /* Notion uses slight background for active tab too? Or underline? */
+    background-color: var(--background-modifier-hover);
+    /* Notion uses slight background for active tab too? Or underline? */
     /* Usually Notion tabs are just text with underline or background. Let's use background for now. */
     border-radius: 15px;
     color: var(--text-normal);
@@ -473,6 +503,7 @@
     color: var(--text-muted);
     transition: background-color 0.1s;
 }
+
 .markdown-db-view-add:hover {
     background-color: var(--background-modifier-hover);
     color: var(--text-normal);
@@ -480,41 +511,41 @@
 
 /* Search */
 .markdown-db-search-container {
-	display: flex;
-	align-items: center;
-	position: relative;
-	transition: width 0.2s;
+    display: flex;
+    align-items: center;
+    position: relative;
+    transition: width 0.2s;
 }
 
 /* Expandable search logic */
 .markdown-db-search-container.active {
-	background: var(--background-modifier-form-field);
-	border-radius: 4px;
-	padding: 4px 8px;
-	width: 200px;
+    background: var(--background-modifier-form-field);
+    border-radius: 4px;
+    padding: 4px 8px;
+    width: 200px;
 }
 
 /* .markdown-db-toolbar-btn.icon-only removed */
 
 .markdown-db-search-icon {
-	opacity: 0.5;
-	margin-right: 6px;
-	font-size: 14px;
+    opacity: 0.5;
+    margin-right: 6px;
+    font-size: 14px;
 }
 
 .markdown-db-search-input {
-	border: none;
-	background: transparent;
-	outline: none;
-	width: 100%;
-	padding: 0;
-	font-size: 14px;
-	color: var(--text-normal);
+    border: none;
+    background: transparent;
+    outline: none;
+    width: 100%;
+    padding: 0;
+    font-size: 14px;
+    color: var(--text-normal);
 }
 
 .markdown-db-search-input:focus {
-	box-shadow: none;
-	border: none;
+    box-shadow: none;
+    border: none;
 }
 
 
@@ -527,7 +558,8 @@
     cursor: pointer;
     display: flex;
     align-items: center;
-    justify-content: center; /* Added for centering */
+    justify-content: center;
+    /* Added for centering */
     gap: 6px;
     transition: background 0.1s;
     font-size: 14px;
@@ -541,7 +573,8 @@
     height: 18px;
 }
 
-.markdown-db-toolbar-text-btn:hover, .markdown-db-toolbar-text-btn.active {
+.markdown-db-toolbar-text-btn:hover,
+.markdown-db-toolbar-text-btn.active {
     background: var(--background-modifier-hover) !important;
     color: var(--text-normal);
 }
@@ -641,8 +674,8 @@
 }
 
 /* Dashboard Modal Styles */
-.modal.markdown-db-dashboard-modal  {
-	width: 1250px !important;
+.modal.markdown-db-dashboard-modal {
+    width: 1250px !important;
     max-width: 98vw !important;
     height: 800px;
     /* width: 95vw !important; */
@@ -690,12 +723,12 @@
     width: 260px;
     background-color: var(--background-secondary);
     border: 1px solid var(--background-modifier-border);
-	border-radius: 15px;
+    border-radius: 15px;
     display: flex;
-	flex: 0 0 250px;
+    flex: 0 0 250px;
     flex-direction: column;
     padding: 20px;
-	margin: 10px;
+    margin: 10px;
     flex-shrink: 0;
     overflow-y: auto;
 }
@@ -763,14 +796,15 @@
 /* Main Content */
 .markdown-db-dashboard-main {
     flex: 1;
-	margin: 10px;
-	margin-top: 25px;
+    margin: 10px;
+    margin-top: 25px;
     display: flex;
     flex-direction: column;
     overflow: hidden;
     position: relative;
     background-color: var(--background-primary);
-    min-width: 0; /* Prevent flex overflow */
+    min-width: 0;
+    /* Prevent flex overflow */
 }
 
 .markdown-db-dashboard-view {
@@ -789,7 +823,7 @@
 }
 
 .modal.markdown-db-dashboard-modal .markdown-db-table-container {
-	padding: 0;
+    padding: 0;
 }
 
 /* Footer / Quick Add */
@@ -798,7 +832,8 @@
     border-top: 1px solid var(--background-modifier-border);
     background-color: var(--background-primary);
     z-index: 10;
-    flex-shrink: 0; /* Prevent shrinking */
+    flex-shrink: 0;
+    /* Prevent shrinking */
 }
 
 .markdown-db-quick-add-container {
@@ -840,7 +875,8 @@
     cursor: pointer;
     font-weight: 500;
     font-size: 13px;
-    height: 34px; /* Match input height roughly */
+    height: 34px;
+    /* Match input height roughly */
     align-self: center;
     transition: opacity 0.2s;
 }
@@ -859,69 +895,70 @@
     font-size: 16px;
     gap: 16px;
 }
+
 .markdown-db-config-container {
-	position: relative;
+    position: relative;
 }
 
 /* .markdown-db-toolbar-btn removed - unified with text-btn */
 
 .markdown-db-config-menu {
-	position: absolute;
-	top: 100%;
-	right: 0;
-	margin-top: 4px;
-	background: var(--background-primary);
-	border: 1px solid var(--background-modifier-border);
-	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-	border-radius: 6px;
-	padding: 8px;
-	z-index: 50;
-	min-width: 180px;
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 4px;
+    background: var(--background-primary);
+    border: 1px solid var(--background-modifier-border);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    border-radius: 6px;
+    padding: 8px;
+    z-index: 50;
+    min-width: 180px;
 }
 
 .markdown-db-config-item {
-	display: flex;
-	flex-direction: column;
-	margin-bottom: 8px;
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 8px;
 }
 
 .markdown-db-config-item:last-child {
-	margin-bottom: 0;
+    margin-bottom: 0;
 }
 
 .markdown-db-config-label {
-	font-size: 11px;
-	color: var(--text-muted);
-	margin-bottom: 4px;
-	font-weight: 600;
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+    font-weight: 600;
 }
 
 .markdown-db-config-menu select {
-	background: var(--background-secondary);
-	border: 1px solid var(--background-modifier-border);
-	border-radius: 4px;
-	padding: 4px;
-	width: 100%;
-	color: var(--text-normal);
+    background: var(--background-secondary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 4px;
+    padding: 4px;
+    width: 100%;
+    color: var(--text-normal);
 }
 
 /* New Button */
 .markdown-db-new-btn {
-	background: var(--interactive-accent) !important;
-	color: var(--text-on-accent) !important;
-	border: none;
-	gap: 8px;
-	padding: 6px 12px;
-	border-radius: 5px;
-	font-weight: 500;
-	cursor: pointer;
-	display: flex;
-	align-items: center;
-	transition: background 0.1s;
+    background: var(--interactive-accent) !important;
+    color: var(--text-on-accent) !important;
+    border: none;
+    gap: 8px;
+    padding: 6px 12px;
+    border-radius: 5px;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    transition: background 0.1s;
 }
 
 .markdown-db-new-btn:hover {
-	background: var(--interactive-accent-hover) !important;
+    background: var(--interactive-accent-hover) !important;
 }
 
 /* Settings Page Styles */
@@ -1046,7 +1083,8 @@
 /* Fix header button alignment */
 .markdown-db-settings-sidebar-header .markdown-db-input-group button {
     padding: 4px 8px;
-    height: 30px; /* Match input height usually */
+    height: 30px;
+    /* Match input height usually */
 }
 
 /* Sidebar Footer & Create Button */
@@ -1075,25 +1113,25 @@
 
 /* Theme Adaptation Variables */
 :root {
-  --tag-color-1: #ffdec9;
-  --tag-color-2: #ffe2dd;
-  --tag-color-3: #fdecc8;
-  --tag-color-4: #dbeddb;
-  --tag-color-5: #d3e5ef;
-  --tag-color-6: #e8deee;
-  --tag-color-7: #f5e0e9;
-  --tag-color-8: #e3e2e0;
+    --tag-color-1: #ffdec9;
+    --tag-color-2: #ffe2dd;
+    --tag-color-3: #fdecc8;
+    --tag-color-4: #dbeddb;
+    --tag-color-5: #d3e5ef;
+    --tag-color-6: #e8deee;
+    --tag-color-7: #f5e0e9;
+    --tag-color-8: #e3e2e0;
 }
 
 .theme-dark {
-  --tag-color-1: #5c4332;
-  --tag-color-2: #5c3532;
-  --tag-color-3: #5c5232;
-  --tag-color-4: #384d38;
-  --tag-color-5: #32465c;
-  --tag-color-6: #4d324d;
-  --tag-color-7: #5c3246;
-  --tag-color-8: #4a4a4a;
+    --tag-color-1: #5c4332;
+    --tag-color-2: #5c3532;
+    --tag-color-3: #5c5232;
+    --tag-color-4: #384d38;
+    --tag-color-5: #32465c;
+    --tag-color-6: #4d324d;
+    --tag-color-7: #5c3246;
+    --tag-color-8: #4a4a4a;
 }
 
 /* Toolbar Buttons & Menus (Notion-style) */
@@ -1107,13 +1145,15 @@
     display: none;
     position: absolute;
     right: 4px;
-    top: 4px; /* Align to top-right corner */
+    top: 4px;
+    /* Align to top-right corner */
     background: var(--background-primary);
     /* border: 1px solid var(--background-modifier-border); */
     border-radius: 4px;
     padding: 4px;
     cursor: pointer;
-    z-index: 20; /* Higher than view layer */
+    z-index: 20;
+    /* Higher than view layer */
     align-items: center;
     justify-content: center;
     color: var(--text-muted);
@@ -1137,7 +1177,8 @@
     transition: background 0.1s;
 }
 
-.markdown-db-toolbar-text-button:hover, .markdown-db-toolbar-text-button.active {
+.markdown-db-toolbar-text-button:hover,
+.markdown-db-toolbar-text-button.active {
     background: var(--background-modifier-hover);
     color: var(--text-normal);
 }
@@ -1150,6 +1191,7 @@
     background: var(--interactive-accent);
     color: var(--text-on-accent);
 }
+
 /* Settings Tabs */
 .markdown-db-settings-tabs {
     display: flex;
@@ -1196,35 +1238,35 @@
 }
 
 .internal-embed.is-loaded.markdown-db-embed .markdown-db-table thead tr th {
-  background-color: var(--background-primary);
-  border-top: 1px solid var(--background-modifier-border);
-  white-space: nowrap;
+    background-color: var(--background-primary);
+    border-top: 1px solid var(--background-modifier-border);
+    white-space: nowrap;
 }
 
 .internal-embed.is-loaded.markdown-db-embed .markdown-db-table tr td:first-child,
 .internal-embed.is-loaded.markdown-db-embed .markdown-db-table tr th:first-child {
-  display: none;
+    display: none;
 }
 
 .internal-embed.is-loaded.markdown-db-embed th:nth-child(2),
 .internal-embed.is-loaded.markdown-db-embed td:nth-child(2) {
-  border-left: 1px solid var(--divider-color);
+    border-left: 1px solid var(--divider-color);
 }
 
 .internal-embed .markdown-db-view-switcher .markdown-db-view-tab:not(.active) {
-  display: none;
+    display: none;
 }
 
-.internal-embed.is-loaded.markdown-db-embed .markdown-db-toolbar{
-  display: none;
+.internal-embed.is-loaded.markdown-db-embed .markdown-db-toolbar {
+    display: none;
 }
 
 .internal-embed.is-loaded.markdown-db-embed .markdown-db-title-input-large {
-  pointer-events: none !important
+    pointer-events: none !important
 }
 
 .internal-embed.is-loaded.markdown-db-embed .markdown-db-header-title-row {
-  padding-bottom: 10px !important;
+    padding-bottom: 10px !important;
 }
 
 .internal-embed.is-loaded.markdown-db-embed .markdown-db-table {
@@ -1234,18 +1276,21 @@
 
 /* Scrollbar visibility on hover (Mac-like behavior enhancement) */
 .internal-embed.is-loaded.markdown-db-embed .markdown-db-table-container::-webkit-scrollbar {
-    width: 12px; /* Windows 下可调大一点 */
+    width: 12px;
+    /* Windows 下可调大一点 */
     height: 12px;
     background-color: transparent;
 }
 
 .internal-embed.is-loaded.markdown-db-embed .markdown-db-table-container::-webkit-scrollbar-thumb {
-    background-color: transparent; /* 默认隐藏 */
+    background-color: transparent;
+    /* 默认隐藏 */
     border-radius: 8px;
 }
 
 .internal-embed.is-loaded.markdown-db-embed .markdown-db-table-container:hover::-webkit-scrollbar-thumb {
-    background-color: var(--scrollbar-thumb-bg); /* 悬浮时显示 */
+    background-color: var(--scrollbar-thumb-bg);
+    /* 悬浮时显示 */
 }
 
 /* Read-only mode styles */

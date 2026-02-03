@@ -24,12 +24,15 @@ interface TableViewProps {
     onHeaderContextMenu: (key: string, event: React.MouseEvent) => void;
     onUpdateConfig: (key: string, value: string) => void;
     onReorderRecord?: (fromIndex: number, toIndex: number) => void;
+    onSyncItem?: (record: DatabaseRecord) => void;
+    isSyncing?: boolean;
+    syncDirection?: 'push' | 'pull';
     portalContainer?: HTMLElement;
     component?: any; // Component type from obsidian
     readonly?: boolean;
 }
 
-export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourcePath, globalProperties, onUpdateProperty, onUpdateContent, onRenameRecord, onOpenRecord, onAddRecord, onAddProperty, onSaveToGlobal, onRemoveGlobalValue, onRowContextMenu, onHeaderContextMenu, onUpdateConfig, onReorderRecord, portalContainer, component, readonly }) => {
+export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourcePath, globalProperties, onUpdateProperty, onUpdateContent, onRenameRecord, onOpenRecord, onAddRecord, onAddProperty, onSaveToGlobal, onRemoveGlobalValue, onRowContextMenu, onHeaderContextMenu, onUpdateConfig, onReorderRecord, onSyncItem, isSyncing, syncDirection, portalContainer, component, readonly }) => {
     
     const propertyKeys = useMemo(() => {
         const all = Array.from(data.allKeys);
@@ -386,6 +389,16 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
         return "&gt;";
     }, []);
 
+    const syncIcon = useMemo(() => {
+        const icon = getIcon("refresh-cw");
+        if (icon) {
+            icon.style.width = "12px";
+            icon.style.height = "12px";
+            return icon.outerHTML;
+        }
+        return "S";
+    }, []);
+
     return (
         <div className="markdown-db-table-container">
             <table className="markdown-db-table" style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0 }}>
@@ -546,20 +559,57 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                                         color: "var(--text-normal)",
                                         position: "relative"
                                     }}>
-                                        <EditableCell
-                                            app={app}
-                                            component={component || null}
-                                            sourcePath={sourcePath || displayTitle}
-                                            value={val?.map(v => String(v.value)).join(", ") || ""}
-                                            onSave={(newVal) => onUpdateProperty(record, key, newVal, type)}
-                                            suggestions={propertySuggestions[key] || []}
-                                            isPropertyColumn={type === "multi" || type === "select" || type === "boolean" || type === "date" || type === "number"}
-                                            propertyKey={key}
-                                            onRemoveGlobalValue={onRemoveGlobalValue}
-                                            portalContainer={portalContainer}
-                                            type={type}
-                                            readonly={readonly}
-                                        />
+                                        <div style={{ position: "relative", width: "100%", height: "100%" }}>
+                                            <EditableCell
+                                                app={app}
+                                                component={component || null}
+                                                sourcePath={sourcePath || displayTitle}
+                                                value={val?.map(v => String(v.value)).join(", ") || ""}
+                                                onSave={(newVal) => onUpdateProperty(record, key, newVal, type)}
+                                                suggestions={propertySuggestions[key] || []}
+                                                isPropertyColumn={type === "multi" || type === "select" || type === "boolean" || type === "date" || type === "number"}
+                                                propertyKey={key}
+                                                onRemoveGlobalValue={onRemoveGlobalValue}
+                                                portalContainer={portalContainer}
+                                                type={type}
+                                                readonly={readonly}
+                                            />
+                                            {key === "sync" && !readonly && onSyncItem && (
+                                                <div
+                                                    style={{
+                                                        position: "absolute",
+                                                        right: "4px",
+                                                        top: "50%",
+                                                        transform: "translateY(-50%)",
+                                                        opacity: hoveredRowIndex === index ? 0.7 : 0,
+                                                        cursor: "pointer",
+                                                        padding: "2px",
+                                                        borderRadius: "4px",
+                                                        display: "flex",
+                                                        alignItems: "center",
+                                                        backgroundColor: "var(--background-primary)",
+                                                        boxShadow: "0 0 4px rgba(0,0,0,0.1)",
+                                                        transition: "opacity 0.2s, background-color 0.2s",
+                                                        pointerEvents: hoveredRowIndex === index ? "auto" : "none",
+                                                        zIndex: 10
+                                                    }}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        if (isSyncing) return;
+                                                        onSyncItem && onSyncItem(record);
+                                                    }}
+                                                    title={isSyncing ? "Syncing..." : (syncDirection === 'pull' ? "Pull from Notion" : "Push to Notion")}
+                                                    onMouseEnter={(e) => (e.currentTarget.style.opacity = "1")}
+                                                    onMouseLeave={(e) => (e.currentTarget.style.opacity = "0.7")}
+                                                >
+                                                    <span 
+                                                        className={isSyncing ? "markdown-db-syncing-icon" : ""}
+                                                        style={{ display: "flex", alignItems: "center", color: "var(--text-normal)" }}
+                                                        dangerouslySetInnerHTML={{ __html: syncIcon }}
+                                                    />
+                                                </div>
+                                            )}
+                                        </div>
                                     </td>
                                 );
                             })}

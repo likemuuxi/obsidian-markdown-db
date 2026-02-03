@@ -4,9 +4,10 @@ import { useState, useMemo } from "react";
 import { createRoot, Root } from "react-dom/client";
 import { TableView } from "../components/TableView";
 import { Toolbar } from "../components/Toolbar";
-import { parseFile} from "../database/parser";
+import { parseFile } from "../database/parser";
 import { DatabaseRecord, DatabaseConfig, PropertyType, FilterRule, SortRule } from "../database/schema";
-import { updateProperty, renameRecord, addRecord, updateConfig, deleteRecord, updateContent, addPropertyToAllRecords, deletePropertyFromAllRecords, updateTitle, reorderRecords, renamePropertyInAllRecords,
+import {
+    updateProperty, renameRecord, addRecord, updateConfig, deleteRecord, updateContent, addPropertyToAllRecords, deletePropertyFromAllRecords, updateTitle, reorderRecords, renamePropertyInAllRecords,
     deleteView,
     renameView,
     reorderViews
@@ -23,6 +24,7 @@ export interface IMarkdownDBView {
     plugin: MarkdownDBPlugin;
     app: App;
     file: TFile | null;
+    isSyncing?: boolean; // Add sync state
     handleUpdateProperty: (record: DatabaseRecord, key: string, value: string, explicitType?: string) => Promise<void>;
     handleUpdateContent: (record: DatabaseRecord, newContent: string) => Promise<void>;
     handleRenameRecord: (record: DatabaseRecord, newName: string) => Promise<void>;
@@ -37,6 +39,7 @@ export interface IMarkdownDBView {
     handleReorderViews: (viewNames: string[]) => Promise<void>;
     handleRowContextMenu: (record: DatabaseRecord, event: React.MouseEvent) => void;
     handleHeaderContextMenu: (key: string, event: React.MouseEvent, config?: DatabaseConfig, records?: DatabaseRecord[], viewName?: string) => void;
+    handleSyncItem: (record: DatabaseRecord) => Promise<void>;
 }
 
 export const MarkdownDBApp = (props: {
@@ -60,7 +63,7 @@ export const MarkdownDBApp = (props: {
 
     const resolvedInitialView = useMemo(() => {
         if (!props.initialView) return null;
-        
+
         // 1. Direct match
         if (dbData.views && dbData.views[props.initialView]) {
             return props.initialView;
@@ -71,23 +74,47 @@ export const MarkdownDBApp = (props: {
         if (dbData.title && props.initialView.startsWith(dbData.title)) {
             const remainder = props.initialView.substring(dbData.title.length).trim();
             let potentialName: string | null = null;
-            
+
             if (remainder.startsWith("(") && remainder.endsWith(")")) {
                 potentialName = remainder.substring(1, remainder.length - 1).trim();
             } else if (remainder.startsWith("（") && remainder.endsWith("）")) {
                 potentialName = remainder.substring(1, remainder.length - 1).trim();
             }
-            
+
             if (potentialName && dbData.views && dbData.views[potentialName]) {
                 return potentialName;
             }
         }
-        
+
         return props.initialView;
     }, [dbData, props.initialView]);
 
     const [searchTerm, setSearchTerm] = useState("");
     const [currentViewName, setCurrentViewName] = useState<string | null>(resolvedInitialView);
+
+    // Listen for sync status
+    const [isSyncing, setIsSyncing] = useState(false);
+    const [syncDirection, setSyncDirection] = useState<'push' | 'pull'>('push');
+
+    React.useEffect(() => {
+        if (props.view.plugin.notionSyncService) {
+            // Initial state
+            setIsSyncing(props.view.plugin.notionSyncService.isSyncing);
+
+            // Get sync direction
+            if (props.file) {
+                const config = props.view.plugin.notionSyncService.getSyncConfigForFile(props.file);
+                if (config) {
+                    setSyncDirection(config.syncDirection || 'push');
+                }
+            }
+
+            // Register listener
+            props.view.plugin.notionSyncService.registerSyncStatusListener((status) => {
+                setIsSyncing(status);
+            });
+        }
+    }, [props.view.plugin.notionSyncService, props.file]);
 
     const viewNotFound = useMemo(() => {
         if (props.initialView) {
@@ -148,35 +175,35 @@ export const MarkdownDBApp = (props: {
 
     const handleAddView = async (name: string, config: { openMode: string, showContent: boolean, contentHeight: string, filters: FilterRule[], sorts: SortRule[] }) => {
         if (!name) return;
-        
+
         // Check for duplicate names
         let newName = name;
         const existingViews = dbData.views ? Object.keys(dbData.views) : [];
         let index = 1;
         const originalName = newName;
-        
+
         while (existingViews.includes(newName)) {
             newName = `${originalName} ${index}`;
             index++;
         }
-        
-        if (props.file) {
-             // Initialize with user selected configs sequentially to avoid race conditions on view creation
-             await props.view.handleUpdateConfig("db-open-mode", config.openMode, newName);
-             await props.view.handleUpdateConfig("db-show-content", config.showContent ? "true" : "false", newName);
-             await props.view.handleUpdateConfig("db-content-height", config.contentHeight, newName);
-             
-             // Save filters (use explicit config from popup)
-             if (config.filters && config.filters.length > 0) {
-                 await props.view.handleUpdateConfig("db-filter", JSON.stringify(config.filters), newName);
-             }
-             
-             // Save sorts (use explicit config from popup)
-             if (config.sorts && config.sorts.length > 0) {
-                 await props.view.handleUpdateConfig("db-sort", JSON.stringify(config.sorts), newName);
-             }
 
-             setCurrentViewName(newName);
+        if (props.file) {
+            // Initialize with user selected configs sequentially to avoid race conditions on view creation
+            await props.view.handleUpdateConfig("db-open-mode", config.openMode, newName);
+            await props.view.handleUpdateConfig("db-show-content", config.showContent ? "true" : "false", newName);
+            await props.view.handleUpdateConfig("db-content-height", config.contentHeight, newName);
+
+            // Save filters (use explicit config from popup)
+            if (config.filters && config.filters.length > 0) {
+                await props.view.handleUpdateConfig("db-filter", JSON.stringify(config.filters), newName);
+            }
+
+            // Save sorts (use explicit config from popup)
+            if (config.sorts && config.sorts.length > 0) {
+                await props.view.handleUpdateConfig("db-sort", JSON.stringify(config.sorts), newName);
+            }
+
+            setCurrentViewName(newName);
         }
     };
 
@@ -220,6 +247,10 @@ export const MarkdownDBApp = (props: {
         if (props.file) props.view.handleUpdateConfig(key, value, viewName);
     };
 
+    const handleSyncItem = async (record: DatabaseRecord) => {
+        if (props.file && props.view.handleSyncItem) await props.view.handleSyncItem(record);
+    };
+
     // Override data records with filtered ones for display
     const displayData = { ...dbData, config: currentConfig, records: filteredRecords };
 
@@ -237,22 +268,22 @@ export const MarkdownDBApp = (props: {
         <div className={`markdown-db-container ${props.readonly ? "markdown-db-readonly" : ""}`}>
             <Toolbar
                 title={dbData.title}
-                    config={currentConfig}
-                    onSearch={setSearchTerm}
-                    onUpdateConfig={handleUpdateConfig}
-                    onAddRecord={handleAddRecord}
-                    onUpdateTitle={handleUpdateTitle}
-                    allProperties={Array.from(dbData.allKeys)}
-                    views={dbData.views ? Object.keys(dbData.views) : []}
-                    currentView={currentViewName}
-                    onSwitchView={handleSwitchView}
-                    onAddView={handleAddView}
-                    onRenameView={handleRenameView}
-                    onDeleteView={handleDeleteView}
-                    onReorderViews={handleReorderViews}
-                    viewsConfig={dbData.views}
-                    onUpdateViewConfig={handleUpdateViewConfig}
-                />
+                config={currentConfig}
+                onSearch={setSearchTerm}
+                onUpdateConfig={handleUpdateConfig}
+                onAddRecord={handleAddRecord}
+                onUpdateTitle={handleUpdateTitle}
+                allProperties={Array.from(dbData.allKeys)}
+                views={dbData.views ? Object.keys(dbData.views) : []}
+                currentView={currentViewName}
+                onSwitchView={handleSwitchView}
+                onAddView={handleAddView}
+                onRenameView={handleRenameView}
+                onDeleteView={handleDeleteView}
+                onReorderViews={handleReorderViews}
+                viewsConfig={dbData.views}
+                onUpdateViewConfig={handleUpdateViewConfig}
+            />
             <TableView
                 app={props.view.app}
                 data={displayData}
@@ -272,6 +303,8 @@ export const MarkdownDBApp = (props: {
                 onHeaderContextMenu={handleHeaderContextMenu}
                 onUpdateConfig={handleUpdateConfig}
                 onReorderRecord={handleReorderRecord}
+                onSyncItem={props.view.handleSyncItem ? handleSyncItem : undefined}
+                isSyncing={isSyncing}
                 readonly={props.readonly}
             />
         </div>
@@ -368,7 +401,7 @@ export class MarkdownDBView extends TextFileView implements IMarkdownDBView {
         await addPropertyToAllRecords(this.app, this.file, name, type);
 
         const dbData = parseFile(this.fileContent);
-        
+
         // Update column types
         const newTypes = { ...(dbData.config.columnTypes || {}), [name]: type };
         await updateConfig(this.app, this.file, "db-column-types", JSON.stringify(newTypes));
@@ -378,7 +411,7 @@ export class MarkdownDBView extends TextFileView implements IMarkdownDBView {
     handleSaveToGlobal = async (name: string, type?: PropertyType) => {
         const newProps = [...this.plugin.settings.properties];
         const existingIndex = newProps.findIndex(p => p.name === name);
-        
+
         if (existingIndex >= 0) {
             if (type && newProps[existingIndex].type !== type) {
                 newProps[existingIndex] = { ...newProps[existingIndex], type };
@@ -391,7 +424,7 @@ export class MarkdownDBView extends TextFileView implements IMarkdownDBView {
                 ignoredValues: []
             });
         }
-        
+
         this.plugin.settings.properties = newProps;
         await this.plugin.saveSettings();
         this.refresh();
@@ -400,7 +433,7 @@ export class MarkdownDBView extends TextFileView implements IMarkdownDBView {
     handleRemoveGlobalValue = async (key: string, value: string) => {
         const newProps = [...this.plugin.settings.properties];
         const propIndex = newProps.findIndex(p => p.name === key);
-        
+
         if (propIndex >= 0) {
             const prop = newProps[propIndex];
             newProps[propIndex] = {
@@ -446,6 +479,41 @@ export class MarkdownDBView extends TextFileView implements IMarkdownDBView {
     handleReorderViews = async (viewNames: string[]) => {
         if (this.file) {
             await reorderViews(this.app, this.file, viewNames);
+        }
+    }
+
+    handleSyncItem = async (record: DatabaseRecord) => {
+        if (!this.file) return;
+
+        // Find config
+        const config = this.plugin.settings.notionSyncConfigs.find(c => c.targetDbPath === this.file?.path);
+        if (!config) {
+            // Not a Notion synced DB or not configured
+            return;
+        }
+
+        // Extract URL from notionUrl property
+        let url = "";
+        const notionUrlProp = record.properties["notionUrl"];
+        if (notionUrlProp && notionUrlProp.length > 0) {
+            url = String(notionUrlProp[0].value);
+        }
+
+        // Fallback: try to extract from title if old format
+        if (!url) {
+            const match = record.title.match(/\]\((https:\/\/(?:www\.)?notion\.so\/[^)]+)\)/);
+            if (match) {
+                url = match[1];
+            }
+        }
+
+        if (this.plugin.notionSyncService) {
+            if (url) {
+                await this.plugin.notionSyncService.syncPage(url, config, this.file, record);
+            } else {
+                // Try to find by title in Notion DB
+                await this.plugin.notionSyncService.syncByTitle(record, config, this.file);
+            }
         }
     }
 
@@ -521,24 +589,24 @@ export class MarkdownDBView extends TextFileView implements IMarkdownDBView {
                 .onClick(() => {
                     new RenameModal(this.app, key, async (newName) => {
                         if (newName && newName !== key && this.file) {
-                             await renamePropertyInAllRecords(this.app, this.file, key, newName);
-                             
-                             // Update config columnTypes
-                             if (config?.columnTypes && config.columnTypes[key]) {
-                                 const type = config.columnTypes[key];
-                                 const newTypes = { ...config.columnTypes };
-                                 delete newTypes[key];
-                                 newTypes[newName] = type;
-                                 await updateConfig(this.app, this.file, "db-column-types", JSON.stringify(newTypes), viewName);
-                             }
-                             
-                             // Update config columnOrder
-                             if (config?.columnOrder && config.columnOrder.includes(key)) {
-                                 const newOrder = config.columnOrder.map(k => k === key ? newName : k);
-                                 await updateConfig(this.app, this.file, "db-columns", JSON.stringify(newOrder), viewName);
-                             }
-                             
-                             new Notice(`Property renamed to "${newName}"`);
+                            await renamePropertyInAllRecords(this.app, this.file, key, newName);
+
+                            // Update config columnTypes
+                            if (config?.columnTypes && config.columnTypes[key]) {
+                                const type = config.columnTypes[key];
+                                const newTypes = { ...config.columnTypes };
+                                delete newTypes[key];
+                                newTypes[newName] = type;
+                                await updateConfig(this.app, this.file, "db-column-types", JSON.stringify(newTypes), viewName);
+                            }
+
+                            // Update config columnOrder
+                            if (config?.columnOrder && config.columnOrder.includes(key)) {
+                                const newOrder = config.columnOrder.map(k => k === key ? newName : k);
+                                await updateConfig(this.app, this.file, "db-columns", JSON.stringify(newOrder), viewName);
+                            }
+
+                            new Notice(`Property renamed to "${newName}"`);
                         }
                     }).open();
                 });
@@ -555,12 +623,12 @@ export class MarkdownDBView extends TextFileView implements IMarkdownDBView {
                         if (config?.columnTypes && config.columnTypes[key]) {
                             type = config.columnTypes[key];
                         } else if (records) {
-                             const foundRecord = records.find(r => r.properties[key] && r.properties[key].length > 0);
-                             if (foundRecord) {
-                                 type = foundRecord.properties[key][0].type;
-                             }
+                            const foundRecord = records.find(r => r.properties[key] && r.properties[key].length > 0);
+                            if (foundRecord) {
+                                type = foundRecord.properties[key][0].type;
+                            }
                         }
-                        
+
                         this.plugin.settings.properties = [
                             ...this.plugin.settings.properties,
                             {
@@ -585,7 +653,7 @@ export class MarkdownDBView extends TextFileView implements IMarkdownDBView {
                     if (this.file && config) {
                         const currentHidden = config.hiddenColumns || [];
                         const newHidden = [...currentHidden, key];
-                        
+
                         await updateConfig(this.app, this.file, "db-hide-columns", JSON.stringify(newHidden), viewName);
                     }
                 });
@@ -594,26 +662,26 @@ export class MarkdownDBView extends TextFileView implements IMarkdownDBView {
         if (config) {
             const hiddenColumns = config.hiddenColumns || [];
             if (hiddenColumns.length > 0) {
-                 menu.addItem((item) => {
-                     item
-                         .setTitle("Unhide property")
-                         .setIcon("eye")
-                         .setSection("view");
-                     
-                     const submenu = (item as any).setSubmenu() as Menu;
-                     
-                     hiddenColumns.forEach(hiddenKey => {
-                         submenu.addItem((subItem) => {
-                             subItem.setTitle(hiddenKey)
-                                    .onClick(async () => {
-                                        if (this.file) {
-                                            const newHidden = hiddenColumns.filter(k => k !== hiddenKey);
-                                            await updateConfig(this.app, this.file, "db-hide-columns", JSON.stringify(newHidden), viewName);
-                                        }
-                                    });
-                         });
-                     });
-                 });
+                menu.addItem((item) => {
+                    item
+                        .setTitle("Unhide property")
+                        .setIcon("eye")
+                        .setSection("view");
+
+                    const submenu = (item as any).setSubmenu() as Menu;
+
+                    hiddenColumns.forEach(hiddenKey => {
+                        submenu.addItem((subItem) => {
+                            subItem.setTitle(hiddenKey)
+                                .onClick(async () => {
+                                    if (this.file) {
+                                        const newHidden = hiddenColumns.filter(k => k !== hiddenKey);
+                                        await updateConfig(this.app, this.file, "db-hide-columns", JSON.stringify(newHidden), viewName);
+                                    }
+                                });
+                        });
+                    });
+                });
             }
         }
 

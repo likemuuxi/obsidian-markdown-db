@@ -11,23 +11,32 @@ import { DashboardModal } from "./modals/DashboardModal";
 import { DBSwitcherModal } from "./modals/DBSwitcherModal";
 import { ImportModal } from "./modals/ImportModal";
 import { GithubSyncService } from "./services/github";
+import { NotionSyncService } from "./services/notion";
 
 export default class MarkdownDBPlugin extends Plugin {
     settings: MarkdownDBSettings;
     isToggling = false;
+    notionSyncService: NotionSyncService;
 
     async onload() {
         await this.loadSettings();
         await this.migrateSettings();
 
+        // Initialize services immediately so views can subscribe
+        this.notionSyncService = new NotionSyncService(this.app, this.settings);
+
         // Check for Auto-Sync
-        if (this.settings.autoSyncGithub) {
-            this.app.workspace.onLayoutReady(() => {
+        this.app.workspace.onLayoutReady(() => {
+            // Github
+            if (this.settings.autoSyncGithub) {
                 const githubService = new GithubSyncService(this.app, this.settings);
                 githubService.syncStars();
                 githubService.syncPRs();
-            });
-        }
+            }
+            
+            // Notion
+            this.notionSyncService.syncAll();
+        });
 
         // Register View
         this.registerView(
