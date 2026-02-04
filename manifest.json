@@ -1,5 +1,5 @@
 {
-    "id": "markdown-db-plugin",
+    "id": "markdown-db",
     "name": "Markdown DB",
     "version": "1.0.0",
     "minAppVersion": "0.15.0",
