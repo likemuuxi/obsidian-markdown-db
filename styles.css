@@ -150,6 +150,7 @@
 .markdown-db-cell-content.rendered {
     height: 100%;
     display: block;
+    max-height: 32px;
     /* Changed from flex to block for simpler line-height centering */
     line-height: 32px;
     white-space: nowrap;
