@@ -17,6 +17,8 @@ import { RenameModal } from "../modals/RenameModal";
 import type MarkdownDBPlugin from "../main";
 
 import { PropertyConfig } from "../settings";
+import { TemplateSuggestModal } from "../modals/TemplateSuggestModal";
+import { parseYaml } from "obsidian";
 
 export const VIEW_TYPE_MARKDOWN_DB = "markdown-db-view";
 
@@ -29,7 +31,6 @@ export interface IMarkdownDBView {
     handleUpdateContent: (record: DatabaseRecord, newContent: string) => Promise<void>;
     handleRenameRecord: (record: DatabaseRecord, newName: string) => Promise<void>;
     handleOpenRecord: (record: DatabaseRecord, config: DatabaseConfig) => Promise<void>;
-    handleAddRecord: () => Promise<void>;
     handleAddProperty: (name: string, type?: string) => Promise<void>;
     handleUpdateConfig: (key: string, value: string, viewName?: string) => Promise<void>;
     handleUpdateTitle: (newTitle: string) => Promise<void>;
@@ -40,6 +41,9 @@ export interface IMarkdownDBView {
     handleRowContextMenu: (record: DatabaseRecord, event: React.MouseEvent) => void;
     handleHeaderContextMenu: (key: string, event: React.MouseEvent, config?: DatabaseConfig, records?: DatabaseRecord[], viewName?: string) => void;
     handleSyncItem: (record: DatabaseRecord) => Promise<void>;
+    handleAddTemplate: () => Promise<void>;
+    handleRemoveTemplate: (path: string) => Promise<void>;
+    handleAddRecord: (templatePath?: string) => Promise<void>;
 }
 
 export const MarkdownDBApp = (props: {
@@ -47,8 +51,11 @@ export const MarkdownDBApp = (props: {
     file: TFile | null,
     view: IMarkdownDBView,
     globalProperties: PropertyConfig[],
+    templates: string[],
     onSaveToGlobal: (name: string, type?: PropertyType) => void,
     onRemoveGlobalValue: (key: string, value: string) => void,
+    onAddTemplate: () => void,
+    onRemoveTemplate: (path: string) => void,
     component?: any,
     readonly?: boolean,
     initialView?: string
@@ -157,8 +164,8 @@ export const MarkdownDBApp = (props: {
         props.view.handleOpenRecord(record, currentConfig);
     };
 
-    const handleAddRecord = () => {
-        if (props.file) props.view.handleAddRecord();
+    const handleAddRecord = (templatePath?: string) => {
+        if (props.file) props.view.handleAddRecord(templatePath);
     };
 
     const handleAddProperty = (name: string, type?: PropertyType) => {
@@ -283,6 +290,9 @@ export const MarkdownDBApp = (props: {
                 onReorderViews={handleReorderViews}
                 viewsConfig={dbData.views}
                 onUpdateViewConfig={handleUpdateViewConfig}
+                templates={props.templates}
+                onAddTemplate={props.onAddTemplate}
+                onRemoveTemplate={props.onRemoveTemplate}
             />
             <TableView
                 app={props.view.app}
@@ -388,10 +398,64 @@ export class MarkdownDBView extends TextFileView implements IMarkdownDBView {
         }
     }
 
-    handleAddRecord = async () => {
+    handleAddRecord = async (templatePath?: string) => {
         if (this.file) {
-            await addRecord(this.app, this.file, "Untitled");
+            let initialProperties = {};
+            if (templatePath) {
+                // console.log(`[MarkdownDB] Using template: ${templatePath}`);
+                const templateFile = this.app.vault.getAbstractFileByPath(templatePath);
+                if (templateFile instanceof TFile) {
+                    try {
+                        // Always read file content directly to avoid cache issues
+                        const content = await this.app.vault.read(templateFile);
+
+                        if (templateFile.extension === "md") {
+                            // Extract YAML frontmatter
+                            const match = content.match(/^---\s*\n([\s\S]*?)\n---/);
+                            if (match) {
+                                // @ts-ignore
+                                const parsed = parseYaml(match[1]);
+                                if (parsed && typeof parsed === "object") {
+                                    initialProperties = parsed;
+                                }
+                            }
+                        } else if (templateFile.extension === "yaml" || templateFile.extension === "yml") {
+                            // @ts-ignore
+                            const parsed = parseYaml(content);
+                            if (parsed && typeof parsed === "object") {
+                                initialProperties = parsed;
+                            }
+                        }
+                    } catch (e) {
+                        console.error("[MarkdownDB] Error parsing template", e);
+                        new Notice(`Error parsing template: ${e.message}`);
+                    }
+                } else {
+                    new Notice(`Template file not found: ${templatePath}`);
+                }
+            }
+            await addRecord(this.app, this.file, "Untitled", initialProperties);
         }
+    }
+
+    handleAddTemplate = async () => {
+        // Dynamic import to avoid circular dependency issues or just use a simple modal class here?
+        // Let's rely on a helper class or just inline a simple suggest modal logic if possible.
+        // Actually, creating a separate modal file is cleaner.
+        // But for now, to keep it simple, I'll use a FileSuggester.
+
+        // Since I cannot easily import a new file I haven't created, and creating one requires multiple steps.
+        // I'll try to use a simple prompt or Reuse an existing modal. 
+        // Or I can create a new Modal class in this file (outside default export).
+
+        new TemplateSuggestModal(this.plugin).open();
+    }
+
+    handleRemoveTemplate = async (path: string) => {
+        const newTemplates = this.plugin.settings.templates.filter(t => t !== path);
+        this.plugin.settings.templates = newTemplates;
+        await this.plugin.saveSettings();
+        this.refresh();
     }
 
     handleAddProperty = async (name: string, type: string = "text") => {
@@ -711,8 +775,11 @@ export class MarkdownDBView extends TextFileView implements IMarkdownDBView {
                     file: this.file,
                     view: this,
                     globalProperties: this.plugin.settings.properties,
+                    templates: this.plugin.settings.templates,
                     onSaveToGlobal: this.handleSaveToGlobal,
                     onRemoveGlobalValue: this.handleRemoveGlobalValue,
+                    onAddTemplate: this.handleAddTemplate,
+                    onRemoveTemplate: this.handleRemoveTemplate,
                     component: this
                 })
             );

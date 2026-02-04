@@ -86,7 +86,7 @@
     padding: 0;
     /* Let inner content handle padding for click area */
     vertical-align: top;
-    height: auto;
+    height: 1px;
     /* Allow height to adapt */
     max-width: 200px;
     /* Limit property columns */
@@ -149,7 +149,6 @@
 /* Rendered view - Single line mode */
 .markdown-db-cell-content.rendered {
     height: 100%;
-    max-height: 32px;
     display: block;
     /* Changed from flex to block for simpler line-height centering */
     line-height: 32px;
@@ -1306,4 +1305,53 @@
 .markdown-db-readonly .markdown-db-add-column-cell,
 .markdown-db-readonly .markdown-db-add-record-button {
     display: none !important;
+}
+
+/* Split Button */
+.markdown-db-split-btn {
+    display: flex;
+    align-items: center;
+    background: var(--interactive-accent);
+    border-radius: 4px;
+    height: 28px;
+    overflow: hidden;
+}
+
+.markdown-db-new-btn-main {
+    background: var(--interactive-accent) !important;
+    border: none;
+    color: var(--text-on-accent);
+    padding: 0 12px;
+    height: 100%;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    transition: background 0.1s;
+    border-right: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.markdown-db-new-btn-main:hover {
+    background: rgba(0, 0, 0, 0.1);
+    color: var(--text-on-accent);
+}
+
+.markdown-db-new-btn-arrow {
+    background: var(--interactive-accent) !important;
+    border: none;
+    color: var(--text-on-accent);
+    padding: 0 6px;
+    height: 100%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.1s;
+}
+
+.markdown-db-new-btn-arrow:hover {
+    background: rgba(0, 0, 0, 0.1);
+}
+
+.markdown-db-new-btn-arrow svg {
+    margin: 0;
 }

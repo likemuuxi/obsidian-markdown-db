@@ -141,12 +141,27 @@ export class NotionAPI {
     }
 
     async queryDatabase(databaseId: string, filter?: any, sorts?: any[]) {
-        const body: any = {};
-        if (filter) body.filter = filter;
-        if (sorts) body.sorts = sorts;
+        const results: any[] = [];
+        let hasMore = true;
+        let cursor: string | undefined = undefined;
 
-        const response = await this.request(`/databases/${databaseId}/query`, "POST", body);
-        return response.results;
+        while (hasMore) {
+            const body: any = {};
+            if (filter) body.filter = filter;
+            if (sorts) body.sorts = sorts;
+            if (cursor) body.start_cursor = cursor;
+
+            const response = await this.request(`/databases/${databaseId}/query`, "POST", body);
+
+            if (response.results) {
+                results.push(...response.results);
+            }
+
+            hasMore = response.has_more;
+            cursor = response.next_cursor;
+        }
+
+        return results;
     }
 
     async retrievePage(pageId: string) {

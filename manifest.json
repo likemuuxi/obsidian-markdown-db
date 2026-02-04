@@ -5,6 +5,6 @@
     "minAppVersion": "0.15.0",
     "description": "Turn your Markdown files into a database.",
     "author": "Muuxi",
-    "authorUrl": "https://github.com/likemuuxi/markdown-db-plugin",
+    "authorUrl": "https://github.com/likemuuxi/obsidian-markdown-db",
     "isDesktopOnly": false
 }

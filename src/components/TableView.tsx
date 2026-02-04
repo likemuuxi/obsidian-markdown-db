@@ -33,22 +33,22 @@ interface TableViewProps {
 }
 
 export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourcePath, globalProperties, onUpdateProperty, onUpdateContent, onRenameRecord, onOpenRecord, onAddRecord, onAddProperty, onSaveToGlobal, onRemoveGlobalValue, onRowContextMenu, onHeaderContextMenu, onUpdateConfig, onReorderRecord, onSyncItem, isSyncing, syncDirection, portalContainer, component, readonly }) => {
-    
+
     const propertyKeys = useMemo(() => {
         const all = Array.from(data.allKeys);
         const order = data.config.columnOrder;
         const hidden = data.config.hiddenColumns || [];
-        
+
         let keys = all;
-        
+
         if (order) {
             const ordered = order.filter(k => all.includes(k));
             const remaining = all.filter(k => !order.includes(k));
             keys = [...ordered, ...remaining];
         } else {
-             keys = all;
+            keys = all;
         }
-        
+
         return keys.filter(k => !hidden.includes(k));
     }, [data.allKeys, data.config.columnOrder, data.config.hiddenColumns]);
 
@@ -60,7 +60,7 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
             records = records.filter(record => {
                 return data.config.filters!.every(filter => {
                     const { key, operator, value } = filter;
-                    
+
                     let recordValue = "";
                     if (key === "Name") {
                         recordValue = record.title;
@@ -70,7 +70,7 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                         const vals = record.properties[key];
                         recordValue = vals ? vals.map(v => String(v.value)).join(", ") : "";
                     }
-                    
+
                     const valLower = recordValue.toLowerCase();
                     const filterValLower = value.toLowerCase();
 
@@ -99,7 +99,7 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
             records.sort((a, b) => {
                 for (const sortRule of data.config.sort!) {
                     const { key, direction } = sortRule;
-                    
+
                     let valA = "";
                     let valB = "";
 
@@ -130,7 +130,7 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
     const [pageSize, setPageSize] = useState(25);
     const [currentPage, setCurrentPage] = useState(1);
     const [pageInputValue, setPageInputValue] = useState("1");
-    
+
     const isAddingRow = React.useRef(false);
 
     // Sync input value when currentPage changes
@@ -146,7 +146,7 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
     // Adjust pagination when data length changes (Add/Remove)
     React.useEffect(() => {
         const newTotal = Math.ceil(processedRecords.length / pageSize) || 1;
-        
+
         if (isAddingRow.current) {
             setCurrentPage(newTotal);
             isAddingRow.current = false;
@@ -198,24 +198,24 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
         e.preventDefault();
         setDragOverColumn(null);
         const sourceKey = e.dataTransfer.getData("text/plain");
-        
+
         if (sourceKey === targetKey) return;
         if (!propertyKeys.includes(sourceKey) || !propertyKeys.includes(targetKey)) return;
 
         const newOrder = [...propertyKeys];
         const fromIndex = newOrder.indexOf(sourceKey);
         const toIndex = newOrder.indexOf(targetKey);
-        
+
         if (fromIndex !== -1 && toIndex !== -1) {
             newOrder.splice(fromIndex, 1);
             newOrder.splice(toIndex, 0, sourceKey);
-            
+
             // Save as [A, B, C]
             onUpdateConfig("db-columns", "[" + newOrder.join(", ") + "]");
         }
     };
 
-    const [dropTarget, setDropTarget] = useState<{index: number, position: 'top' | 'bottom'} | null>(null);
+    const [dropTarget, setDropTarget] = useState<{ index: number, position: 'top' | 'bottom' } | null>(null);
     const [hoveredRowIndex, setHoveredRowIndex] = useState<number | null>(null);
     const isManualSort = (!data.config.sort || data.config.sort.length === 0) && (!data.config.filters || data.config.filters.length === 0);
 
@@ -226,7 +226,7 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
         // Add a global class to help with styling or event handling if needed
         document.body.classList.add("markdown-db-dragging-row");
     };
-    
+
     const handleRowDragEnd = () => {
         setDropTarget(null);
         document.body.classList.remove("markdown-db-dragging-row");
@@ -236,15 +236,15 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
         e.preventDefault();
         e.stopPropagation(); // Ensure we handle the dragover
         e.dataTransfer.dropEffect = "move";
-        
+
         // Calculate position relative to row
         const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
         const midY = rect.top + rect.height / 2;
         const position = e.clientY < midY ? 'top' : 'bottom';
-        
+
         setDropTarget({ index, position });
     };
-    
+
     const handleRowDragLeave = (e: React.DragEvent) => {
         // Only clear if we're leaving the table or something? 
         // Actually, dragging over another row will overwrite dropTarget.
@@ -256,30 +256,30 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
         e.preventDefault();
         e.stopPropagation(); // Stop bubbling to prevent other handlers
         handleRowDragEnd();
-        
+
         const data = e.dataTransfer.getData("text/plain");
         if (!data.startsWith("row-")) return;
-        
+
         const sourceIndex = parseInt(data.replace("row-", ""));
         if (isNaN(sourceIndex)) return;
-        
+
         // Recalculate position to avoid stale state
         const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
         const midY = rect.top + rect.height / 2;
         const position = e.clientY < midY ? 'top' : 'bottom';
-        
+
         let finalToIndex = targetIndex;
         if (position === 'bottom') {
             finalToIndex = targetIndex + 1;
         }
-        
+
         // Correction for removing item from array before insertion if source < target
         if (sourceIndex < finalToIndex) {
             finalToIndex--;
         }
-        
+
         if (sourceIndex === finalToIndex) return; // No move
-        
+
         if (onReorderRecord) {
             onReorderRecord(sourceIndex, finalToIndex);
         }
@@ -287,7 +287,7 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
 
     const allPropertyTypes = useMemo(() => {
         const types: Record<string, PropertyType> = {};
-        
+
         // 0. Global defaults
         globalProperties.forEach(p => {
             types[p.name] = p.type;
@@ -295,21 +295,21 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
 
         // 1. Config
         if (data.config.columnTypes) {
-             Object.assign(types, data.config.columnTypes);
+            Object.assign(types, data.config.columnTypes);
         }
         // 2. Scan records for missing or text types
         data.records.forEach(record => {
             Object.entries(record.properties).forEach(([key, values]) => {
                 if (values && values.length > 0) {
-                     const valType = values[0].type;
-                     // If type is not recorded or is text, and we found a more specific type
-                     if ((!types[key] || types[key] === "text") && valType !== "text") {
-                         types[key] = valType;
-                     }
-                     // If not recorded, record it (even if text)
-                     if (!types[key]) {
-                         types[key] = valType;
-                     }
+                    const valType = values[0].type;
+                    // If type is not recorded or is text, and we found a more specific type
+                    if ((!types[key] || types[key] === "text") && valType !== "text") {
+                        types[key] = valType;
+                    }
+                    // If not recorded, record it (even if text)
+                    if (!types[key]) {
+                        types[key] = valType;
+                    }
                 }
             });
         });
@@ -408,7 +408,7 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                         {columns.map(col => {
                             const isProperty = col !== "Name" && col !== "Content";
                             let columnType = isProperty && data.config.columnTypes ? data.config.columnTypes[col] : undefined;
-                            
+
                             // Fallback: Infer from records if type is missing or "text" (to handle stale config)
                             if (isProperty && (!columnType || columnType === "text")) {
                                 const recordWithVal = data.records.find(r => r.properties[col] && r.properties[col].length > 0 && r.properties[col][0].type !== "text");
@@ -423,75 +423,76 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                                 iconSvg.style.width = "14px";
                                 iconSvg.style.height = "14px";
                             }
-                            
+
                             return (
-                            <th key={col} 
-                                draggable={isProperty && !readonly}
-                                onDragStart={(e) => isProperty && !readonly && handleDragStart(e, col)}
-                                onDragOver={(e) => isProperty && !readonly && handleDragOver(e, col)}
-                                onDrop={(e) => isProperty && !readonly && handleDrop(e, col)}
-                                onDragEnd={handleDragEnd}
-                                style={{
-                                    textAlign: "left",
-                                    padding: "8px",
-                                    borderBottom: "2px solid var(--background-modifier-border)",
-                                    boxShadow: dragOverColumn === col ? "inset 3px 0 0 0 var(--interactive-accent)" : "none",
-                                    backgroundColor: dragOverColumn === col ? "var(--background-modifier-hover)" : undefined,
-                                    transition: "box-shadow 0.1s, background-color 0.1s",
-                                    fontWeight: "600",
-                                    color: "var(--text-muted)",
-                                    fontSize: "12px",
-                                    cursor: (isProperty && !readonly) ? "grab" : "default",
-                                    userSelect: "none"
-                                }}
-                                onContextMenu={(e) => {
-                                    if (!readonly && (isProperty || col === "Name")) {
-                                        onHeaderContextMenu(col, e);
-                                    }
-                                }}
-                            >
-                                <span 
-                                    style={{ 
-                                        display: "inline-flex", 
-                                        alignItems: "center", 
-                                        marginRight: "6px", 
-                                        verticalAlign: "text-bottom",
+                                <th key={col}
+                                    draggable={isProperty && !readonly}
+                                    onDragStart={(e) => isProperty && !readonly && handleDragStart(e, col)}
+                                    onDragOver={(e) => isProperty && !readonly && handleDragOver(e, col)}
+                                    onDrop={(e) => isProperty && !readonly && handleDrop(e, col)}
+                                    onDragEnd={handleDragEnd}
+                                    style={{
+                                        textAlign: "left",
+                                        padding: "8px",
+                                        borderBottom: "2px solid var(--background-modifier-border)",
+                                        boxShadow: dragOverColumn === col ? "inset 3px 0 0 0 var(--interactive-accent)" : "none",
+                                        backgroundColor: dragOverColumn === col ? "var(--background-modifier-hover)" : undefined,
+                                        transition: "box-shadow 0.1s, background-color 0.1s",
+                                        fontWeight: "600",
                                         color: "var(--text-muted)",
-                                        opacity: 0.8
+                                        fontSize: "12px",
+                                        cursor: (isProperty && !readonly) ? "grab" : "default",
+                                        userSelect: "none"
                                     }}
-                                    dangerouslySetInnerHTML={{ __html: iconSvg?.outerHTML || "" }}
-                                />
-                                {col}
-                            </th>
-                        )})}
-                        <th 
+                                    onContextMenu={(e) => {
+                                        if (!readonly && (isProperty || col === "Name")) {
+                                            onHeaderContextMenu(col, e);
+                                        }
+                                    }}
+                                >
+                                    <span
+                                        style={{
+                                            display: "inline-flex",
+                                            alignItems: "center",
+                                            marginRight: "6px",
+                                            verticalAlign: "text-bottom",
+                                            color: "var(--text-muted)",
+                                            opacity: 0.8
+                                        }}
+                                        dangerouslySetInnerHTML={{ __html: iconSvg?.outerHTML || "" }}
+                                    />
+                                    {col}
+                                </th>
+                            )
+                        })}
+                        <th
                             className="markdown-db-add-column-header"
                             style={{
-                            width: "40px",
-                            padding: "8px",
-                            borderBottom: "2px solid var(--background-modifier-border)",
-                            borderRight: "none",
-                            textAlign: "center",
-                            cursor: "pointer",
-                            color: "var(--text-muted)"
-                        }} onClick={(e) => !readonly && handleAddClick(e)} title="Add Property Column">
+                                width: "40px",
+                                padding: "8px",
+                                borderBottom: "2px solid var(--background-modifier-border)",
+                                borderRight: "none",
+                                textAlign: "center",
+                                cursor: "pointer",
+                                color: "var(--text-muted)"
+                            }} onClick={(e) => !readonly && handleAddClick(e)} title="Add Property Column">
                             +
                         </th>
                     </tr>
                 </thead>
                 <tbody>
                     {paginatedRecords.map((record, index) => (
-                        <tr 
-                            key={index} 
+                        <tr
+                            key={index}
                             style={{
                                 borderBottom: "1px solid var(--background-modifier-border)",
-                                boxShadow: (dropTarget?.index === index && dropTarget.position === 'top') 
+                                boxShadow: (dropTarget?.index === index && dropTarget.position === 'top')
                                     ? "inset 0 2px 0 0 var(--interactive-accent)"
                                     : (dropTarget?.index === index && dropTarget.position === 'bottom')
                                         ? "inset 0 -2px 0 0 var(--interactive-accent)"
                                         : "none"
-                            }} 
-                            className="markdown-db-row" 
+                            }}
+                            className="markdown-db-row"
                             onContextMenu={(e) => !readonly && onRowContextMenu(record, e)}
                             onMouseEnter={() => setHoveredRowIndex(index)}
                             onMouseLeave={() => setHoveredRowIndex(null)}
@@ -516,7 +517,7 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                                         }}
                                         title="Drag to reorder"
                                     >
-                                        <span 
+                                        <span
                                             style={{ display: "inline-flex", alignItems: "center", color: "var(--text-muted)" }}
                                             title="Drag to reorder"
                                             dangerouslySetInnerHTML={{ __html: dragHandleIcon }}
@@ -530,8 +531,11 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                                 color: "var(--text-strong)",
                                 fontWeight: "500",
                                 position: "relative"
-                            }}>
-                                <div style={{ position: "relative", width: "100%" }}>
+                            }}
+                                onMouseEnter={() => setHoveredRowIndex(index)}
+                                onMouseLeave={() => setHoveredRowIndex(null)}
+                            >
+                                <div style={{ position: "relative", width: "100%", height: "100%", display: "flex", alignItems: "center" }}>
                                     <EditableCell
                                         app={app}
                                         component={component || null}
@@ -544,6 +548,36 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                                         onLinkClick={() => onOpenRecord(record)}
                                         portalContainer={portalContainer}
                                         readonly={readonly}
+                                        leftAction={(!readonly && onSyncItem) ? (
+                                            <div
+                                                style={{
+                                                    cursor: "pointer",
+                                                    padding: "4px",
+                                                    borderRadius: "4px",
+                                                    display: "flex",
+                                                    alignItems: "center",
+                                                    color: "var(--text-muted)",
+                                                }}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    if (isSyncing) return;
+                                                    onSyncItem && onSyncItem(record);
+                                                }}
+                                                title={isSyncing ? "Syncing..." : (syncDirection === 'pull' ? "Pull from Notion" : "Push to Notion")}
+                                                onMouseEnter={(e) => {
+                                                    e.currentTarget.style.color = "var(--interactive-accent)";
+                                                }}
+                                                onMouseLeave={(e) => {
+                                                    e.currentTarget.style.color = "var(--text-muted)";
+                                                }}
+                                            >
+                                                <span
+                                                    className={isSyncing ? "markdown-db-syncing-icon" : ""}
+                                                    style={{ display: "flex", alignItems: "center", width: "14px", height: "14px" }}
+                                                    dangerouslySetInnerHTML={{ __html: syncIcon }}
+                                                />
+                                            </div>
+                                        ) : undefined}
                                     />
                                 </div>
                             </td>
@@ -559,7 +593,7 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                                         color: "var(--text-normal)",
                                         position: "relative"
                                     }}>
-                                        <div style={{ position: "relative", width: "100%", height: "100%" }}>
+                                        <div style={{ position: "relative", width: "100%", height: "100%", display: "flex", alignItems: type === "boolean" ? "center" : "flex-start" }}>
                                             <EditableCell
                                                 app={app}
                                                 component={component || null}
@@ -574,41 +608,6 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                                                 type={type}
                                                 readonly={readonly}
                                             />
-                                            {key === "sync" && !readonly && onSyncItem && (
-                                                <div
-                                                    style={{
-                                                        position: "absolute",
-                                                        right: "4px",
-                                                        top: "50%",
-                                                        transform: "translateY(-50%)",
-                                                        opacity: hoveredRowIndex === index ? 0.7 : 0,
-                                                        cursor: "pointer",
-                                                        padding: "2px",
-                                                        borderRadius: "4px",
-                                                        display: "flex",
-                                                        alignItems: "center",
-                                                        backgroundColor: "var(--background-primary)",
-                                                        boxShadow: "0 0 4px rgba(0,0,0,0.1)",
-                                                        transition: "opacity 0.2s, background-color 0.2s",
-                                                        pointerEvents: hoveredRowIndex === index ? "auto" : "none",
-                                                        zIndex: 10
-                                                    }}
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        if (isSyncing) return;
-                                                        onSyncItem && onSyncItem(record);
-                                                    }}
-                                                    title={isSyncing ? "Syncing..." : (syncDirection === 'pull' ? "Pull from Notion" : "Push to Notion")}
-                                                    onMouseEnter={(e) => (e.currentTarget.style.opacity = "1")}
-                                                    onMouseLeave={(e) => (e.currentTarget.style.opacity = "0.7")}
-                                                >
-                                                    <span 
-                                                        className={isSyncing ? "markdown-db-syncing-icon" : ""}
-                                                        style={{ display: "flex", alignItems: "center", color: "var(--text-normal)" }}
-                                                        dangerouslySetInnerHTML={{ __html: syncIcon }}
-                                                    />
-                                                </div>
-                                            )}
                                         </div>
                                     </td>
                                 );
@@ -637,8 +636,8 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                             <td className="markdown-db-add-column-cell" style={{ borderBottom: "1px solid var(--background-modifier-border)", borderRight: "none" }}></td>
                         </tr>
                     ))}
-                    <tr 
-                        className="markdown-db-new-row" 
+                    <tr
+                        className="markdown-db-new-row"
                         onClick={() => {
                             if (readonly) return;
                             isAddingRow.current = true;
@@ -657,7 +656,7 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                                     paddingRight: "8px"
                                 }}>+ New</span>
                                 {totalPages > 1 && (
-                                    <div 
+                                    <div
                                         onClick={(e) => e.stopPropagation()}
                                         style={{
                                             position: "sticky",
@@ -669,10 +668,10 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                                             fontSize: "12px"
                                         }}
                                     >
-                                        <button 
+                                        <button
                                             onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                                             disabled={currentPage === 1}
-                                            style={{ 
+                                            style={{
                                                 background: "none",
                                                 border: "none",
                                                 padding: "2px 6px",
@@ -685,7 +684,7 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                                             dangerouslySetInnerHTML={{ __html: prevIcon }}
                                         />
                                         <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                                            <input 
+                                            <input
                                                 type="text"
                                                 value={pageInputValue}
                                                 onChange={(e) => setPageInputValue(e.target.value)}
@@ -716,10 +715,10 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                                                 / {totalPages || 1}
                                             </span>
                                         </div>
-                                        <button 
+                                        <button
                                             onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                                             disabled={currentPage === totalPages || totalPages === 0}
-                                            style={{ 
+                                            style={{
                                                 background: "none",
                                                 border: "none",
                                                 padding: "2px 6px",

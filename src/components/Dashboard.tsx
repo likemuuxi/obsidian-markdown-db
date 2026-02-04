@@ -12,15 +12,15 @@ import type MyPlugin from "../main";
 import { VIEW_TYPE_MARKDOWN_DB } from "../views/view";
 import { RenameModal } from "../modals/RenameModal";
 import { CreateDatabaseModal } from "../modals/CreateDatabaseModal";
-import { 
-    updateProperty, 
-    renameRecord, 
-    addRecord, 
-    updateConfig, 
-    deleteRecord, 
-    updateContent, 
-    addPropertyToAllRecords, 
-    deletePropertyFromAllRecords, 
+import {
+    updateProperty,
+    renameRecord,
+    addRecord,
+    updateConfig,
+    deleteRecord,
+    updateContent,
+    addPropertyToAllRecords,
+    deletePropertyFromAllRecords,
     updateTitle,
     reorderRecords,
     renamePropertyInAllRecords,
@@ -56,7 +56,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
     const onSaveToGlobal = async (name: string, type?: PropertyType) => {
         const newProps = [...plugin.settings.properties];
         const existingIndex = newProps.findIndex(p => p.name === name);
-        
+
         if (existingIndex >= 0) {
             if (type && newProps[existingIndex].type !== type) {
                 newProps[existingIndex] = { ...newProps[existingIndex], type };
@@ -69,7 +69,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
                 ignoredValues: []
             });
         }
-        
+
         plugin.settings.properties = newProps;
         await plugin.saveSettings();
         setGlobalProperties(newProps);
@@ -78,7 +78,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
     const onRemoveGlobalValue = async (key: string, value: string) => {
         const newProps = [...plugin.settings.properties];
         const propIndex = newProps.findIndex(p => p.name === key);
-        
+
         if (propIndex >= 0) {
             const prop = newProps[propIndex];
             newProps[propIndex] = {
@@ -111,7 +111,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
         // Reading all files is expensive.
         // Let's just list all markdown files for now, or maybe cache metadata.
         // Better: Check obsidian metadata cache for 'markdown-db' property?
-        
+
         const dbFiles = allFiles.filter(file => {
             const cache = app.metadataCache.getFileCache(file);
             return cache?.frontmatter?.["markdown-db"] === true;
@@ -122,14 +122,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
         // but maybe allow "All Files" mode?
         // Let's stick to files with `markdown-db: true` to keep it clean as "Projects".
         // If list is empty, maybe show all files?
-        
+
         if (dbFiles.length > 0) {
             setFiles(dbFiles);
-            
+
             // Check last opened
             const lastOpenedPath = plugin.settings.lastOpenedDbPath;
             const lastOpenedFile = lastOpenedPath ? dbFiles.find(f => f.path === lastOpenedPath) : null;
-            
+
             if (lastOpenedFile) {
                 setSelectedFile(lastOpenedFile);
             } else if (!selectedFile) {
@@ -137,8 +137,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
             }
         } else {
             // Fallback: show all markdown files if no DBs defined
-             setFiles(allFiles);
-             if (!selectedFile && allFiles.length > 0) setSelectedFile(allFiles[0]);
+            setFiles(allFiles);
+            if (!selectedFile && allFiles.length > 0) setSelectedFile(allFiles[0]);
         }
     }, []);
 
@@ -186,27 +186,27 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
 
     const handleAddView = async (name: string, config: { openMode: string, showContent: boolean, contentHeight: string, filters: FilterRule[], sorts: SortRule[] }) => {
         if (!selectedFile || !dbData || !name) return;
-        
+
         // Check for duplicate names
         let newName = name;
         const existingViews = dbData.views ? Object.keys(dbData.views) : [];
         let index = 1;
         const originalName = newName;
-        
+
         while (existingViews.includes(newName)) {
             newName = `${originalName} ${index}`;
             index++;
         }
-        
+
         // Initialize with user selected configs sequentially
         await updateConfig(app, selectedFile, "db-open-mode", config.openMode, newName);
         await updateConfig(app, selectedFile, "db-show-content", config.showContent ? "true" : "false", newName);
         await updateConfig(app, selectedFile, "db-content-height", config.contentHeight, newName);
-        
+
         if (config.filters && config.filters.length > 0) {
             await updateConfig(app, selectedFile, "db-filter", JSON.stringify(config.filters), newName);
         }
-        
+
         if (config.sorts && config.sorts.length > 0) {
             await updateConfig(app, selectedFile, "db-sort", JSON.stringify(config.sorts), newName);
         }
@@ -282,13 +282,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
     const handleAddProperty = async (name: string, type: PropertyType = "text") => {
         if (selectedFile) {
             await addPropertyToAllRecords(app, selectedFile, name, type, "");
-            
+
             // Update column types in config
             if (dbData) {
                 const newTypes = { ...(dbData.config.columnTypes || {}), [name]: type };
                 await updateConfig(app, selectedFile, "db-column-types", JSON.stringify(newTypes));
             }
-            
+
             await reloadCurrentFile();
         }
     };
@@ -309,7 +309,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
 
     const handleRowContextMenu = (record: DatabaseRecord, event: React.MouseEvent) => {
         const menu = new Menu();
-        
+
         menu.addItem((item) => {
             item
                 .setTitle("Delete")
@@ -347,10 +347,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
 
     const displayData = useMemo(() => {
         if (!dbData) return null;
-        return { 
-            ...dbData, 
+        return {
+            ...dbData,
             config: currentConfig,
-            records: filteredRecords 
+            records: filteredRecords
         };
     }, [dbData, currentConfig, filteredRecords]);
 
@@ -364,25 +364,25 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
                 .onClick(() => {
                     new RenameModal(app, key, async (newName) => {
                         if (newName && newName !== key && selectedFile) {
-                             await renamePropertyInAllRecords(app, selectedFile, key, newName);
-                             
-                             // Update config columnTypes
-                             if (dbData?.config.columnTypes && dbData.config.columnTypes[key]) {
-                                 const type = dbData.config.columnTypes[key];
-                                 const newTypes = { ...dbData.config.columnTypes };
-                                 delete newTypes[key];
-                                 newTypes[newName] = type;
-                                 await updateConfig(app, selectedFile, "db-column-types", JSON.stringify(newTypes));
-                             }
-                             
-                             // Update config columnOrder
-                             if (dbData?.config.columnOrder && dbData.config.columnOrder.includes(key)) {
-                                 const newOrder = dbData.config.columnOrder.map(k => k === key ? newName : k);
-                                 await updateConfig(app, selectedFile, "db-columns", JSON.stringify(newOrder));
-                             }
-                             
-                             await reloadCurrentFile();
-                             new Notice(`Property renamed to "${newName}"`);
+                            await renamePropertyInAllRecords(app, selectedFile, key, newName);
+
+                            // Update config columnTypes
+                            if (dbData?.config.columnTypes && dbData.config.columnTypes[key]) {
+                                const type = dbData.config.columnTypes[key];
+                                const newTypes = { ...dbData.config.columnTypes };
+                                delete newTypes[key];
+                                newTypes[newName] = type;
+                                await updateConfig(app, selectedFile, "db-column-types", JSON.stringify(newTypes));
+                            }
+
+                            // Update config columnOrder
+                            if (dbData?.config.columnOrder && dbData.config.columnOrder.includes(key)) {
+                                const newOrder = dbData.config.columnOrder.map(k => k === key ? newName : k);
+                                await updateConfig(app, selectedFile, "db-columns", JSON.stringify(newOrder));
+                            }
+
+                            await reloadCurrentFile();
+                            new Notice(`Property renamed to "${newName}"`);
                         }
                     }).open();
                 });
@@ -399,7 +399,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
                         if (dbData?.config.columnTypes && dbData.config.columnTypes[key]) {
                             type = dbData.config.columnTypes[key];
                         }
-                        
+
                         await onSaveToGlobal(key, type);
                         new Notice(`Property "${key}" added to global settings`);
                     });
@@ -414,7 +414,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
                     if (selectedFile && dbData) {
                         const currentHidden = dbData.config.hiddenColumns || [];
                         const newHidden = [...currentHidden, key];
-                        
+
                         await updateConfig(app, selectedFile, "db-hide-columns", JSON.stringify(newHidden));
                         await reloadCurrentFile();
                     }
@@ -424,27 +424,27 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
         if (dbData) {
             const hiddenColumns = dbData.config.hiddenColumns || [];
             if (hiddenColumns.length > 0) {
-                 menu.addItem((item) => {
-                     item
-                         .setTitle("Unhide property")
-                         .setIcon("eye")
-                         .setSection("view");
-                     
-                     const submenu = (item as any).setSubmenu() as Menu;
-                     
-                     hiddenColumns.forEach(hiddenKey => {
-                         submenu.addItem((subItem) => {
-                             subItem.setTitle(hiddenKey)
-                                    .onClick(async () => {
-                                        if (selectedFile) {
-                                            const newHidden = hiddenColumns.filter(k => k !== hiddenKey);
-                                            await updateConfig(app, selectedFile, "db-hide-columns", JSON.stringify(newHidden));
-                                            await reloadCurrentFile();
-                                        }
-                                    });
-                         });
-                     });
-                 });
+                menu.addItem((item) => {
+                    item
+                        .setTitle("Unhide property")
+                        .setIcon("eye")
+                        .setSection("view");
+
+                    const submenu = (item as any).setSubmenu() as Menu;
+
+                    hiddenColumns.forEach(hiddenKey => {
+                        submenu.addItem((subItem) => {
+                            subItem.setTitle(hiddenKey)
+                                .onClick(async () => {
+                                    if (selectedFile) {
+                                        const newHidden = hiddenColumns.filter(k => k !== hiddenKey);
+                                        await updateConfig(app, selectedFile, "db-hide-columns", JSON.stringify(newHidden));
+                                        await reloadCurrentFile();
+                                    }
+                                });
+                        });
+                    });
+                });
             }
         }
 
@@ -508,9 +508,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
                     });
                 })
         );
-        
+
         menu.addSeparator();
-        
+
         menu.addItem((item) =>
             item
                 .setTitle("Delete")
@@ -525,8 +525,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
                         }
                         new Notice("File moved to trash");
                     } catch (e) {
-                         new Notice("Failed to delete file");
-                         console.error(e);
+                        new Notice("Failed to delete file");
+                        console.error(e);
                     }
                 })
         );
@@ -537,7 +537,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
     const handleCreateDbFile = async () => {
         new CreateDatabaseModal(app, "Untitled Database", async (filename) => {
             if (!filename) return;
-            
+
             // Ensure extension
             if (!filename.endsWith(".md")) {
                 filename += ".md";
@@ -546,23 +546,23 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
             const folderPath = plugin.settings.defaultDbFolder || "";
             // Check if folder exists
             if (folderPath && !(await app.vault.adapter.exists(folderPath))) {
-                 // Try to create folder?
-                 try {
+                // Try to create folder?
+                try {
                     await app.vault.createFolder(folderPath);
-                 } catch (e) {
-                     new Notice(`Failed to create folder: ${folderPath}`);
-                     return;
-                 }
+                } catch (e) {
+                    new Notice(`Failed to create folder: ${folderPath}`);
+                    return;
+                }
             }
-            
+
             let filePath = folderPath ? `${folderPath}/${filename}` : filename;
-            
+
             // Handle duplicates or error if exists
             if (await app.vault.adapter.exists(filePath)) {
                 new Notice("File with this name already exists!");
                 return;
             }
-            
+
             const initialContent = "---\nmarkdown-db: true\n---\n\n# Database\n";
             try {
                 const newFile = await app.vault.create(filePath, initialContent);
@@ -586,8 +586,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
                 </div>
                 <div className="markdown-db-file-list">
                     {files.map(file => (
-                        <div 
-                            key={file.path} 
+                        <div
+                            key={file.path}
                             className={`markdown-db-file-item ${selectedFile?.path === file.path ? "active" : ""}`}
                             onClick={() => setSelectedFile(file)}
                             onDoubleClick={async () => {
@@ -618,7 +618,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
             <div className="markdown-db-dashboard-main" tabIndex={-1} style={{ outline: "none" }}>
                 {selectedFile && displayData ? (
                     <>
-                         <Toolbar
+                        <Toolbar
                             title={displayData.title}
                             config={displayData.config}
                             onSearch={setSearchTerm}
@@ -667,6 +667,31 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
                                 onRowContextMenu={handleRowContextMenu}
                                 onHeaderContextMenu={handleHeaderContextMenu}
                                 onUpdateConfig={handleUpdateConfig}
+                                onSyncItem={(() => {
+                                    if (!selectedFile) return undefined;
+                                    const config = plugin.notionSyncService.getSyncConfigForFile(selectedFile);
+                                    if (!config) return undefined;
+
+                                    return async (record: DatabaseRecord) => {
+                                        plugin.notionSyncService.setSyncStatus(true);
+                                        try {
+                                            if (record.properties['notionUrl'] && record.properties['notionUrl'].length > 0) {
+                                                await plugin.notionSyncService.syncPage(String(record.properties['notionUrl'][0].value), config, selectedFile, record);
+                                            } else {
+                                                await plugin.notionSyncService.syncByTitle(record, config, selectedFile);
+                                            }
+                                        } finally {
+                                            plugin.notionSyncService.setSyncStatus(false);
+                                            await reloadCurrentFile();
+                                        }
+                                    };
+                                })()}
+                                isSyncing={plugin.notionSyncService.isSyncing}
+                                syncDirection={(() => {
+                                    if (!selectedFile) return 'push';
+                                    const config = plugin.notionSyncService.getSyncConfigForFile(selectedFile);
+                                    return config?.syncDirection || 'push';
+                                })()}
                             />
                         </div>
                     </>

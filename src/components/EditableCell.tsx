@@ -23,6 +23,7 @@ interface EditableCellProps {
     portalContainer?: HTMLElement;
     type?: PropertyType;
     readonly?: boolean;
+    leftAction?: React.ReactNode;
 }
 
 const TAG_COLORS = [
@@ -45,21 +46,22 @@ const getTagColor = (text: string) => {
     return TAG_COLORS[index];
 };
 
-export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, onSave, placeholder, className, app, component, sourcePath, onLinkClick, isContentColumn, suggestions = [], isPropertyColumn, propertyKey, onRemoveGlobalValue, contentHeight = "compact", portalContainer, type, readonly }) => {
+export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, onSave, placeholder, className, app, component, sourcePath, onLinkClick, isContentColumn, suggestions = [], isPropertyColumn, propertyKey, onRemoveGlobalValue, contentHeight = "compact", portalContainer, type, readonly, leftAction }) => {
     const [isEditing, setIsEditing] = useState(false);
+    const [isHovering, setIsHovering] = useState(false);
     const contentRef = useRef<HTMLDivElement>(null);
     const viewRef = useRef<HTMLDivElement>(null);
-    
+
     // Determine render mode based on type
     const isTagMode = isPropertyColumn && (type === "multi" || type === "select");
     const isCheckboxMode = isPropertyColumn && type === "boolean";
     const isDateMode = isPropertyColumn && type === "date";
     const isNumberMode = isPropertyColumn && type === "number";
-    
+
     // Property specific state
     const [inputValue, setInputValue] = useState("");
     const inputRef = useRef<HTMLInputElement>(null);
-    
+
     // Suggestion state
     const [suggestionIndex, setSuggestionIndex] = useState(0);
     const [filteredSuggestions, setFilteredSuggestions] = useState<string[]>([]);
@@ -82,7 +84,7 @@ export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, on
     const [fileSuggestionCoords, setFileSuggestionCoords] = useState<{ top: number; left: number } | null>(null);
 
     // --- PROPERTY COLUMN LOGIC ---
-    
+
     const tags = React.useMemo(() => {
         if (!value || !isTagMode) return [];
         return value.split(",").map(s => s.trim()).filter(s => s.length > 0);
@@ -91,9 +93,9 @@ export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, on
     const handleAddTag = (tag: string) => {
         const trimmed = tag.trim();
         if (!trimmed) return;
-        
+
         let newTags: string[];
-        
+
         if (type === "select") {
             // Single select: replace existing
             newTags = [trimmed];
@@ -101,12 +103,12 @@ export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, on
             // Multi select: append
             // Don't add if already exists
             if (tags.some(t => t.toLowerCase() === trimmed.toLowerCase())) {
-                 setInputValue("");
-                 return; 
+                setInputValue("");
+                return;
             }
             newTags = [...tags, trimmed];
         }
-        
+
         onSave(newTags.join(", "));
         setInputValue("");
         setShowSuggestions(false);
@@ -132,7 +134,7 @@ export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, on
         const available = suggestions.filter(s => !tags.some(t => t.toLowerCase() === s.toLowerCase()));
         const filtered = available.filter(s => s.toLowerCase().includes(lower));
         setFilteredSuggestions(filtered);
-        
+
         if (filtered.length > 0 && inputRef.current) {
             const rect = inputRef.current.getBoundingClientRect();
             setSuggestionCoords({
@@ -234,14 +236,14 @@ export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, on
             viewRef.current.empty();
             // Always render with MarkdownRenderer to support formatting in Content column too
             // CSS handles truncation for single-line view
-            
+
             const runRender = async () => {
                 try {
                     await MarkdownRenderer.render(app, value || "", viewRef.current!, sourcePath, component);
                 } catch (e) {
                     // Ignore errors
                 }
-                
+
                 // Fallback: If MarkdownRenderer fails to render anything (common in Embed views if context is missing),
                 // display the raw value as text so it's not blank.
                 if (viewRef.current && viewRef.current.childNodes.length === 0 && value) {
@@ -249,15 +251,15 @@ export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, on
                     // Try to render simple links manually if fallback is triggered
                     // This is a basic "other way" to support links when MarkdownRenderer fails
                     if (value.startsWith("[[") && value.endsWith("]]")) {
-                         const linkContent = value.slice(2, -2);
-                         const parts = linkContent.split("|");
-                         const linkText = parts.length > 1 ? parts[1] : parts[0];
-                         // Simple anchor to make it look like a link (click handling is on parent)
-                         viewRef.current.innerHTML = `<a class="internal-link" href="${parts[0]}">${linkText}</a>`;
+                        const linkContent = value.slice(2, -2);
+                        const parts = linkContent.split("|");
+                        const linkText = parts.length > 1 ? parts[1] : parts[0];
+                        // Simple anchor to make it look like a link (click handling is on parent)
+                        viewRef.current.innerHTML = `<a class="internal-link" href="${parts[0]}">${linkText}</a>`;
                     }
                 }
             };
-            
+
             runRender();
         }
     }, [value, app, sourcePath, component, isContentColumn, isPropertyColumn, isDateMode, isNumberMode, isCheckboxMode]);
@@ -266,14 +268,14 @@ export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, on
         if (!isPropertyColumn && isEditing && contentRef.current) {
             const valToSet = editValue !== undefined ? editValue : value;
             contentRef.current.innerText = valToSet;
-            
+
             const range = document.createRange();
             const sel = window.getSelection();
             range.selectNodeContents(contentRef.current);
             range.collapse(false);
             sel?.removeAllRanges();
             sel?.addRange(range);
-            
+
             contentRef.current.focus();
         }
     }, [isEditing, value, editValue, isContentColumn, isPropertyColumn]);
@@ -281,36 +283,36 @@ export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, on
     const checkFileSuggestions = () => {
         const selection = window.getSelection();
         if (!selection || selection.rangeCount === 0) return;
-        
+
         const range = selection.getRangeAt(0);
         const node = range.startContainer;
-        
+
         // Ensure we are in the content ref
         if (!contentRef.current?.contains(node) && node !== contentRef.current) return;
 
         const targetNode = node.nodeType === Node.TEXT_NODE ? node : node.childNodes[range.startOffset] || node;
-        
+
         if (targetNode.nodeType === Node.TEXT_NODE && targetNode.textContent) {
             const text = targetNode.textContent;
             const cursor = node.nodeType === Node.TEXT_NODE ? range.startOffset : 0;
             const textBefore = text.substring(0, cursor);
-            
+
             // Match [[filename#heading or [[filename or [[#heading or [[filename^block or [[^block
             const match = textBefore.match(/(?:^|[^\[])(\[\[)([^\]]*)$/);
-            
+
             if (match) {
                 const query = match[2];
                 const offset = match[0].startsWith("[[") ? 0 : 1;
                 const matchIndex = match.index! + offset;
-                
+
                 // Parse query for file, heading, or block
                 // Check for last occurrence of # or ^ to determine mode
                 const hashIndex = query.lastIndexOf("#");
                 const caretIndex = query.lastIndexOf("^");
-                
+
                 let separator = "";
                 let separatorIndex = -1;
-                
+
                 if (caretIndex > hashIndex) {
                     separator = "^";
                     separatorIndex = caretIndex;
@@ -318,10 +320,10 @@ export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, on
                     separator = "#";
                     separatorIndex = hashIndex;
                 }
-                
+
                 let filePart = query;
                 let filterPart = "";
-                
+
                 if (separator) {
                     filePart = query.substring(0, separatorIndex);
                     filterPart = query.substring(separatorIndex + 1);
@@ -334,14 +336,14 @@ export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, on
                         const filename = currentFile.basename;
                         const newLinkStart = `[[${filename}${separator}`;
                         const newLinkText = `${newLinkStart}${filterPart}`;
-                        
+
                         const textBeforeMatch = textBefore.substring(0, matchIndex);
                         const fullText = targetNode.textContent || "";
                         const textAfterCursor = fullText.substring(cursor);
-                        
+
                         const newFullText = textBeforeMatch + newLinkText + textAfterCursor;
                         targetNode.textContent = newFullText;
-                        
+
                         const newCursor = matchIndex + newLinkStart.length + filterPart.length;
                         try {
                             const newRange = document.createRange();
@@ -352,18 +354,18 @@ export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, on
                         } catch (e) {
                             console.error(e);
                         }
-                        
+
                         // Update variables for suggestion search
                         filePart = filename;
                     }
                 }
-                
+
                 let suggestions: SuggestionItem[] = [];
 
                 if (separator === "#" || separator === "^") {
                     // Search headings or blocks in specific file
                     let targetFile: TFile | null = null;
-                    
+
                     if (!filePart) {
                         // Current file (or source file of the record)
                         targetFile = app.metadataCache.getFirstLinkpathDest("", sourcePath);
@@ -401,8 +403,8 @@ export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, on
                     // Search files
                     const allFiles = app.vault.getFiles();
                     suggestions = allFiles
-                        .filter(f => 
-                            f.basename.toLowerCase().includes(filePart.toLowerCase()) || 
+                        .filter(f =>
+                            f.basename.toLowerCase().includes(filePart.toLowerCase()) ||
                             f.path.toLowerCase().includes(filePart.toLowerCase())
                         )
                         .slice(0, 10)
@@ -413,12 +415,12 @@ export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, on
                             path: f.path
                         }));
                 }
-                
+
                 if (suggestions.length > 0) {
                     setFileSuggestions(suggestions);
                     setFileSuggestionIndex(0);
                     setShowFileSuggestions(true);
-                    
+
                     try {
                         const r = document.createRange();
                         r.setStart(targetNode, matchIndex);
@@ -449,54 +451,54 @@ export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, on
     const handleInsertFileLink = (item: SuggestionItem) => {
         const selection = window.getSelection();
         if (!selection || selection.rangeCount === 0) return;
-        
+
         const range = selection.getRangeAt(0);
         let node = range.startContainer;
-        
+
         if (node.nodeType !== Node.TEXT_NODE) {
-             node = node.childNodes[range.startOffset] || node;
+            node = node.childNodes[range.startOffset] || node;
         }
 
         if (node.nodeType === Node.TEXT_NODE && node.textContent) {
             const text = node.textContent;
             const cursor = range.startOffset;
             const textBefore = text.substring(0, cursor);
-            
+
             const match = textBefore.match(/(?:^|[^\[])(\[\[)([^\]]*)$/);
-            
+
             if (match) {
-                 const offset = match[0].startsWith("[[") ? 0 : 1;
-                 const matchIndex = match.index! + offset;
-                 
-                 const before = text.substring(0, matchIndex);
-                 const after = text.substring(cursor);
-                 
-                 let linkText = "";
-                  if (item.type === 'file') {
-                      linkText = `[[${item.file.basename}]]`;
-                  } else if (item.type === 'heading') {
-                      linkText = `[[${item.file.basename}#${item.heading}]]`;
-                  } else if (item.type === 'block') {
-                      linkText = `[[${item.file.basename}^${item.blockId}]]`;
-                  }
-                  
-                  const newText = before + linkText + after;
-                 
-                 node.textContent = newText;
-                 
-                 // Move cursor
-                 const newCursor = matchIndex + linkText.length;
-                 try {
-                     const newRange = document.createRange();
-                     newRange.setStart(node, newCursor);
-                     newRange.setEnd(node, newCursor);
-                     selection.removeAllRanges();
-                     selection.addRange(newRange);
-                 } catch (e) {
-                     console.error(e);
-                 }
-                 
-                 setShowFileSuggestions(false);
+                const offset = match[0].startsWith("[[") ? 0 : 1;
+                const matchIndex = match.index! + offset;
+
+                const before = text.substring(0, matchIndex);
+                const after = text.substring(cursor);
+
+                let linkText = "";
+                if (item.type === 'file') {
+                    linkText = `[[${item.file.basename}]]`;
+                } else if (item.type === 'heading') {
+                    linkText = `[[${item.file.basename}#${item.heading}]]`;
+                } else if (item.type === 'block') {
+                    linkText = `[[${item.file.basename}^${item.blockId}]]`;
+                }
+
+                const newText = before + linkText + after;
+
+                node.textContent = newText;
+
+                // Move cursor
+                const newCursor = matchIndex + linkText.length;
+                try {
+                    const newRange = document.createRange();
+                    newRange.setStart(node, newCursor);
+                    newRange.setEnd(node, newCursor);
+                    selection.removeAllRanges();
+                    selection.addRange(newRange);
+                } catch (e) {
+                    console.error(e);
+                }
+
+                setShowFileSuggestions(false);
             }
         }
     };
@@ -533,46 +535,46 @@ export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, on
             if ((e.key === "#" || e.key === "^") && fileSuggestions[fileSuggestionIndex].type === 'file') {
                 e.preventDefault();
                 const item = fileSuggestions[fileSuggestionIndex];
-                
+
                 const selection = window.getSelection();
                 if (selection && selection.rangeCount > 0) {
                     const range = selection.getRangeAt(0);
                     let node = range.startContainer;
                     if (node.nodeType !== Node.TEXT_NODE) {
-                         node = node.childNodes[range.startOffset] || node;
+                        node = node.childNodes[range.startOffset] || node;
                     }
-                    
+
                     if (node.nodeType === Node.TEXT_NODE && node.textContent) {
                         const text = node.textContent;
                         const cursor = range.startOffset;
                         const textBefore = text.substring(0, cursor);
-                        
+
                         const match = textBefore.match(/(?:^|[^\[])(\[\[)([^\]]*)$/);
                         if (match) {
-                             const offset = match[0].startsWith("[[") ? 0 : 1;
-                             const matchIndex = match.index! + offset;
-                             
-                             const before = text.substring(0, matchIndex);
-                             const after = text.substring(cursor);
-                             
-                             const linkText = `[[${item.file.basename}${e.key}`;
-                             
-                             const newText = before + linkText + after;
-                             node.textContent = newText;
-                             
-                             const newCursor = matchIndex + linkText.length;
-                             try {
-                                 const newRange = document.createRange();
-                                 newRange.setStart(node, newCursor);
-                                 newRange.setEnd(node, newCursor);
-                                 selection.removeAllRanges();
-                                 selection.addRange(newRange);
-                                 
-                                 // Trigger suggestions update
-                                 setTimeout(() => checkFileSuggestions(), 0);
-                             } catch (err) {
-                                 console.error(err);
-                             }
+                            const offset = match[0].startsWith("[[") ? 0 : 1;
+                            const matchIndex = match.index! + offset;
+
+                            const before = text.substring(0, matchIndex);
+                            const after = text.substring(cursor);
+
+                            const linkText = `[[${item.file.basename}${e.key}`;
+
+                            const newText = before + linkText + after;
+                            node.textContent = newText;
+
+                            const newCursor = matchIndex + linkText.length;
+                            try {
+                                const newRange = document.createRange();
+                                newRange.setStart(node, newCursor);
+                                newRange.setEnd(node, newCursor);
+                                selection.removeAllRanges();
+                                selection.addRange(newRange);
+
+                                // Trigger suggestions update
+                                setTimeout(() => checkFileSuggestions(), 0);
+                            } catch (err) {
+                                console.error(err);
+                            }
                         }
                     }
                 }
@@ -599,7 +601,7 @@ export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, on
 
     const handlePaste = (e: React.ClipboardEvent) => {
         e.preventDefault();
-        
+
         const clipboardData = e.clipboardData;
         const html = clipboardData.getData("text/html");
         const text = clipboardData.getData("text/plain");
@@ -617,13 +619,13 @@ export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, on
         // Insert content at cursor position
         const selection = window.getSelection();
         if (!selection || !selection.rangeCount) return;
-        
+
         const range = selection.getRangeAt(0);
         range.deleteContents();
-        
+
         const textNode = document.createTextNode(contentToInsert);
         range.insertNode(textNode);
-        
+
         // Move cursor to end of inserted text
         range.setStartAfter(textNode);
         range.setEndAfter(textNode);
@@ -673,15 +675,15 @@ export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, on
 
     if (isCheckboxMode) {
         return (
-             <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                 <input 
-                    type="checkbox" 
-                    checked={value === "true"} 
+            <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <input
+                    type="checkbox"
+                    checked={value === "true"}
                     onChange={(e) => onSave(String(e.target.checked))}
                     style={{ cursor: readonly ? "default" : "pointer" }}
                     disabled={readonly}
-                 />
-             </div>
+                />
+            </div>
         );
     }
 
@@ -689,7 +691,7 @@ export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, on
         return (
             <div style={{ position: "relative", width: "100%", height: "100%" }}>
                 {/* View Layer - Always rendered to maintain size, hidden when editing */}
-                <div 
+                <div
                     className={`markdown-db-cell-property rendered ${className || ""}`}
                     title={tags.join(", ")}
                     onClick={readonly ? undefined : (e) => {
@@ -732,7 +734,7 @@ export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, on
 
                 {/* Edit Layer - Portal positioned over the view layer */}
                 {isEditing && editCoords && ReactDOM.createPortal(
-                    <div 
+                    <div
                         className="markdown-db-cell-property editing"
                         style={{
                             position: "fixed",
@@ -771,13 +773,13 @@ export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, on
                                 whiteSpace: "nowrap"
                             }}>
                                 {tag}
-                                <span 
+                                <span
                                     onClick={(e) => handleRemoveTag(idx, e)}
                                     onMouseDown={(e) => e.preventDefault()} // Prevent focus loss on click
                                     className="markdown-db-tag-remove"
-                                    style={{ 
-                                        cursor: "pointer", 
-                                        opacity: 0.5, 
+                                    style={{
+                                        cursor: "pointer",
+                                        opacity: 0.5,
                                         fontWeight: "bold",
                                         fontSize: "14px",
                                         lineHeight: "1"
@@ -789,7 +791,7 @@ export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, on
                                 </span>
                             </span>
                         ))}
-                        
+
                         <div style={{ flex: "1", minWidth: "60px", position: "relative" }}>
                             <input
                                 ref={inputRef}
@@ -800,6 +802,8 @@ export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, on
                                 }}
                                 onFocus={() => updateSuggestions(inputValue)}
                                 onKeyDown={handlePropertyKeyDown}
+                                onMouseLeave={() => setIsHovering(false)}
+                                onMouseEnter={() => setIsHovering(true)}
                                 onBlur={() => {
                                     setTimeout(() => {
                                         setIsEditing(false);
@@ -841,7 +845,7 @@ export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, on
                                             className={`suggestion-item ${index === suggestionIndex ? "is-selected" : ""}`}
                                             onMouseDown={(e) => {
                                                 if ((e.target as HTMLElement).closest(".suggestion-delete")) return;
-                                                e.preventDefault(); 
+                                                e.preventDefault();
                                                 handleAddTag(suggestion);
                                             }}
                                             style={{
@@ -857,7 +861,7 @@ export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, on
                                         >
                                             <span>{suggestion}</span>
                                             {onRemoveGlobalValue && propertyKey && (
-                                                <span 
+                                                <span
                                                     className="suggestion-delete"
                                                     style={{
                                                         opacity: 0.5,
@@ -899,10 +903,10 @@ export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, on
         if (target.tagName === "A" && target.classList.contains("internal-link")) {
             // Stop propagation so parent handlers don't fire (avoids double trigger in View)
             e.stopPropagation();
-            
+
             app.workspace.trigger("hover-link", {
                 event: e.nativeEvent,
-                source: "markdown-db-view", 
+                source: "markdown-db-view",
                 hoverParent: viewRef.current,
                 targetEl: target,
                 linktext: target.getAttribute("data-href"),
@@ -912,21 +916,49 @@ export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, on
     };
 
     return (
-        <div className="markdown-db-cell-container" style={{ position: "relative", width: "100%", height: "100%", minHeight: "32px" }}>
-            {!isEditing && (
-                <div
-                    className="markdown-db-copy-button"
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        e.preventDefault();
-                        navigator.clipboard.writeText(value);
-                        new Notice("Copied to clipboard");
-                    }}
-                    title="Copy"
-                    dangerouslySetInnerHTML={{
-                        __html: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="svg-icon lucide-copy"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>`
-                    }}
-                />
+        <div
+            className="markdown-db-cell-container"
+            style={{ position: "relative", width: "100%", height: "100%", minHeight: "32px" }}
+            onMouseEnter={() => setIsHovering(true)}
+            onMouseLeave={() => setIsHovering(false)}
+        >
+            {!isEditing && isHovering && (
+                <div style={{
+                    position: "absolute",
+                    right: "4px",
+                    top: "4px",
+                    display: "flex", // Show when hovering
+                    alignItems: "center",
+                    gap: "4px",
+                    zIndex: 20
+                }}>
+                    {leftAction}
+                    <div
+                        className="markdown-db-copy-button"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            navigator.clipboard.writeText(value);
+                            new Notice("Copied to clipboard");
+                        }}
+                        title="Copy"
+                        style={{
+                            position: "relative", // Override absolute from CSS
+                            right: "auto",
+                            top: "auto",
+                            display: "flex",
+                            padding: "4px",
+                            cursor: "pointer",
+                            color: "var(--text-muted)",
+                            borderRadius: "4px",
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.color = "var(--interactive-accent)"}
+                        onMouseLeave={(e) => e.currentTarget.style.color = "var(--text-muted)"}
+                        dangerouslySetInnerHTML={{
+                            __html: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="svg-icon lucide-copy"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>`
+                        }}
+                    />
+                </div>
             )}
             {/* View Layer - Always rendered to maintain size, hidden when editing */}
             <div
@@ -1009,94 +1041,94 @@ export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, on
                     />
                 ) : (
                     <>
-                    <div
-                        ref={contentRef}
-                        contentEditable={true}
-                        suppressContentEditableWarning={true}
-                        onBlur={handleStandardBlur}
-                        onKeyDown={handleStandardKeyDown}
-                        onInput={checkFileSuggestions}
-                        onPaste={handlePaste}
-                        className={`markdown-db-cell-content editing ${className || ""}`}
-                        style={{
-                            outline: "none",
-                            whiteSpace: "pre-wrap",
-                            wordBreak: "break-word",
-                            position: "fixed",
-                            top: editCoords.top,
-                            left: editCoords.left,
-                            width: editCoords.width,
-                            minHeight: "32px",
-                            height: "auto",
-                            maxHeight: "50vh",
-                            overflowY: "auto",
-                            zIndex: 9999,
-                            backgroundColor: "var(--background-primary)",
-                            border: "2px solid var(--interactive-accent)",
-                            boxSizing: "border-box",
-                            boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
-                            padding: "6px 8px",
-                            margin: 0,
-                            lineHeight: "1.5",
-                            fontFamily: "inherit",
-                            fontSize: "14px",
-                            borderRadius: "4px"
-                        }}
-                    />
-                    {showFileSuggestions && fileSuggestionCoords && ReactDOM.createPortal(
-                        <div className="markdown-db-suggestions file-suggestions" style={{
-                            position: "fixed",
-                            top: fileSuggestionCoords.top,
-                            left: fileSuggestionCoords.left,
-                            minWidth: "200px",
-                            maxHeight: "200px",
-                            overflowY: "auto",
-                            backgroundColor: "var(--background-primary)",
-                            border: "1px solid var(--background-modifier-border)",
-                            boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
-                            zIndex: 10000,
-                            borderRadius: "4px"
-                        }}>
-                            {fileSuggestions.map((item, index) => (
-                                <div
-                                    key={item.path + (item.heading ? "#" + item.heading : "")}
-                                    className={`suggestion-item ${index === fileSuggestionIndex ? "is-selected" : ""}`}
-                                    onMouseDown={(e) => {
-                                        e.preventDefault();
-                                        handleInsertFileLink(item);
-                                    }}
-                                    style={{
-                                        padding: "6px 10px",
-                                        cursor: "pointer",
-                                        backgroundColor: index === fileSuggestionIndex ? "var(--background-modifier-hover)" : "transparent",
-                                        fontSize: "13px",
-                                        display: "flex",
-                                        alignItems: "center"
-                                    }}
-                                    onMouseEnter={() => setFileSuggestionIndex(index)}
-                                >
-                                    <div style={{ marginRight: "8px", opacity: 0.7 }}>
-                                        {item.type === 'file' && (
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
-                                        )}
-                                        {item.type === 'heading' && (
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12h16"/><path d="M4 6h16"/><path d="M4 18h16"/></svg>
-                                        )}
-                                        {item.type === 'block' && (
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
-                                        )}
+                        <div
+                            ref={contentRef}
+                            contentEditable={true}
+                            suppressContentEditableWarning={true}
+                            onBlur={handleStandardBlur}
+                            onKeyDown={handleStandardKeyDown}
+                            onInput={checkFileSuggestions}
+                            onPaste={handlePaste}
+                            className={`markdown-db-cell-content editing ${className || ""}`}
+                            style={{
+                                outline: "none",
+                                whiteSpace: "pre-wrap",
+                                wordBreak: "break-word",
+                                position: "fixed",
+                                top: editCoords.top,
+                                left: editCoords.left,
+                                width: editCoords.width,
+                                minHeight: "32px",
+                                height: "auto",
+                                maxHeight: "50vh",
+                                overflowY: "auto",
+                                zIndex: 9999,
+                                backgroundColor: "var(--background-primary)",
+                                border: "2px solid var(--interactive-accent)",
+                                boxSizing: "border-box",
+                                boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
+                                padding: "6px 8px",
+                                margin: 0,
+                                lineHeight: "1.5",
+                                fontFamily: "inherit",
+                                fontSize: "14px",
+                                borderRadius: "4px"
+                            }}
+                        />
+                        {showFileSuggestions && fileSuggestionCoords && ReactDOM.createPortal(
+                            <div className="markdown-db-suggestions file-suggestions" style={{
+                                position: "fixed",
+                                top: fileSuggestionCoords.top,
+                                left: fileSuggestionCoords.left,
+                                minWidth: "200px",
+                                maxHeight: "200px",
+                                overflowY: "auto",
+                                backgroundColor: "var(--background-primary)",
+                                border: "1px solid var(--background-modifier-border)",
+                                boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
+                                zIndex: 10000,
+                                borderRadius: "4px"
+                            }}>
+                                {fileSuggestions.map((item, index) => (
+                                    <div
+                                        key={item.path + (item.heading ? "#" + item.heading : "")}
+                                        className={`suggestion-item ${index === fileSuggestionIndex ? "is-selected" : ""}`}
+                                        onMouseDown={(e) => {
+                                            e.preventDefault();
+                                            handleInsertFileLink(item);
+                                        }}
+                                        style={{
+                                            padding: "6px 10px",
+                                            cursor: "pointer",
+                                            backgroundColor: index === fileSuggestionIndex ? "var(--background-modifier-hover)" : "transparent",
+                                            fontSize: "13px",
+                                            display: "flex",
+                                            alignItems: "center"
+                                        }}
+                                        onMouseEnter={() => setFileSuggestionIndex(index)}
+                                    >
+                                        <div style={{ marginRight: "8px", opacity: 0.7 }}>
+                                            {item.type === 'file' && (
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+                                            )}
+                                            {item.type === 'heading' && (
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12h16" /><path d="M4 6h16" /><path d="M4 18h16" /></svg>
+                                            )}
+                                            {item.type === 'block' && (
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                                            )}
+                                        </div>
+                                        <div>
+                                            <div style={{ fontWeight: 500 }}>{item.displayText}</div>
+                                            {item.type === 'file' && <div style={{ fontSize: "11px", opacity: 0.6 }}>{item.path}</div>}
+                                            {item.type === 'heading' && <div style={{ fontSize: "11px", opacity: 0.6 }}>{item.file.basename}</div>}
+                                            {item.type === 'block' && <div style={{ fontSize: "11px", opacity: 0.6 }}>{item.file.basename}</div>}
+                                        </div>
                                     </div>
-                                    <div>
-                                        <div style={{ fontWeight: 500 }}>{item.displayText}</div>
-                                        {item.type === 'file' && <div style={{ fontSize: "11px", opacity: 0.6 }}>{item.path}</div>}
-                                        {item.type === 'heading' && <div style={{ fontSize: "11px", opacity: 0.6 }}>{item.file.basename}</div>}
-                                        {item.type === 'block' && <div style={{ fontSize: "11px", opacity: 0.6 }}>{item.file.basename}</div>}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>,
-                        document.body
-                    )}
+                                ))}
+                            </div>,
+                            document.body
+                        )}
                     </>
                 ),
                 portalContainer || document.body

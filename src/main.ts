@@ -23,7 +23,7 @@ export default class MarkdownDBPlugin extends Plugin {
         await this.migrateSettings();
 
         // Initialize services immediately so views can subscribe
-        this.notionSyncService = new NotionSyncService(this.app, this.settings);
+        this.notionSyncService = new NotionSyncService(this.app, this.settings, this.saveSettings.bind(this));
 
         // Check for Auto-Sync
         this.app.workspace.onLayoutReady(() => {
@@ -33,7 +33,7 @@ export default class MarkdownDBPlugin extends Plugin {
                 githubService.syncStars();
                 githubService.syncPRs();
             }
-            
+
             // Notion
             this.notionSyncService.syncAll();
         });
@@ -49,29 +49,29 @@ export default class MarkdownDBPlugin extends Plugin {
 
         // Listen for new file creation to auto-add cssclass if enabled
         this.registerEvent(this.app.vault.on("create", async (file) => {
-             if (this.settings.hideProperties && file instanceof TFile && file.extension === 'md') {
-                  // Wait a bit for cache to populate or read content directly? 
-                  // "create" event might fire before content is fully populated if done programmatically.
-                  // But usually frontmatter check relies on metadata cache which updates async.
-                  // A safer bet is checking content or waiting.
-                  // For simplicity, we can try to read the file content or check cache after a delay.
-                  
-                  // Actually, let's hook into metadata cache updates, which is more reliable for detecting "markdown-db: true"
-             }
+            if (this.settings.hideProperties && file instanceof TFile && file.extension === 'md') {
+                // Wait a bit for cache to populate or read content directly? 
+                // "create" event might fire before content is fully populated if done programmatically.
+                // But usually frontmatter check relies on metadata cache which updates async.
+                // A safer bet is checking content or waiting.
+                // For simplicity, we can try to read the file content or check cache after a delay.
+
+                // Actually, let's hook into metadata cache updates, which is more reliable for detecting "markdown-db: true"
+            }
         }));
 
         this.registerEvent(this.app.metadataCache.on("changed", async (file) => {
             if (this.settings.hideProperties) {
                 const cache = this.app.metadataCache.getFileCache(file);
                 if (cache?.frontmatter?.['markdown-db'] === true || cache?.frontmatter?.['markdown-db'] === 'true') {
-                     // Check if it already has the class
-                     const classes = cache.frontmatter['cssclasses'];
-                     const hasClass = Array.isArray(classes) ? classes.includes(HIDDEN_CSS_CLASS) : classes === HIDDEN_CSS_CLASS;
-                     
-                     if (!hasClass) {
-                         // Avoid infinite loops: verify we are adding it only if missing
-                         await addCssClassToFiles(this.app, [file], HIDDEN_CSS_CLASS);
-                     }
+                    // Check if it already has the class
+                    const classes = cache.frontmatter['cssclasses'];
+                    const hasClass = Array.isArray(classes) ? classes.includes(HIDDEN_CSS_CLASS) : classes === HIDDEN_CSS_CLASS;
+
+                    if (!hasClass) {
+                        // Avoid infinite loops: verify we are adding it only if missing
+                        await addCssClassToFiles(this.app, [file], HIDDEN_CSS_CLASS);
+                    }
                 }
             }
         }));
@@ -136,7 +136,7 @@ export default class MarkdownDBPlugin extends Plugin {
 
                             const leaf = this.app.workspace.getLeaf(false);
                             await leaf.openFile(newFile);
-                            
+
                             // Explicitly switch to DB view for new files
                             await leaf.setViewState({
                                 type: VIEW_TYPE_MARKDOWN_DB,
@@ -273,7 +273,7 @@ export default class MarkdownDBPlugin extends Plugin {
                 }
 
                 this.settings.properties = newProperties;
-                
+
                 // We don't delete old fields from the object in memory immediately to avoid strict type issues if they were typed,
                 // but since we assigned to this.settings (which is typed as MarkdownDBSettings), the old fields are gone from the type view.
                 // When we save, only the fields in MarkdownDBSettings will be saved? 
@@ -309,15 +309,15 @@ export default class MarkdownDBPlugin extends Plugin {
             data.records.forEach(record => {
                 Object.entries(record.properties).forEach(([key, values]) => {
                     const propConfig = this.settings.properties.find(p => p.name === key);
-                    
+
                     if (propConfig) {
                         values.forEach(rawVal => {
                             const splitVals = String(rawVal.value).split(",").map(v => v.trim()).filter(v => v);
-                            
+
                             splitVals.forEach(val => {
                                 // Check if ignored
                                 const ignored = propConfig.ignoredValues && propConfig.ignoredValues.includes(val);
-                                
+
                                 if (!ignored && !propConfig.values.includes(val)) {
                                     propConfig.values.push(val);
                                     updated = true;
@@ -337,12 +337,12 @@ export default class MarkdownDBPlugin extends Plugin {
     async scanAllDatabaseFiles() {
         const files = this.app.vault.getMarkdownFiles();
         let updated = false;
-        
+
         // Reset or Merge? 
         // If we reset, we lose values from files that might not be scanned if we change logic later.
         // But if we don't reset, deleted values persist forever.
         // For now, let's keep it additive.
-        
+
         for (const file of files) {
             const cache = this.app.metadataCache.getFileCache(file);
             if (cache?.frontmatter?.["markdown-db"]) {
@@ -352,15 +352,15 @@ export default class MarkdownDBPlugin extends Plugin {
                 data.records.forEach(record => {
                     Object.entries(record.properties).forEach(([key, values]) => {
                         const propConfig = this.settings.properties.find(p => p.name === key);
-                        
+
                         if (propConfig) {
-                             values.forEach(rawVal => {
+                            values.forEach(rawVal => {
                                 const splitVals = String(rawVal.value).split(",").map(v => v.trim()).filter(v => v);
-                                
+
                                 splitVals.forEach(val => {
                                     // Check if ignored
                                     const ignored = propConfig.ignoredValues && propConfig.ignoredValues.includes(val);
-                                    
+
                                     if (!ignored && !propConfig.values.includes(val)) {
                                         propConfig.values.push(val);
                                         updated = true;
@@ -404,31 +404,31 @@ export default class MarkdownDBPlugin extends Plugin {
     monkeyPatchOpenFile() {
         const plugin = this;
         const originalOpenFile = WorkspaceLeaf.prototype.openFile;
-        
+
         plugin.register(() => {
             WorkspaceLeaf.prototype.openFile = originalOpenFile;
         });
 
-        WorkspaceLeaf.prototype.openFile = async function(file: TFile, state?: any) {
+        WorkspaceLeaf.prototype.openFile = async function (file: TFile, state?: any) {
             // Check if this is a DB file
             // We need a fast check here.
             let isDB = false;
-            
+
             try {
                 if (file.extension === "md") {
-                     const cache = plugin.app.metadataCache.getFileCache(file);
-                     if (cache?.frontmatter?.["markdown-db"]) {
-                         isDB = true;
-                     } else if (!cache) {
-                         // If no cache (new file or startup), try reading a bit of content
-                         // This might be slightly slow but necessary for "seamless" feeling on cold start
-                         try {
+                    const cache = plugin.app.metadataCache.getFileCache(file);
+                    if (cache?.frontmatter?.["markdown-db"]) {
+                        isDB = true;
+                    } else if (!cache) {
+                        // If no cache (new file or startup), try reading a bit of content
+                        // This might be slightly slow but necessary for "seamless" feeling on cold start
+                        try {
                             const content = await plugin.app.vault.read(file);
                             if (/^---\s*[\s\S]*?markdown-db:\s*true/.test(content)) {
                                 isDB = true;
                             }
-                         } catch {}
-                     }
+                        } catch { }
+                    }
                 }
             } catch (e) {
                 console.error("Markdown DB: Error checking if file is DB", e);
@@ -450,10 +450,10 @@ export default class MarkdownDBPlugin extends Plugin {
                 }
 
                 if (!plugin.isToggling) {
-                     return this.setViewState({
-                         type: VIEW_TYPE_MARKDOWN_DB,
-                         state: { file: file.path, ...state }
-                     });
+                    return this.setViewState({
+                        type: VIEW_TYPE_MARKDOWN_DB,
+                        state: { file: file.path, ...state }
+                    });
                 }
             }
 
@@ -473,7 +473,7 @@ export default class MarkdownDBPlugin extends Plugin {
         const OBSIDIAN_TAG_CLASS = "nav-file-tag";
 
         const fileExplorerLeaves = this.app.workspace.getLeavesOfType("file-explorer");
-        
+
         if (fileExplorerLeaves.length === 0) {
             if (retryCount < MAX_RETRY) {
                 setTimeout(() => this.updateFileExplorerBadgesWithRetry(retryCount + 1), RETRY_INTERVAL);
@@ -488,7 +488,7 @@ export default class MarkdownDBPlugin extends Plugin {
                     const navItem = item as any;
                     // navItem.selfEl is the full row container (div.nav-file-title)
                     const selfEl = navItem.selfEl;
-                    
+
                     if (selfEl) {
                         // Remove existing badges first to avoid duplicates
                         const existingBadges = selfEl.querySelectorAll(`.${BADGE_CLASS}`);
@@ -524,9 +524,9 @@ export default class MarkdownDBPlugin extends Plugin {
                     const observer = new MutationObserver((mutations) => {
                         let shouldUpdate = false;
                         for (const mutation of mutations) {
-                            if (mutation.target instanceof HTMLElement && 
-                                (mutation.target.classList.contains('nav-files-container') || 
-                                 mutation.target.classList.contains('nav-folder-children'))) {
+                            if (mutation.target instanceof HTMLElement &&
+                                (mutation.target.classList.contains('nav-files-container') ||
+                                    mutation.target.classList.contains('nav-folder-children'))) {
                                 shouldUpdate = true;
                                 break;
                             }

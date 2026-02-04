@@ -11,10 +11,12 @@ export class NotionSyncService {
     private dbTitleProps: Map<string, string> = new Map();
     public isSyncing: boolean = false;
     private onSyncStatusChange: ((isSyncing: boolean) => void) | null = null;
+    private onSaveSettings: () => Promise<void>;
 
-    constructor(app: App, settings: MarkdownDBSettings) {
+    constructor(app: App, settings: MarkdownDBSettings, onSaveSettings: () => Promise<void>) {
         this.app = app;
         this.settings = settings;
+        this.onSaveSettings = onSaveSettings;
     }
 
     setSyncStatus(status: boolean) {
@@ -56,7 +58,7 @@ export class NotionSyncService {
     async syncAll() {
         if (this.isSyncing) return;
         this.setSyncStatus(true);
-        new Notice("Starting Notion Sync (Pulling data)...");
+        new Notice("Starting Notion Sync...");
 
         const configs = this.settings.notionSyncConfigs;
         if (configs.length === 0) {
@@ -67,7 +69,8 @@ export class NotionSyncService {
         try {
             for (const config of configs) {
                 // Check if auto-sync is enabled for this config
-                if (config.autoSyncOnStartup) {
+                // strict check: only allow if pull (though settings UI enforces this, good to be safe)
+                if (config.autoSyncOnStartup && config.syncDirection !== 'push') {
                     await this.syncDatabase(config);
                 }
             }
@@ -80,7 +83,7 @@ export class NotionSyncService {
         }
     }
 
-    async syncDatabase(config: NotionSyncConfig) {
+    async syncDatabase(config: NotionSyncConfig, forceFull: boolean = false) {
         const token = this.settings.notionApiKey;
         if (!token || !config.databaseId || !config.targetDbPath) {
             console.warn(`Skipping sync for ${config.name}: Missing token, DB ID, or target path.`);
@@ -93,14 +96,46 @@ export class NotionSyncService {
             return;
         }
 
-        new Notice(`Syncing Notion Database: ${config.name}...`);
+        const isIncremental = !forceFull && !!config.lastSyncTime;
+        const msg = isIncremental ? `Syncing Notion Database (Incremental): ${config.name}...` : `Syncing Notion Database (Full): ${config.name}...`;
+        new Notice(msg);
+
+        // Capture time before request to ensure we don't miss updates happening during sync
+        const syncStartTime = new Date().toISOString();
 
         try {
             const api = new NotionAPI(token);
-            const results = await api.queryDatabase(config.databaseId);
 
-            await this.processResults(results, config, file);
-            new Notice(`Synced ${config.name}: ${results.length} items processed.`);
+            let filter: any = undefined;
+            if (isIncremental) {
+                filter = {
+                    timestamp: "last_edited_time",
+                    last_edited_time: {
+                        after: config.lastSyncTime
+                    }
+                };
+            }
+
+            const results = await api.queryDatabase(config.databaseId, filter);
+
+            if (results.length > 0) {
+                await this.processResults(results, config, file);
+                new Notice(`Synced ${config.name}: ${results.length} items processed.`);
+            } else {
+                if (isIncremental) {
+                    // specific message for incremental with no changes
+                    // console.log(`No changes for ${config.name}`);
+                } else {
+                    new Notice(`Synced ${config.name}: No items found.`);
+                }
+            }
+
+            // Update lastSyncTime and save
+            config.lastSyncTime = syncStartTime;
+            if (this.onSaveSettings) {
+                await this.onSaveSettings();
+            }
+
         } catch (error) {
             console.error(`Failed to sync Notion DB ${config.name}:`, error);
             new Notice(`Sync failed for ${config.name}: ${error.message}`);
@@ -712,7 +747,7 @@ export class NotionSyncService {
 
         const title = this.getTitleFromPage(page);
         const headerLine = `## ${title}`;
-        let metaLine = `%% [sync::boolean(true)]`;
+        let metaLine = `%%`;
 
         const props = page.properties;
 

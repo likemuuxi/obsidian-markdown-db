@@ -1,4 +1,4 @@
-import {App, PluginSettingTab, setIcon, Setting, Menu, TFile} from "obsidian";
+import { App, PluginSettingTab, setIcon, Setting, Menu, TFile } from "obsidian";
 import MyPlugin from "./main";
 import { FolderSuggest } from "./suggest/suggest";
 import { PropertyType, PROPERTY_TYPE_ICONS, VALID_PROPERTY_TYPES } from "./database/schema";
@@ -26,6 +26,7 @@ export interface NotionSyncConfig {
     properties: NotionPropertyConfig[];
     syncDirection: 'push' | 'pull';
     autoSyncOnStartup: boolean;
+    lastSyncTime?: string;
 }
 
 export interface MarkdownDBSettings {
@@ -33,7 +34,7 @@ export interface MarkdownDBSettings {
     defaultDbFolder: string;
     lastOpenedDbPath?: string;
     hideProperties: boolean;
-    
+
     // Github Auto-Sync Settings
     autoSyncGithub: boolean;
     githubUsername: string;
@@ -44,6 +45,7 @@ export interface MarkdownDBSettings {
     // Notion Sync Settings
     notionApiKey: string;
     notionSyncConfigs: NotionSyncConfig[];
+    templates: string[];
 }
 
 export const DEFAULT_SETTINGS: MarkdownDBSettings = {
@@ -56,7 +58,8 @@ export const DEFAULT_SETTINGS: MarkdownDBSettings = {
     githubSyncStarsDb: "",
     githubSyncPrsDb: "",
     notionApiKey: "",
-    notionSyncConfigs: []
+    notionSyncConfigs: [],
+    templates: []
 }
 
 export class MarkdownDBSettingTab extends PluginSettingTab {
@@ -73,13 +76,13 @@ export class MarkdownDBSettingTab extends PluginSettingTab {
     }
 
     display(): void {
-        const {containerEl} = this;
+        const { containerEl } = this;
         containerEl.empty();
 
         // Tab Header
         const tabHeader = containerEl.createDiv({ cls: 'markdown-db-settings-tabs' });
-        
-        const generalTab = tabHeader.createDiv({ 
+
+        const generalTab = tabHeader.createDiv({
             cls: `markdown-db-settings-tab ${this.activeTab === 'general' ? 'is-active' : ''}`,
             text: 'General'
         });
@@ -88,7 +91,7 @@ export class MarkdownDBSettingTab extends PluginSettingTab {
             this.display();
         };
 
-        const propTab = tabHeader.createDiv({ 
+        const propTab = tabHeader.createDiv({
             cls: `markdown-db-settings-tab ${this.activeTab === 'properties' ? 'is-active' : ''}`,
             text: 'Properties'
         });
@@ -97,7 +100,7 @@ export class MarkdownDBSettingTab extends PluginSettingTab {
             this.display();
         };
 
-        const integrationTab = tabHeader.createDiv({ 
+        const integrationTab = tabHeader.createDiv({
             cls: `markdown-db-settings-tab ${this.activeTab === 'integration' ? 'is-active' : ''}`,
             text: 'Integration'
         });
@@ -139,17 +142,17 @@ export class MarkdownDBSettingTab extends PluginSettingTab {
                 .onChange(async (value) => {
                     this.plugin.settings.hideProperties = value;
                     await this.plugin.saveSettings();
-                    
+
                     // Identify all DB files
                     const dbFiles = this.app.vault.getMarkdownFiles().filter(file => {
-                         const cache = this.app.metadataCache.getFileCache(file);
-                         return cache?.frontmatter?.['markdown-db'] === true || cache?.frontmatter?.['markdown-db'] === 'true';
+                        const cache = this.app.metadataCache.getFileCache(file);
+                        return cache?.frontmatter?.['markdown-db'] === true || cache?.frontmatter?.['markdown-db'] === 'true';
                     });
 
                     if (value) {
-                         await addCssClassToFiles(this.app, dbFiles, HIDDEN_CSS_CLASS);
+                        await addCssClassToFiles(this.app, dbFiles, HIDDEN_CSS_CLASS);
                     } else {
-                         await removeCssClassFromFiles(this.app, dbFiles, HIDDEN_CSS_CLASS);
+                        await removeCssClassFromFiles(this.app, dbFiles, HIDDEN_CSS_CLASS);
                     }
                 }));
     }

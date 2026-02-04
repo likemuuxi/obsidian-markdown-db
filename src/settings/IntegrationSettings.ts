@@ -39,7 +39,7 @@ export class IntegrationSettingsView {
     }
 
     renderIntegrationList(containerEl: HTMLElement) {
-        containerEl.createEl('h2', {text: 'Integrations'});
+        containerEl.createEl('h2', { text: 'Integrations' });
 
         const integrations = [
             {
@@ -157,10 +157,10 @@ export class IntegrationSettingsView {
                     files.forEach((file) => {
                         dropdown.addOption(file.path, file.path);
                     });
-                    
+
                     // Default if empty
                     if (!this.plugin.settings.githubSyncStarsDb && files.length > 0) {
-                         // Don't auto-set, let user choose
+                        // Don't auto-set, let user choose
                     }
                 }
 
@@ -235,12 +235,12 @@ export class IntegrationSettingsView {
                 }));
 
         const listContainer = containerEl.createDiv({ cls: 'markdown-db-notion-list' });
-        
+
         if (this.plugin.settings.notionSyncConfigs.length === 0) {
-            listContainer.createDiv({ 
-                text: 'No Notion databases configured.', 
-                cls: 'setting-item-description', 
-                attr: { style: 'padding: 10px; font-style: italic;' } 
+            listContainer.createDiv({
+                text: 'No Notion databases configured.',
+                cls: 'setting-item-description',
+                attr: { style: 'padding: 10px; font-style: italic;' }
             });
         } else {
             this.plugin.settings.notionSyncConfigs.forEach(config => {
@@ -258,7 +258,7 @@ export class IntegrationSettingsView {
                 const title = infoDiv.createDiv({ cls: 'markdown-db-integration-title' });
                 title.setText(config.name || 'Untitled Config');
                 title.style.fontWeight = 'bold';
-                
+
                 const detail = infoDiv.createDiv({ cls: 'markdown-db-integration-desc' });
                 detail.setText(`ID: ${config.databaseId.slice(0, 8)}... | Target: ${config.targetDbPath}`);
                 detail.style.color = 'var(--text-muted)';
@@ -333,7 +333,7 @@ export class IntegrationSettingsView {
             this.display();
         });
 
-        let updateActionButtons = () => {};
+        let updateActionButtons = () => { };
 
         // --- Fields ---
         new Setting(containerEl)
@@ -367,23 +367,27 @@ export class IntegrationSettingsView {
                 .setValue(config.syncDirection || 'push')
                 .onChange(value => {
                     config.syncDirection = value as 'push' | 'pull';
+                    if (config.syncDirection === 'push') {
+                        config.autoSyncOnStartup = false;
+                    }
                     this.isDirty = true;
                     this.display();
                 }));
 
-        new Setting(containerEl)
-            .setName('Sync on Startup')
-            .setDesc('Automatically sync with Notion when Obsidian starts.')
-            .addToggle(toggle => toggle
-                .setValue(config.autoSyncOnStartup || false)
-                .onChange(value => {
-                    config.autoSyncOnStartup = value;
-                    this.isDirty = true;
-                    updateActionButtons();
-                }));
+        if (config.syncDirection === 'pull') {
+            new Setting(containerEl)
+                .setName('Sync on Startup')
+                .setDesc('Automatically sync with Notion when Obsidian starts.')
+                .addToggle(toggle => toggle
+                    .setValue(config.autoSyncOnStartup || false)
+                    .onChange(value => {
+                        config.autoSyncOnStartup = value;
+                        this.isDirty = true;
+                        updateActionButtons();
+                    }));
+        }
 
-
-                // --- Test Connection Button ---
+        // --- Test Connection Button ---
         const testBtnContainer = containerEl.createDiv();
         testBtnContainer.style.marginTop = '10px';
         testBtnContainer.style.display = 'flex';
@@ -434,157 +438,157 @@ export class IntegrationSettingsView {
                 this.isDirty = true;
                 renderProperties();
                 updateActionButtons();
-        };
+            };
 
-        const propertiesContainer = containerEl.createDiv();
-        
-        let draggedIndex: number | null = null;
+            const propertiesContainer = containerEl.createDiv();
 
-        const renderProperties = () => {
-            propertiesContainer.empty();
-            config.properties.forEach((prop, index) => {
-                const row = propertiesContainer.createDiv({ cls: 'markdown-db-mapping-row' });
-                row.style.display = 'flex';
-                row.style.gap = '10px';
-                row.style.marginBottom = '10px';
-                row.style.alignItems = 'center';
-                // Add transition for smooth border appearance
-                row.style.transition = 'border 0.1s ease'; 
-                row.style.borderTop = '2px solid transparent';
-                row.style.borderBottom = '2px solid transparent';
+            let draggedIndex: number | null = null;
 
-                // Drag Handle
-                const dragHandle = row.createDiv({ cls: 'clickable-icon' });
-                setIcon(dragHandle, 'grip-vertical');
-                dragHandle.style.cursor = 'grab';
-                dragHandle.style.flexShrink = '0';
-                dragHandle.setAttribute('draggable', 'true');
+            const renderProperties = () => {
+                propertiesContainer.empty();
+                config.properties.forEach((prop, index) => {
+                    const row = propertiesContainer.createDiv({ cls: 'markdown-db-mapping-row' });
+                    row.style.display = 'flex';
+                    row.style.gap = '10px';
+                    row.style.marginBottom = '10px';
+                    row.style.alignItems = 'center';
+                    // Add transition for smooth border appearance
+                    row.style.transition = 'border 0.1s ease';
+                    row.style.borderTop = '2px solid transparent';
+                    row.style.borderBottom = '2px solid transparent';
 
-                dragHandle.addEventListener('dragstart', (e) => {
-                    draggedIndex = index;
-                    e.dataTransfer?.setData('text/plain', index.toString());
-                    e.dataTransfer!.effectAllowed = 'move';
-                    e.dataTransfer?.setDragImage(row, 0, 0);
-                    row.style.opacity = '0.5';
-                });
+                    // Drag Handle
+                    const dragHandle = row.createDiv({ cls: 'clickable-icon' });
+                    setIcon(dragHandle, 'grip-vertical');
+                    dragHandle.style.cursor = 'grab';
+                    dragHandle.style.flexShrink = '0';
+                    dragHandle.setAttribute('draggable', 'true');
 
-                dragHandle.addEventListener('dragend', () => {
-                    draggedIndex = null;
-                    row.style.opacity = '1';
-                    propertiesContainer.querySelectorAll('.markdown-db-mapping-row').forEach(el => {
-                        (el as HTMLElement).style.borderTop = '2px solid transparent';
-                        (el as HTMLElement).style.borderBottom = '2px solid transparent';
+                    dragHandle.addEventListener('dragstart', (e) => {
+                        draggedIndex = index;
+                        e.dataTransfer?.setData('text/plain', index.toString());
+                        e.dataTransfer!.effectAllowed = 'move';
+                        e.dataTransfer?.setDragImage(row, 0, 0);
+                        row.style.opacity = '0.5';
                     });
-                });
 
-                // Row Drop Targets
-                row.addEventListener('dragover', (e) => {
-                    e.preventDefault();
-                    if (draggedIndex === null || draggedIndex === index) return;
+                    dragHandle.addEventListener('dragend', () => {
+                        draggedIndex = null;
+                        row.style.opacity = '1';
+                        propertiesContainer.querySelectorAll('.markdown-db-mapping-row').forEach(el => {
+                            (el as HTMLElement).style.borderTop = '2px solid transparent';
+                            (el as HTMLElement).style.borderBottom = '2px solid transparent';
+                        });
+                    });
 
-                    if (draggedIndex < index) {
-                        row.style.borderBottom = '2px solid var(--interactive-accent)';
-                        row.style.borderTop = '2px solid transparent';
-                    } else {
-                        row.style.borderTop = '2px solid var(--interactive-accent)';
-                        row.style.borderBottom = '2px solid transparent';
-                    }
-                });
+                    // Row Drop Targets
+                    row.addEventListener('dragover', (e) => {
+                        e.preventDefault();
+                        if (draggedIndex === null || draggedIndex === index) return;
 
-                row.addEventListener('dragleave', () => {
-                    row.style.borderTop = '2px solid transparent';
-                    row.style.borderBottom = '2px solid transparent';
-                });
-
-                row.addEventListener('drop', async (e) => {
-                    e.preventDefault();
-                    row.style.borderTop = '2px solid transparent';
-                    row.style.borderBottom = '2px solid transparent';
-                    
-                    const fromIndexStr = e.dataTransfer?.getData('text/plain');
-                    if (fromIndexStr === undefined) return;
-                    const fromIndex = parseInt(fromIndexStr);
-
-                    if (!isNaN(fromIndex) && fromIndex !== index) {
-                        const item = config.properties[fromIndex];
-                        config.properties.splice(fromIndex, 1);
-                        config.properties.splice(index, 0, item);
-
-                        // Auto-save logic
-                        if (!config.name || !this.plugin.settings.notionApiKey || !config.databaseId) {
-                            new Notice('Reordered, but not saved. Please fill in Name, Database ID, and ensure Global Token is set.');
-                            this.isDirty = true;
-                            renderProperties();
-                            updateActionButtons();
-                            return;
-                        }
-
-                        // Check if order actually changed
-                        const newProps = JSON.stringify(config.properties);
-                        const oldProps = JSON.stringify(this.plugin.settings.notionSyncConfigs.find(c => c.id === config.id)?.properties || []);
-                        
-                        if (newProps === oldProps) {
-                             // Nothing changed
-                             return;
-                        }
-
-                        if (isNew) {
-                            this.plugin.settings.notionSyncConfigs.push(config);
+                        if (draggedIndex < index) {
+                            row.style.borderBottom = '2px solid var(--interactive-accent)';
+                            row.style.borderTop = '2px solid transparent';
                         } else {
-                            const idx = this.plugin.settings.notionSyncConfigs.findIndex(c => c.id === config.id);
-                            if (idx !== -1) {
-                                this.plugin.settings.notionSyncConfigs[idx] = config;
-                            }
+                            row.style.borderTop = '2px solid var(--interactive-accent)';
+                            row.style.borderBottom = '2px solid transparent';
                         }
+                    });
 
-                        await this.plugin.saveSettings();
-                        new Notice('Notion configuration saved.');
-                        
-                        this.isDirty = false;
-                        this.currentEditingConfig = null;
-                        this.editingNotionConfigId = config.id; 
-                        this.display();
-                    }
+                    row.addEventListener('dragleave', () => {
+                        row.style.borderTop = '2px solid transparent';
+                        row.style.borderBottom = '2px solid transparent';
+                    });
+
+                    row.addEventListener('drop', async (e) => {
+                        e.preventDefault();
+                        row.style.borderTop = '2px solid transparent';
+                        row.style.borderBottom = '2px solid transparent';
+
+                        const fromIndexStr = e.dataTransfer?.getData('text/plain');
+                        if (fromIndexStr === undefined) return;
+                        const fromIndex = parseInt(fromIndexStr);
+
+                        if (!isNaN(fromIndex) && fromIndex !== index) {
+                            const item = config.properties[fromIndex];
+                            config.properties.splice(fromIndex, 1);
+                            config.properties.splice(index, 0, item);
+
+                            // Auto-save logic
+                            if (!config.name || !this.plugin.settings.notionApiKey || !config.databaseId) {
+                                new Notice('Reordered, but not saved. Please fill in Name, Database ID, and ensure Global Token is set.');
+                                this.isDirty = true;
+                                renderProperties();
+                                updateActionButtons();
+                                return;
+                            }
+
+                            // Check if order actually changed
+                            const newProps = JSON.stringify(config.properties);
+                            const oldProps = JSON.stringify(this.plugin.settings.notionSyncConfigs.find(c => c.id === config.id)?.properties || []);
+
+                            if (newProps === oldProps) {
+                                // Nothing changed
+                                return;
+                            }
+
+                            if (isNew) {
+                                this.plugin.settings.notionSyncConfigs.push(config);
+                            } else {
+                                const idx = this.plugin.settings.notionSyncConfigs.findIndex(c => c.id === config.id);
+                                if (idx !== -1) {
+                                    this.plugin.settings.notionSyncConfigs[idx] = config;
+                                }
+                            }
+
+                            await this.plugin.saveSettings();
+                            new Notice('Notion configuration saved.');
+
+                            this.isDirty = false;
+                            this.currentEditingConfig = null;
+                            this.editingNotionConfigId = config.id;
+                            this.display();
+                        }
+                    });
+
+                    const nameInput = row.createEl('input', { type: 'text', placeholder: 'Notion Property Name' });
+                    nameInput.value = prop.name;
+                    nameInput.style.flex = '1';
+                    nameInput.onchange = (e) => {
+                        prop.name = (e.target as HTMLInputElement).value;
+                        this.isDirty = true;
+                        updateActionButtons();
+                    };
+
+                    const typeSelect = row.createEl('select');
+                    typeSelect.style.flex = '1';
+
+                    const types = [
+                        'Text', 'Number', 'Select', 'Multi-Select', 'Date',
+                        'Files & Media', 'Checkbox', 'URL'
+                    ];
+                    types.forEach(t => {
+                        const option = typeSelect.createEl('option', { text: t, value: t });
+                        if (t === prop.type) option.selected = true;
+                    });
+                    typeSelect.onchange = (e) => {
+                        prop.type = (e.target as HTMLSelectElement).value;
+                        this.isDirty = true;
+                        updateActionButtons();
+                    };
+
+                    const delBtn = row.createEl('button', { cls: 'clickable-icon' });
+                    setIcon(delBtn, 'trash');
+                    delBtn.onclick = () => {
+                        config.properties.splice(index, 1);
+                        this.isDirty = true;
+                        renderProperties();
+                        updateActionButtons();
+                    };
                 });
+            };
 
-                const nameInput = row.createEl('input', { type: 'text', placeholder: 'Notion Property Name' });
-                nameInput.value = prop.name;
-                nameInput.style.flex = '1';
-                nameInput.onchange = (e) => {
-                    prop.name = (e.target as HTMLInputElement).value;
-                    this.isDirty = true;
-                    updateActionButtons();
-                };
-
-                const typeSelect = row.createEl('select');
-                typeSelect.style.flex = '1';
-
-                const types = [
-                    'Text', 'Number', 'Select', 'Multi-Select', 'Date', 
-                    'Files & Media', 'Checkbox', 'URL'
-                ];
-                types.forEach(t => {
-                    const option = typeSelect.createEl('option', { text: t, value: t });
-                    if (t === prop.type) option.selected = true;
-                });
-                typeSelect.onchange = (e) => {
-                    prop.type = (e.target as HTMLSelectElement).value;
-                    this.isDirty = true;
-                    updateActionButtons();
-                };
-
-                const delBtn = row.createEl('button', { cls: 'clickable-icon' });
-                setIcon(delBtn, 'trash');
-                delBtn.onclick = () => {
-                    config.properties.splice(index, 1);
-                    this.isDirty = true;
-                    renderProperties();
-                    updateActionButtons();
-                };
-            });
-        };
-
-        renderProperties();
+            renderProperties();
         }
 
         const actionsDiv = containerEl.createDiv();
@@ -594,162 +598,162 @@ export class IntegrationSettingsView {
         actionsDiv.style.gap = '10px';
 
         const generateOrUpdateDbFile = async (config: NotionSyncConfig) => {
-             if (config.syncDirection !== 'pull' && config.properties.length === 0) {
-                 new Notice('Please add at least one property first.');
-                 return;
-             }
+            if (config.syncDirection !== 'pull' && config.properties.length === 0) {
+                new Notice('Please add at least one property first.');
+                return;
+            }
 
-             if (config.syncDirection === 'pull' && config.properties.length === 0) {
-                  try {
-                      const token = this.plugin.settings.notionApiKey;
-                      if (!token || !config.databaseId) {
-                          new Notice('Please fill in Token and Database ID first.');
-                          return;
-                      }
-                      
-                      new Notice('Fetching schema from Notion...');
-                      const api = new NotionAPI(token);
-                      const db = await api.getDatabase(config.databaseId);
-                      
-                      const props = db.properties;
-                      for (const key in props) {
-                          const p = props[key];
-                          let type = 'Text';
-                          switch (p.type) {
-                              case 'number': type = 'Number'; break;
-                              case 'select': type = 'Select'; break;
-                              case 'multi_select': type = 'Multi-Select'; break;
-                              case 'date': type = 'Date'; break;
-                              case 'checkbox': type = 'Checkbox'; break;
-                              case 'url': type = 'URL'; break;
-                              case 'files': type = 'Files & Media'; break;
-                              default: type = 'Text';
-                          }
-                          config.properties.push({ name: key, type: type });
-                      }
-                      new Notice(`Fetched ${config.properties.length} properties.`);
-                  } catch (e: any) {
-                      console.error(e);
-                      new Notice('Failed to fetch schema: ' + (e.message || e));
-                      return;
-                  }
-             }
+            if (config.syncDirection === 'pull' && config.properties.length === 0) {
+                try {
+                    const token = this.plugin.settings.notionApiKey;
+                    if (!token || !config.databaseId) {
+                        new Notice('Please fill in Token and Database ID first.');
+                        return;
+                    }
 
-             const safeName = config.name.replace(/[^a-zA-Z0-9]/g, '_') || 'NotionDB';
-             const folder = this.plugin.settings.defaultDbFolder || '';
-             let targetPath = folder ? `${folder}/${safeName}.md` : `${safeName}.md`;
-             
-             targetPath = normalizePath(targetPath);
+                    new Notice('Fetching schema from Notion...');
+                    const api = new NotionAPI(token);
+                    const db = await api.getDatabase(config.databaseId);
 
-             const frontmatter: any = {
-                 "markdown-db": true
-             };
+                    const props = db.properties;
+                    for (const key in props) {
+                        const p = props[key];
+                        let type = 'Text';
+                        switch (p.type) {
+                            case 'number': type = 'Number'; break;
+                            case 'select': type = 'Select'; break;
+                            case 'multi_select': type = 'Multi-Select'; break;
+                            case 'date': type = 'Date'; break;
+                            case 'checkbox': type = 'Checkbox'; break;
+                            case 'url': type = 'URL'; break;
+                            case 'files': type = 'Files & Media'; break;
+                            default: type = 'Text';
+                        }
+                        config.properties.push({ name: key, type: type });
+                    }
+                    new Notice(`Fetched ${config.properties.length} properties.`);
+                } catch (e: any) {
+                    console.error(e);
+                    new Notice('Failed to fetch schema: ' + (e.message || e));
+                    return;
+                }
+            }
 
-             const columnTypes: Record<string, string> = {};
-             const columnOrder: string[] = [];
+            const safeName = config.name.replace(/[^a-zA-Z0-9]/g, '_') || 'NotionDB';
+            const folder = this.plugin.settings.defaultDbFolder || '';
+            let targetPath = folder ? `${folder}/${safeName}.md` : `${safeName}.md`;
 
-             config.properties.forEach(prop => {
-                 let dbType = "text";
+            targetPath = normalizePath(targetPath);
 
-                 switch (prop.type.toLowerCase()) {
-                     case 'number': 
-                         dbType = "number";
-                         break;
-                     case 'checkbox': 
-                         dbType = "boolean";
-                         break;
-                     case 'multi-select':
-                         dbType = "multi";
-                         break;
-                     case 'date': 
-                         dbType = "date";
-                         break;
-                     case 'select':
-                         dbType = "select";
-                         break;
-                     case 'url':
-                         dbType = "link";
-                         break;
-                     case 'files':
-                         dbType = "text"; 
-                         break;
-                     case 'rich_text':
-                     case 'text':
-                     default:
-                         dbType = "text";
-                         break;
-                 }
-                 columnTypes[prop.name] = dbType;
-                 columnOrder.push(prop.name);
-             });
+            const frontmatter: any = {
+                "markdown-db": true
+            };
 
-             const propertyParts = columnOrder.map(name => {
-                 const type = columnTypes[name];
-                 return `[${name}::${type}()]`;
-             });
-             const propertyBlock = propertyParts.length > 0 ? `%% [sync::boolean()] ${propertyParts.join(' ')} [notionUrl::link()] %%` : '';
+            const columnTypes: Record<string, string> = {};
+            const columnOrder: string[] = [];
 
-             const content = `---\n${stringifyYaml(frontmatter)}---\n\n# ${config.name}\n\n## Example\n${propertyBlock}\n\n\n`;
+            config.properties.forEach(prop => {
+                let dbType = "text";
 
-             try {
-                 const existingFile = this.plugin.app.vault.getAbstractFileByPath(targetPath);
-                 if (existingFile instanceof TFile) {
-                     // Update schema only
-                     const currentContent = await this.plugin.app.vault.read(existingFile);
-                     
-                     // Try to find ## Example block or property definition
-                     const exampleRegex = new RegExp('(##\\s+Example\\s*\\n\\s*)(%%[\\s\\S]*?%%)');
-                     let newContent = currentContent;
-                     
-                     if (exampleRegex.test(currentContent)) {
-                         newContent = currentContent.replace(exampleRegex, `$1${propertyBlock}`);
-                     } else if (currentContent.includes("## Example")) {
-                         // ## Example exists but no block? Append block
-                         newContent = currentContent.replace("## Example", `## Example\n${propertyBlock}`);
-                     } else {
-                         // No Example section, append to end
-                         newContent = currentContent + `\n\n## Example\n${propertyBlock}`;
-                     }
+                switch (prop.type.toLowerCase()) {
+                    case 'number':
+                        dbType = "number";
+                        break;
+                    case 'checkbox':
+                        dbType = "boolean";
+                        break;
+                    case 'multi-select':
+                        dbType = "multi";
+                        break;
+                    case 'date':
+                        dbType = "date";
+                        break;
+                    case 'select':
+                        dbType = "select";
+                        break;
+                    case 'url':
+                        dbType = "link";
+                        break;
+                    case 'files':
+                        dbType = "text";
+                        break;
+                    case 'rich_text':
+                    case 'text':
+                    default:
+                        dbType = "text";
+                        break;
+                }
+                columnTypes[prop.name] = dbType;
+                columnOrder.push(prop.name);
+            });
 
-                     if (newContent !== currentContent) {
+            const propertyParts = columnOrder.map(name => {
+                const type = columnTypes[name];
+                return `[${name}::${type}()]`;
+            });
+            const propertyBlock = propertyParts.length > 0 ? `%% ${propertyParts.join(' ')} [notionUrl::link()] %%` : '';
+
+            const content = `---\n${stringifyYaml(frontmatter)}---\n\n# ${config.name}\n\n## Example\n${propertyBlock}\n\n\n`;
+
+            try {
+                const existingFile = this.plugin.app.vault.getAbstractFileByPath(targetPath);
+                if (existingFile instanceof TFile) {
+                    // Update schema only
+                    const currentContent = await this.plugin.app.vault.read(existingFile);
+
+                    // Try to find ## Example block or property definition
+                    const exampleRegex = new RegExp('(##\\s+Example\\s*\\n\\s*)(%%[\\s\\S]*?%%)');
+                    let newContent = currentContent;
+
+                    if (exampleRegex.test(currentContent)) {
+                        newContent = currentContent.replace(exampleRegex, `$1${propertyBlock}`);
+                    } else if (currentContent.includes("## Example")) {
+                        // ## Example exists but no block? Append block
+                        newContent = currentContent.replace("## Example", `## Example\n${propertyBlock}`);
+                    } else {
+                        // No Example section, append to end
+                        newContent = currentContent + `\n\n## Example\n${propertyBlock}`;
+                    }
+
+                    if (newContent !== currentContent) {
                         await this.plugin.app.vault.modify(existingFile, newContent);
                         new Notice(`Updated schema in: ${targetPath}`);
-                     } else {
+                    } else {
                         new Notice(`No changes needed for: ${targetPath}`);
-                     }
-                 } else {
-                     await this.plugin.app.vault.create(targetPath, content);
-                     new Notice(`Created template: ${targetPath}`);
-                 }
-                 
-                 // Always update the target path and refresh UI
-                 config.targetDbPath = targetPath;
-                 
-                 // Auto-save the config with the new target path
-                 if (isNew) {
-                     this.plugin.settings.notionSyncConfigs.push(config);
-                 } else {
-                     const idx = this.plugin.settings.notionSyncConfigs.findIndex(c => c.id === config.id);
-                     if (idx !== -1) {
-                         this.plugin.settings.notionSyncConfigs[idx] = config;
-                     }
-                 }
-                 await this.plugin.saveSettings();
-                 
-                 this.isDirty = false;
-                 this.currentEditingConfig = null;
-                 
-                 // Need to update the editing ID if it was new
-                 if (isNew) {
-                     this.editingNotionConfigId = config.id;
-                 }
+                    }
+                } else {
+                    await this.plugin.app.vault.create(targetPath, content);
+                    new Notice(`Created template: ${targetPath}`);
+                }
 
-                 updateActionButtons();
-                 // new Notice('Template generated. Please save configuration.'); // Removed as we auto-save now
-             } catch (err) {
-                 new Notice(`Error: ${err}`);
-                 console.error(err);
-             }
+                // Always update the target path and refresh UI
+                config.targetDbPath = targetPath;
+
+                // Auto-save the config with the new target path
+                if (isNew) {
+                    this.plugin.settings.notionSyncConfigs.push(config);
+                } else {
+                    const idx = this.plugin.settings.notionSyncConfigs.findIndex(c => c.id === config.id);
+                    if (idx !== -1) {
+                        this.plugin.settings.notionSyncConfigs[idx] = config;
+                    }
+                }
+                await this.plugin.saveSettings();
+
+                this.isDirty = false;
+                this.currentEditingConfig = null;
+
+                // Need to update the editing ID if it was new
+                if (isNew) {
+                    this.editingNotionConfigId = config.id;
+                }
+
+                updateActionButtons();
+                // new Notice('Template generated. Please save configuration.'); // Removed as we auto-save now
+            } catch (err) {
+                new Notice(`Error: ${err}`);
+                console.error(err);
+            }
         };
 
         updateActionButtons = () => {
@@ -764,7 +768,7 @@ export class IntegrationSettingsView {
                     hasChanges = JSON.stringify(config) !== JSON.stringify(original);
                 }
             }
-            
+
             // Update isDirty status to reflect actual state
             this.isDirty = hasChanges;
 
@@ -788,12 +792,12 @@ export class IntegrationSettingsView {
 
                     await this.plugin.saveSettings();
                     new Notice('Notion configuration saved.');
-                    
+
                     this.isDirty = false;
                     this.currentEditingConfig = null;
-                    
+
                     // Stay on edit page but update UI
-                    this.editingNotionConfigId = config.id; 
+                    this.editingNotionConfigId = config.id;
                     // Need to re-enter edit mode to refresh "isNew" status and UI
                     this.display();
 
@@ -802,17 +806,17 @@ export class IntegrationSettingsView {
                     const folder = this.plugin.settings.defaultDbFolder || '';
                     let targetPath = folder ? `${folder}/${safeName}.md` : `${safeName}.md`;
                     targetPath = normalizePath(targetPath);
-                    
+
                     const existingFile = this.plugin.app.vault.getAbstractFileByPath(targetPath);
                     if (existingFile instanceof TFile) {
                         if (confirm(`Configuration saved. Update DB File "${targetPath}"? (This will update the schema definition)`)) {
                             await generateOrUpdateDbFile(config);
                         }
                     } else {
-                         // File doesn't exist, maybe ask to create?
-                         if (confirm(`Configuration saved. Generate DB File "${targetPath}"?`)) {
-                             await generateOrUpdateDbFile(config);
-                         }
+                        // File doesn't exist, maybe ask to create?
+                        if (confirm(`Configuration saved. Generate DB File "${targetPath}"?`)) {
+                            await generateOrUpdateDbFile(config);
+                        }
                     }
                 };
             } else {
