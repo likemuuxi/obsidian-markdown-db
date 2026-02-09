@@ -14,6 +14,7 @@ import type MyPlugin from "../main";
 import { VIEW_TYPE_MARKDOWN_DB } from "../views/view";
 import { RenameModal } from "../modals/RenameModal";
 import { CreateDatabaseModal } from "../modals/CreateDatabaseModal";
+import { TemplateSuggestModal } from "../modals/TemplateSuggestModal";
 import {
     updateProperty,
     renameRecord,
@@ -100,6 +101,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
     const [loading, setLoading] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
     const [currentView, setCurrentView] = useState<string | null>(null);
+    const [templates, setTemplates] = useState<string[]>(plugin.settings.templates);
 
     // Reset view when file changes
     useEffect(() => {
@@ -301,9 +303,62 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
         }
     };
 
-    const handleAddRecord = async () => {
+    const handleAddRecord = async (templatePath?: string) => {
         if (selectedFile) {
-            await addRecord(app, selectedFile, "Untitled");
+            let initialProperties: Record<string, any> = {};
+
+            if (templatePath) {
+                const templateFile = app.vault.getAbstractFileByPath(templatePath);
+                if (templateFile instanceof TFile) {
+                    const cache = app.metadataCache.getFileCache(templateFile);
+
+                    // 1. Frontmatter
+                    if (cache?.frontmatter) {
+                        const { position, ...rest } = cache.frontmatter;
+                        initialProperties = { ...initialProperties, ...rest };
+                    }
+
+                    // 2. Inline fields (Simple Parsing)
+                    try {
+                        const content = await app.vault.read(templateFile);
+                        // Regex to find [key::value] or [key::type(value)]
+                        // Note: This is a basic extraction. 
+                        const regex = /\[\s*([\w\s-_]+)\s*::\s*(.*?)\s*\]/g;
+                        let match;
+                        while ((match = regex.exec(content)) !== null) {
+                            const key = match[1].trim();
+                            const rawValue = match[2].trim();
+
+                            // Check if it has type info e.g. text(value)
+                            const typeMatch = rawValue.match(/^([a-zA-Z]+)\s*\((.*)\)$/);
+                            if (typeMatch) {
+                                const type = typeMatch[1].toLowerCase();
+                                const valStr = typeMatch[2];
+                                if (type === "number") {
+                                    initialProperties[key] = parseFloat(valStr);
+                                } else if (type === "boolean") {
+                                    initialProperties[key] = valStr.toLowerCase() === "true";
+                                } else {
+                                    initialProperties[key] = valStr;
+                                }
+                            } else {
+                                // Try to infer type
+                                if (rawValue.toLowerCase() === "true" || rawValue.toLowerCase() === "false") {
+                                    initialProperties[key] = rawValue.toLowerCase() === "true";
+                                } else if (!isNaN(Number(rawValue)) && rawValue.trim() !== "") {
+                                    initialProperties[key] = Number(rawValue);
+                                } else {
+                                    initialProperties[key] = rawValue;
+                                }
+                            }
+                        }
+                    } catch (e) {
+                        console.error("Failed to read template file", e);
+                    }
+                }
+            }
+
+            await addRecord(app, selectedFile, "Untitled", initialProperties);
             await reloadCurrentFile();
         }
     };
@@ -334,6 +389,18 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
             await updateTitle(app, selectedFile, newTitle);
             await reloadCurrentFile();
         }
+    };
+
+    const handleAddTemplate = () => {
+        new TemplateSuggestModal(plugin, (file) => {
+            setTemplates([...plugin.settings.templates]);
+        }).open();
+    };
+
+    const handleRemoveTemplate = async (path: string) => {
+        plugin.settings.templates = plugin.settings.templates.filter(t => t !== path);
+        await plugin.saveSettings();
+        setTemplates([...plugin.settings.templates]);
     };
 
     const handleRowContextMenu = (record: DatabaseRecord, event: React.MouseEvent) => {
@@ -766,7 +833,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
                     <button className="markdown-db-create-db-btn" onClick={() => handleCreateDbFile(plugin.settings.defaultDbFolder)} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" }}>
                         <Icon name="plus" />
                     </button>
-                    <button className="markdown-db-create-db-btn" onClick={() => handleCreateFolder(plugin.settings.defaultDbFolder || "")} style={{ flex: 1, background: "var(--background-secondary-alt)", color: "var(--text-normal)", border: "1px solid var(--background-modifier-border)", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" }}>
+                    <button className="markdown-db-create-db-btn" onClick={() => handleCreateFolder(plugin.settings.defaultDbFolder || "")} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" }}>
                         <Icon name="folder-plus" />
                     </button>
                 </div>
@@ -792,6 +859,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
                             onRenameView={handleRenameView}
                             onDeleteView={handleDeleteView}
                             onReorderViews={handleReorderViews}
+                            templates={templates}
+                            onAddTemplate={handleAddTemplate}
+                            onRemoveTemplate={handleRemoveTemplate}
                         />
                         <div className="markdown-db-dashboard-view">
                             <TableView

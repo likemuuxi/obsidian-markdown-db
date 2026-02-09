@@ -3,10 +3,12 @@ import type MarkdownDBPlugin from "../main";
 
 export class TemplateSuggestModal extends FuzzySuggestModal<TFile> {
     plugin: MarkdownDBPlugin;
+    onSelect?: (file: TFile) => void;
 
-    constructor(plugin: MarkdownDBPlugin) {
+    constructor(plugin: MarkdownDBPlugin, onSelect?: (file: TFile) => void) {
         super(plugin.app);
         this.plugin = plugin;
+        this.onSelect = onSelect;
         this.setPlaceholder("Select a file to use as template");
     }
 
@@ -22,11 +24,17 @@ export class TemplateSuggestModal extends FuzzySuggestModal<TFile> {
         if (!this.plugin.settings.templates.includes(item.path)) {
             this.plugin.settings.templates.push(item.path);
             await this.plugin.saveSettings();
+
+            if (this.onSelect) {
+                this.onSelect(item);
+            }
+
             // Refresh view? The view should react to settings change if it subscribed?
             // Actually view.tsx explicitly passes settings. So we need to trigger refresh in active view.
             this.app.workspace.iterateAllLeaves(leaf => {
                 if (leaf.view.getViewType() === "markdown-db-view") {
-                    (leaf.view as any).refresh();
+                    // @ts-ignore
+                    if (leaf.view.refresh) leaf.view.refresh();
                 }
             });
         }
