@@ -1,30 +1,26 @@
 import { App, Modal, Setting } from "obsidian";
 
-export class CreateDatabaseModal extends Modal {
-    filename: string;
-    onSubmit: (filename: string) => void;
+export class CreateFolderModal extends Modal {
+    folderName: string;
+    onSubmit: (folderName: string) => void;
 
-    folderPath?: string;
-
-    constructor(app: App, defaultName: string, onSubmit: (filename: string) => void, folderPath?: string) {
+    constructor(app: App, onSubmit: (folderName: string) => void) {
         super(app);
-        this.filename = defaultName;
+        this.folderName = "";
         this.onSubmit = onSubmit;
-        this.folderPath = folderPath;
     }
 
     onOpen() {
         const { contentEl } = this;
-        contentEl.createEl("h2", { text: "Create New Database" });
+        contentEl.createEl("h2", { text: "Create New Folder" });
 
         const setting = new Setting(contentEl)
             .setName("Name")
-            .setDesc("Enter the name for your new database")
+            .setDesc("Enter the name for your new folder")
             .addText((text) => {
                 text
-                    .setValue(this.filename)
                     .onChange((value) => {
-                        this.filename = value;
+                        this.folderName = value;
                     });
                 text.inputEl.focus();
                 text.inputEl.addEventListener("keypress", (e) => {
@@ -47,7 +43,7 @@ export class CreateDatabaseModal extends Modal {
 
     submit() {
         this.close();
-        this.onSubmit(this.filename);
+        this.onSubmit(this.folderName);
     }
 
     onClose() {

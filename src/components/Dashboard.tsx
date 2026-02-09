@@ -1,6 +1,8 @@
 import * as React from "react";
-import { useState, useEffect, useMemo, useRef } from "react";
-import { App, TFile, setIcon, Notice, Menu, normalizePath } from "obsidian";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { App, TFile, setIcon, Notice, Menu, normalizePath, TFolder } from "obsidian";
+import { FileTree } from "./FileTree";
+import { CreateFolderModal } from "../modals/CreateFolderModal";
 import { TableView } from "./TableView";
 import { Toolbar } from "./Toolbar";
 import { RecordModal } from "../modals/RecordModal";
@@ -92,6 +94,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
     };
 
     const [files, setFiles] = useState<TFile[]>([]);
+    const [folders, setFolders] = useState<TFolder[]>([]);
     const [selectedFile, setSelectedFile] = useState<TFile | null>(null);
     const [dbData, setDbData] = useState<DatabaseData | null>(null);
     const [loading, setLoading] = useState(false);
@@ -104,43 +107,69 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
     }, [selectedFile]);
 
     // Load DB files on mount
-    useEffect(() => {
+    // Load DB files on mount
+    const refreshFiles = useCallback(() => {
         const allFiles = app.vault.getMarkdownFiles();
-        // Filter for potential DB files (e.g. contain markdown-db frontmatter or just all markdown?)
-        // For now, let's include all markdown files but prioritize those with frontmatter if we could check efficiently.
-        // Reading all files is expensive.
-        // Let's just list all markdown files for now, or maybe cache metadata.
-        // Better: Check obsidian metadata cache for 'markdown-db' property?
+        const allLoaded = app.vault.getAllLoadedFiles();
+        const defaultDbFolder = plugin.settings.defaultDbFolder;
 
         const dbFiles = allFiles.filter(file => {
+            if (defaultDbFolder && !file.path.startsWith(defaultDbFolder)) {
+                return false;
+            }
             const cache = app.metadataCache.getFileCache(file);
             return cache?.frontmatter?.["markdown-db"] === true;
         });
 
-        // If no explicit DB files found, maybe fallback to all markdown files or let user browse?
-        // The user said "Left DB files". Let's stick to explicit DB files for "Projects" feel, 
-        // but maybe allow "All Files" mode?
-        // Let's stick to files with `markdown-db: true` to keep it clean as "Projects".
-        // If list is empty, maybe show all files?
+        const allFolders = allLoaded.filter(f => f instanceof TFolder) as TFolder[];
+        const validFolders = defaultDbFolder
+            ? allFolders.filter(f => f.path.startsWith(defaultDbFolder))
+            : allFolders;
+
+        setFolders(validFolders);
 
         if (dbFiles.length > 0) {
             setFiles(dbFiles);
+        } else {
+            const filesInFolder = defaultDbFolder
+                ? allFiles.filter(f => f.path.startsWith(defaultDbFolder))
+                : allFiles;
+            setFiles(filesInFolder);
+        }
+    }, [plugin.settings.defaultDbFolder]);
 
-            // Check last opened
+    useEffect(() => {
+        refreshFiles();
+
+        // Initial selection logic separate from refresh
+        const allFiles = app.vault.getMarkdownFiles();
+        const defaultDbFolder = plugin.settings.defaultDbFolder;
+        const dbFiles = allFiles.filter(file => {
+            if (defaultDbFolder && !file.path.startsWith(defaultDbFolder)) return false;
+            const cache = app.metadataCache.getFileCache(file);
+            return cache?.frontmatter?.["markdown-db"] === true;
+        });
+
+        if (dbFiles.length > 0) {
             const lastOpenedPath = plugin.settings.lastOpenedDbPath;
             const lastOpenedFile = lastOpenedPath ? dbFiles.find(f => f.path === lastOpenedPath) : null;
-
-            if (lastOpenedFile) {
-                setSelectedFile(lastOpenedFile);
-            } else if (!selectedFile) {
-                setSelectedFile(dbFiles[0]);
-            }
+            if (lastOpenedFile) setSelectedFile(lastOpenedFile);
+            else if (!selectedFile) setSelectedFile(dbFiles[0]);
         } else {
-            // Fallback: show all markdown files if no DBs defined
-            setFiles(allFiles);
-            if (!selectedFile && allFiles.length > 0) setSelectedFile(allFiles[0]);
+            const filesInFolder = defaultDbFolder ? allFiles.filter(f => f.path.startsWith(defaultDbFolder)) : allFiles;
+            if (!selectedFile && filesInFolder.length > 0) setSelectedFile(filesInFolder[0]);
         }
-    }, []);
+
+        const events = [
+            app.vault.on("create", refreshFiles),
+            app.vault.on("delete", refreshFiles),
+            app.vault.on("rename", refreshFiles)
+        ];
+
+        return () => {
+            events.forEach(ref => app.vault.offref(ref));
+        };
+    }, [plugin.settings.defaultDbFolder, refreshFiles]);
 
     // Save last opened when selectedFile changes
     useEffect(() => {
@@ -534,7 +563,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
         menu.showAtPosition({ x: event.clientX, y: event.clientY });
     };
 
-    const handleCreateDbFile = async () => {
+
+
+    const handleCreateDbFile = async (folderPath?: string) => {
         new CreateDatabaseModal(app, "Untitled Database", async (filename) => {
             if (!filename) return;
 
@@ -543,19 +574,20 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
                 filename += ".md";
             }
 
-            const folderPath = plugin.settings.defaultDbFolder || "";
+            const basePath = folderPath || plugin.settings.defaultDbFolder || "";
             // Check if folder exists
-            if (folderPath && !(await app.vault.adapter.exists(folderPath))) {
+            if (basePath && basePath !== "/" && !(await app.vault.adapter.exists(basePath))) {
                 // Try to create folder?
                 try {
-                    await app.vault.createFolder(folderPath);
+                    await app.vault.createFolder(basePath);
                 } catch (e) {
-                    new Notice(`Failed to create folder: ${folderPath}`);
+                    new Notice(`Failed to create folder: ${basePath}`);
                     return;
                 }
             }
 
-            let filePath = folderPath ? `${folderPath}/${filename}` : filename;
+            let filePath = basePath ? `${basePath}/${filename}` : filename;
+            if (basePath === "/") filePath = filename; // Root handling
 
             // Handle duplicates or error if exists
             if (await app.vault.adapter.exists(filePath)) {
@@ -573,7 +605,96 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
                 new Notice("Failed to create file");
                 console.error(e);
             }
+        }, folderPath).open();
+    };
+
+    const handleCreateFolder = (parentPath: string) => {
+        new CreateFolderModal(app, async (folderName) => {
+            // Validate and Create
+            if (!folderName) return;
+            const newPath = parentPath ? `${parentPath}/${folderName}` : folderName;
+
+            try {
+                if (await app.vault.adapter.exists(newPath)) {
+                    new Notice("Folder already exists");
+                    return;
+                }
+                await app.vault.createFolder(newPath);
+                new Notice("Folder created");
+
+                // Trigger refresh immediately
+                refreshFiles();
+            } catch (e) {
+                new Notice("Failed to create folder");
+                console.error(e);
+            }
         }).open();
+    };
+
+    const handleFolderContextMenu = (folderPath: string, event: React.MouseEvent) => {
+        const menu = new Menu();
+
+        menu.addItem((item) =>
+            item
+                .setTitle("New Database")
+                .setIcon("plus")
+                .onClick(() => {
+                    handleCreateDbFile(folderPath);
+                })
+        );
+
+        menu.addItem((item) =>
+            item
+                .setTitle("New Folder")
+                .setIcon("folder-plus")
+                .onClick(() => {
+                    handleCreateFolder(folderPath);
+                })
+        );
+
+        menu.addSeparator();
+
+        menu.addItem((item) => {
+            item
+                .setTitle("Rename")
+                .setIcon("pencil")
+                .onClick(() => {
+                    // Get folder name from path
+                    const folderName = folderPath.split("/").pop() || "";
+                    new RenameModal(app, folderName, async (newName) => {
+                        if (newName && newName !== folderName) {
+                            const parentPath = folderPath.substring(0, folderPath.lastIndexOf("/"));
+                            const newPath = parentPath ? `${parentPath}/${newName}` : newName;
+                            try {
+                                await app.vault.adapter.rename(folderPath, newPath);
+                                new Notice(`Renamed to ${newName}`);
+                                // Rely on reactive updates if implemented, otherwise manual refresh might be needed
+                            } catch (e) {
+                                new Notice("Failed to rename folder");
+                                console.error(e);
+                            }
+                        }
+                    }).open();
+                });
+        });
+
+        menu.addItem((item) =>
+            item
+                .setTitle("Delete")
+                .setIcon("trash")
+                .setWarning(true)
+                .onClick(async () => {
+                    try {
+                        await app.vault.adapter.trashLocal(folderPath); // Or trash(folder)
+                        new Notice("Folder moved to trash");
+                    } catch (e) {
+                        new Notice("Failed to delete folder");
+                        console.error(e);
+                    }
+                })
+        );
+
+        menu.showAtPosition({ x: event.clientX, y: event.clientY });
     };
 
     return (
@@ -585,31 +706,68 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
                     {/* <button className="markdown-db-icon-btn"><Icon name="plus" /></button> */}
                 </div>
                 <div className="markdown-db-file-list">
-                    {files.map(file => (
-                        <div
-                            key={file.path}
-                            className={`markdown-db-file-item ${selectedFile?.path === file.path ? "active" : ""}`}
-                            onClick={() => setSelectedFile(file)}
-                            onDoubleClick={async () => {
-                                onClose();
-                                const leaf = app.workspace.getLeaf("tab");
-                                await leaf.openFile(file);
-                                await leaf.setViewState({
-                                    type: VIEW_TYPE_MARKDOWN_DB,
-                                    state: { file: file.path }
-                                });
-                            }}
-                            onContextMenu={(e) => handleFileContextMenu(file, e)}
-                        >
-                            <Icon name="table-properties" className="markdown-db-file-icon" />
-                            <span className="markdown-db-file-name">{file.basename}</span>
-                            {/* <span className="markdown-db-file-count">12</span> */}
-                        </div>
-                    ))}
+                    <FileTree
+                        files={files}
+                        folders={folders}
+                        // Pass all folders if we want to show empty ones, for now inferred from files + maybe defaultDbFolder?
+                        // To properly support "Create Folder", we should pass all relevant folders.
+                        rootPath={plugin.settings.defaultDbFolder}
+                        selectedFile={selectedFile}
+                        onSelect={setSelectedFile}
+
+                        onOpenFile={async (file) => {
+                            onClose();
+                            const leaf = app.workspace.getLeaf("tab");
+                            await leaf.openFile(file);
+                            await leaf.setViewState({
+                                type: VIEW_TYPE_MARKDOWN_DB,
+                                state: { file: file.path }
+                            });
+                        }}
+                        onFileContextMenu={handleFileContextMenu}
+                        onFolderContextMenu={handleFolderContextMenu}
+                        onMoveFile={async (file, newPath) => {
+                            try {
+                                await app.fileManager.renameFile(file, newPath);
+                                // The vault listener or refresh logic will pick this up
+                                // But since we manage `files` state manually in useEffect,
+                                // we might need to trigger a refresh or let the reactive updates handle it.
+                                // Actually Dashboard useEffect depends on `defaultDbFolder`, not file events.
+                                // We might need to manually update state or force re-render.
+                                // Quick fix: update files state optimistically or re-fetch.
+
+                                // Let's rely on standard React updates - if we modify `files` state?
+                                // Actually better to re-run the fetch.
+                                // How to trigger re-fetch?
+                                // We can extract the fetch logic to a function and call it.
+                                // For now, let's just update `files` state locally to reflect the move immediately if possible,
+                                // or better, just `setFiles(prev => ...)` 
+
+                                // Actually, `app.fileManager.renameFile` modifies the TFile in place? 
+                                // Obsidian API says: "Renames or moves a file".
+                                // If we just wait a bit, maybe `getMarkdownFiles` returns updated paths?
+                                new Notice(`Moved to ${newPath}`);
+
+                                // Force refresh
+                                const allFiles = app.vault.getMarkdownFiles();
+                                // Re-filter... this is duplicating logic from useEffect.
+                                // Ideally we should have a `refresh` function.
+                                // But since `files` state drives the tree, and `files` array contains `TFile` objects which strictly speaking *should* update their path property...
+                                // Let's try just forcing a re-render by creating a new array ref.
+                                setFiles([...files]);
+                            } catch (e) {
+                                new Notice("Failed to move file");
+                                console.error(e);
+                            }
+                        }}
+                    />
                 </div>
-                <div className="markdown-db-sidebar-footer">
-                    <button className="markdown-db-create-db-btn" onClick={handleCreateDbFile}>
-                        + New Database
+                <div className="markdown-db-sidebar-footer" style={{ display: "flex", gap: "8px" }}>
+                    <button className="markdown-db-create-db-btn" onClick={() => handleCreateDbFile(plugin.settings.defaultDbFolder)} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" }}>
+                        <Icon name="plus" />
+                    </button>
+                    <button className="markdown-db-create-db-btn" onClick={() => handleCreateFolder(plugin.settings.defaultDbFolder || "")} style={{ flex: 1, background: "var(--background-secondary-alt)", color: "var(--text-normal)", border: "1px solid var(--background-modifier-border)", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" }}>
+                        <Icon name="folder-plus" />
                     </button>
                 </div>
             </div>

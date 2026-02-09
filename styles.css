@@ -205,9 +205,9 @@
     /* Restore padding for editing */
 }
 
-.markdown-db-cell-content:hover {
+/* .markdown-db-cell-content:hover {
     background-color: var(--background-modifier-hover);
-}
+} */
 
 .markdown-db-cell-content:focus {
     background-color: var(--background-primary);
@@ -1355,4 +1355,23 @@
 
 .markdown-db-new-btn-arrow svg {
     margin: 0;
+}
+.markdown-db-create-db-btn {
+    padding: 8px;
+    background-color: var(--interactive-accent);
+    color: var(--text-on-accent);
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    margin-top: auto;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: opacity 0.2s;
+}
+
+.markdown-db-create-db-btn:hover {
+    opacity: 0.9;
 }
