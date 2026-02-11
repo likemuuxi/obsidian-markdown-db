@@ -386,8 +386,37 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
 
     const handleUpdateTitle = async (newTitle: string) => {
         if (selectedFile) {
-            await updateTitle(app, selectedFile, newTitle);
-            await reloadCurrentFile();
+            if (newTitle === selectedFile.basename) return;
+
+            // Preserve suffix (e.g. " (View)")
+            const currentName = selectedFile.basename;
+            const suffixMatch = currentName.match(/(\s*\(.*\))$/);
+            const suffix = suffixMatch ? suffixMatch[1] : "";
+
+            // If the current name has a suffix, and we are editing the "Title" part
+            // We assume the input `newTitle` is the intent for the *base* title if it doesn't contain the suffix?
+            // Wait, the input in Toolbar shows `displayData.title`.
+            // What is `displayData.title`?
+            // In `main.tsx`: `if (!data.title) data.title = selectedFile.basename;`
+            // And `parseFile` might extract H1 as title.
+            // If H1 is `# Name`, then title is `Name`.
+            // If filename is `Name (View)`, H1 is likely `# Name`.
+            // So `newTitle` will be just `Name`.
+            // So we should append the suffix from filename to `newTitle`.
+
+            const newFilename = `${newTitle}${suffix}`;
+
+            if (newFilename === currentName) return;
+
+            const parentPath = selectedFile.parent?.path || "";
+            const newPath = normalizePath(`${parentPath}/${newFilename}.md`);
+
+            try {
+                await app.fileManager.renameFile(selectedFile, newPath);
+            } catch (e) {
+                new Notice("Failed to rename file");
+                console.error(e);
+            }
         }
     };
 
@@ -662,7 +691,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
                 return;
             }
 
-            const initialContent = "---\nmarkdown-db: true\n---\n\n# Database\n";
+            const title = filename.replace(/\.md$/, "").split("(")[0].trim();
+            const initialContent = `---\nmarkdown-db: true\n---\n\n# ${title}\n`;
             try {
                 const newFile = await app.vault.create(filePath, initialContent);
                 setFiles(prev => [...prev, newFile]);

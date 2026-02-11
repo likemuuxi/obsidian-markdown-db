@@ -131,7 +131,8 @@ export default class MarkdownDBPlugin extends Plugin {
                                 i++;
                             }
 
-                            const initialContent = "---\nmarkdown-db: true\n---\n\n# Database\n";
+                            const title = filename.replace(/\.md$/, "").split("(")[0].trim();
+                            const initialContent = `---\nmarkdown-db: true\n---\n\n# ${title}\n`;
                             const newFile = await this.app.vault.create(filePath, initialContent);
 
                             const leaf = this.app.workspace.getLeaf(false);
@@ -222,7 +223,36 @@ export default class MarkdownDBPlugin extends Plugin {
         this.registerEvent(this.app.metadataCache.on('changed', (file) => {
             this.updateFileExplorerBadges();
         }));
-        this.registerEvent(this.app.vault.on('rename', () => this.updateFileExplorerBadges()));
+        this.registerEvent(this.app.vault.on('rename', async (file, oldPath) => {
+            this.updateFileExplorerBadges();
+
+            // Update H1 title if it's a DB file
+            if (file instanceof TFile && file.extension === "md") {
+                const cache = this.app.metadataCache.getFileCache(file);
+                if (cache?.frontmatter?.["markdown-db"]) {
+                    try {
+                        const content = await this.app.vault.read(file);
+                        // Regex to replace all H1 headers
+                        // We use a regex dealing with multiline to match lines starting with # 
+                        // But JS regex 'm' flag is needed or we iterate lines.
+                        // Simple replace with regex: /^#\s+(.*)$/gm
+
+                        const newBase = file.basename.split("(")[0].trim();
+                        const newContent = content.replace(/^#\s+(.*)$/gm, (match, oldTitle) => {
+                            const suffixMatch = oldTitle.match(/(\s*\(.*\))$/);
+                            const suffix = suffixMatch ? suffixMatch[1] : "";
+                            return `# ${newBase}${suffix}`;
+                        });
+
+                        if (newContent !== content) {
+                            await this.app.vault.modify(file, newContent);
+                        }
+                    } catch (e) {
+                        console.error("Markdown DB: Failed to update title on rename", e);
+                    }
+                }
+            }
+        }));
         this.registerEvent(this.app.vault.on('create', () => this.updateFileExplorerBadges()));
         this.registerEvent(this.app.vault.on('delete', () => this.updateFileExplorerBadges()));
 

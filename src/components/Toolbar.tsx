@@ -578,8 +578,11 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             <div className="markdown-db-header-title-row">
                 <BufferedInput
                     className="markdown-db-title-input-large"
-                    value={title || ""}
-                    onChange={(val) => onUpdateTitle(val)}
+                    value={title ? title.split("(")[0].trim() : ""}
+                    onChange={(val) => {
+                        console.log("Toolbar: BufferedInput changed to:", val);
+                        onUpdateTitle(val);
+                    }}
                     placeholder="Untitled Database"
                 />
             </div>
