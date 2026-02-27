@@ -359,7 +359,24 @@
 }
 
 /* Hide Properties Mode - Scoped to cssclass */
-.markdown-db-hidden .cm-line:has(.cm-comment-start.cm-formatting):has(.cm-comment-end.cm-formatting) {
+/* .db-property-hidden .cm-line:has(.cm-comment-start.cm-formatting):has(.cm-comment-end.cm-formatting) {
+    display: none;
+} */
+
+.db-property-hidden .cm-line:has(.cm-comment) {
+    display: none !important;
+}
+
+.db-property-hidden .cm-line .cm-comment {
+    display: none;
+}
+
+.db-property-hidden .cm-content {
+    padding: 0 !important;
+}
+
+.db-property-hidden .cm-comment-start,
+.db-property-hidden .cm-comment-end {
     display: none;
 }
 

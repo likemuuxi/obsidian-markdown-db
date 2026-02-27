@@ -36,7 +36,7 @@ export class RecordModal extends Modal {
                 title = line.replace(/^##\s+/, "");
                 return;
             }
-            
+
             const trimmed = line.trim();
             if (trimmed.startsWith("%%") && trimmed.endsWith("%%")) {
                 // Properties block
@@ -77,7 +77,7 @@ export class RecordModal extends Modal {
         // Properties Section
         const propsSection = container.createDiv({ cls: "markdown-db-record-properties" });
         propsSection.createEl("h4", { text: "Properties (inside %% block)" });
-        const propsTextarea = propsSection.createEl("textarea", { 
+        const propsTextarea = propsSection.createEl("textarea", {
             text: propertiesText,
             placeholder: "[key:: type(value)] [key2:: type(val2)]"
         });
@@ -87,12 +87,12 @@ export class RecordModal extends Modal {
 
         // Content Section
         const contentSection = container.createDiv({ cls: "markdown-db-record-content" });
-        
+
         // Functions to toggle between Preview and Edit
         const renderContent = async () => {
             contentSection.empty();
             const previewContainer = contentSection.createDiv({ cls: "markdown-db-record-preview" });
-            
+
             // Add some basic styles for the preview container to make it fill space and be clickable
             previewContainer.style.flex = "1";
             previewContainer.style.overflowY = "auto";
@@ -121,7 +121,7 @@ export class RecordModal extends Modal {
 
         const switchToEdit = () => {
             contentSection.empty();
-            const textarea = contentSection.createEl("textarea", { 
+            const textarea = contentSection.createEl("textarea", {
                 text: currentContent,
                 placeholder: "Type content..."
             });
@@ -129,7 +129,7 @@ export class RecordModal extends Modal {
             textarea.style.height = "100%";
             textarea.style.width = "100%";
             textarea.style.resize = "none";
-            
+
             textarea.focus();
 
             textarea.oninput = (e) => {
@@ -143,31 +143,31 @@ export class RecordModal extends Modal {
 
         // Initial Render
         renderContent();
-        
+
         // Auto-save on Close logic
         this.onClose = async () => {
-             // Reconstruct the raw record block
-             const header = `## ${currentTitle}`;
-             const props = currentProperties.trim();
-             const content = currentContent;
-             
-             let newBlock = header;
-             if (props) {
-                 newBlock += `\n%% ${props} %%`;
-             }
-             // Ensure separation between properties and content if both exist
-             if (content) {
-                 newBlock += "\n\n" + content;
-             } else if (props) {
-                 newBlock += "\n"; // Just a newline at end if no content
-             }
+            // Reconstruct the raw record block
+            const header = `## ${currentTitle}`;
+            const props = currentProperties.trim();
+            const content = currentContent;
 
-             // Only update if changed (simple check or always update)
-             // Always update is safer for now to ensure consistency
-             await updateRecordRaw(this.app, this.file, this.record, newBlock);
-             
-             this.component.unload();
-             contentEl.empty();
+            let newBlock = header;
+            if (props) {
+                newBlock += `\n%%\n${props}\n%%`;
+            }
+            // Ensure separation between properties and content if both exist
+            if (content) {
+                newBlock += "\n\n" + content;
+            } else if (props) {
+                newBlock += "\n"; // Just a newline at end if no content
+            }
+
+            // Only update if changed (simple check or always update)
+            // Always update is safer for now to ensure consistency
+            await updateRecordRaw(this.app, this.file, this.record, newBlock);
+
+            this.component.unload();
+            contentEl.empty();
         };
     }
 

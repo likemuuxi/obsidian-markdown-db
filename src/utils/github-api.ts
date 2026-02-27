@@ -71,9 +71,9 @@ export async function fetchGithubStars(username: string, token: string): Promise
 
         try {
             const response = await requestUrl(params);
-            
+
             if (response.status >= 400) {
-                 throw new Error(`HTTP ${response.status}: ${response.text}`);
+                throw new Error(`HTTP ${response.status}: ${response.text}`);
             }
 
             const stars = response.json as StarredRepo[];
@@ -104,7 +104,7 @@ export async function fetchGithubPRs(username: string, token: string): Promise<G
     while (hasMore) {
         const query = `author:${username} type:pr`;
         const url = `https://api.github.com/search/issues?q=${encodeURIComponent(query)}&per_page=${perPage}&page=${page}&sort=created&order=desc`;
-        
+
         const params: RequestUrlParam = {
             url: url,
             method: 'GET',
@@ -120,9 +120,9 @@ export async function fetchGithubPRs(username: string, token: string): Promise<G
 
         try {
             const response = await requestUrl(params);
-            
+
             if (response.status >= 400) {
-                 throw new Error(`HTTP ${response.status}: ${response.text}`);
+                throw new Error(`HTTP ${response.status}: ${response.text}`);
             }
 
             const data = response.json as GithubSearchResponse;
@@ -136,7 +136,7 @@ export async function fetchGithubPRs(username: string, token: string): Promise<G
                     hasMore = false;
                 } else {
                     page++;
-                    if (page > 10) hasMore = false; 
+                    if (page > 10) hasMore = false;
                 }
             }
         } catch (e) {
@@ -149,15 +149,15 @@ export async function fetchGithubPRs(username: string, token: string): Promise<G
 
 export function formatStarToMarkdown(repo: StarredRepo): { title: string, content: string } {
     const title = repo.name.replace(/[\\/:*?"<>|]/g, "-");
-    
+
     // Map fields
-    const aliases = `[aliases::multi(${repo.name})]`; 
+    const aliases = `[aliases::multi(${repo.name})]`;
     const starsCount = `[stars::number(${repo.stargazers_count})]`;
     const url = `[url::link(${repo.html_url})]`;
     const owner = `[owner::link(${repo.owner.html_url})]`;
     const language = `[language::text(${repo.language || ""})]`;
     const description = `[description::text(${(repo.description || "").replace(/\n/g, " ").replace(/"/g, '\\"')})]`;
-    
+
     const createdDate = new Date(repo.created_at);
     const createdFormatted = `${createdDate.getFullYear()}-${String(createdDate.getMonth() + 1).padStart(2, '0')}-${String(createdDate.getDate()).padStart(2, '0')}`;
     const modifiedDate = new Date(repo.updated_at);
@@ -165,16 +165,16 @@ export function formatStarToMarkdown(repo: StarredRepo): { title: string, conten
 
     const created = `[created::date(${createdFormatted})]`;
     const modified = `[modified::date(${modifiedFormatted})]`;
-    
+
     const tagsList = ["github-star"];
     if (repo.language) tagsList.push(`lang/${repo.language.toLowerCase()}`);
     if (repo.topics) repo.topics.forEach(t => tagsList.push(`topic/${t}`));
     const tags = `[tags::multi(${tagsList.join(",")})]`;
 
-    const properties = `%% ${aliases} ${starsCount} ${url} ${owner} ${language} ${description} ${created} ${modified} ${tags} %%`;
+    const properties = `%%\n${aliases}\n${starsCount}\n${url}\n${owner}\n${language}\n${description}\n${created}\n${modified}\n${tags}\n%%`;
 
     const content = `## ${title}\n${properties}\n\n${repo.description || ""}\n\n`;
-    
+
     return { title, content };
 }
 
@@ -183,22 +183,22 @@ export function formatPRToMarkdown(pr: GithubPRItem): { title: string, content: 
 
     // Map fields
     const repoNameRaw = pr.repository_url.split("/").pop() || "";
-    
+
     const repoName = `[repo_name::text(${repoNameRaw})]`;
-    
+
     const stateStr = pr.state.charAt(0).toUpperCase() + pr.state.slice(1);
     const state = `[state::select(${stateStr})]`;
-    
+
     const reviewStateStr = pr.draft ? "Draft" : "Ready";
     const reviewState = `[review_state::select(${reviewStateStr})]`;
-    
+
     const isMerged = !!(pr.pull_request?.merged_at);
     const merged = `[merged::boolean(${isMerged})]`;
-    
+
     const roleRaw = pr.author_association.toLowerCase();
     const roleStr = roleRaw.charAt(0).toUpperCase() + roleRaw.slice(1);
     const authorRole = `[author_role::select(${roleStr})]`;
-    
+
     const updatedDate = new Date(pr.updated_at);
     const updatedFormatted = `${updatedDate.getFullYear()}-${String(updatedDate.getMonth() + 1).padStart(2, '0')}-${String(updatedDate.getDate()).padStart(2, '0')}`;
     const updatedAt = `[updated_at::date(${updatedFormatted})]`;
@@ -208,7 +208,7 @@ export function formatPRToMarkdown(pr: GithubPRItem): { title: string, content: 
     const labelsRaw = pr.labels?.map(l => l.name) || [];
     const labels = `[labels::multi(${labelsRaw.join(",")})]`;
 
-    const properties = `%% ${repoName} ${merged} ${state} ${reviewState} ${authorRole} ${url} ${updatedAt} ${labels} %%`;
+    const properties = `%%\n${repoName}\n${merged}\n${state}\n${reviewState}\n${authorRole}\n${url}\n${updatedAt}\n${labels}\n%%`;
 
     // let bodyContent = pr.body || "";
     // if (bodyContent) {
@@ -217,7 +217,7 @@ export function formatPRToMarkdown(pr: GithubPRItem): { title: string, content: 
     //     // So # -> ###, ## -> ####
     //     bodyContent = bodyContent.replace(/^(#+)/gm, "##$1");
     // }
-    
+
     // const content = `## ${title}\n${properties}\n\n${bodyContent}\n\n`;
     const content = `## ${title}\n${properties}\n\n`;
 
@@ -238,10 +238,10 @@ export function mergeMarkdownContent<T>(
     for (const item of items) {
         const { title, content } = formatter(item);
         const escapedTitle = title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        
+
         // Full block regex: matches ## Title ... until next ## or EOF
         const recordRegex = new RegExp(`^##\\s+${escapedTitle}\\s*$(?:\\r?\\n|\\r)(?:[\\s\\S]*?)(?=(?:^##\\s)|$)`, 'm');
-        
+
         const exists = recordRegex.test(currentContent);
 
         if (exists) {
@@ -255,7 +255,7 @@ export function mergeMarkdownContent<T>(
             newCount++;
         }
     }
-    
+
     let finalContent = currentContent;
     if (newContentOnly) {
         // Ensure separation

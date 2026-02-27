@@ -691,7 +691,7 @@ export class IntegrationSettingsView {
                 const type = columnTypes[name];
                 return `[${name}::${type}()]`;
             });
-            const propertyBlock = propertyParts.length > 0 ? `%% ${propertyParts.join(' ')} [notionUrl::link()] %%` : '';
+            const propertyBlock = propertyParts.length > 0 ? `%%\n${propertyParts.join('\n')}\n[notionUrl::link()]\n%%` : '';
 
             const content = `---\n${stringifyYaml(frontmatter)}---\n\n# ${config.name}\n\n## Example\n${propertyBlock}\n\n\n`;
 

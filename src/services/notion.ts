@@ -747,7 +747,7 @@ export class NotionSyncService {
 
         const title = this.getTitleFromPage(page);
         const headerLine = `## ${title}`;
-        let metaLine = `%%`;
+        const metaLines: string[] = [];
 
         const props = page.properties;
 
@@ -770,15 +770,16 @@ export class NotionSyncService {
 
             const val = this.extractPropertyValue(propData);
             if (val !== null && val !== '') {
-                metaLine += ` [${propConfig.name}::${val}]`;
+                metaLines.push(`[${propConfig.name}::${val}]`);
             }
         });
 
         // Add notionUrl
         if (page.url) {
-            metaLine += ` [notionUrl::link(${page.url})]`;
+            metaLines.push(`[notionUrl::link(${page.url})]`);
         }
-        metaLine += ` %%`;
+
+        const metaLine = `%%\n${metaLines.join('\n')}\n%%`;
 
         return `${headerLine}\n${metaLine}`;
     }

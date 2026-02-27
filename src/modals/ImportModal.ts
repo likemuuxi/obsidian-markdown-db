@@ -1,10 +1,10 @@
 import { App, Modal, Setting, Notice, TFile, TFolder } from "obsidian";
 import { FolderSuggest } from "../suggest/suggest";
 import type MarkdownDBPlugin from "../main";
-import { 
-    fetchGithubStars, 
-    fetchGithubPRs, 
-    formatStarToMarkdown, 
+import {
+    fetchGithubStars,
+    fetchGithubPRs,
+    formatStarToMarkdown,
     formatPRToMarkdown,
     mergeMarkdownContent
 } from "../utils/github-api";
@@ -96,7 +96,7 @@ export class ImportModal extends Modal {
 
     renderObsidianSource(container: HTMLElement) {
         container.createEl("h3", { text: "Settings" });
-        
+
         new Setting(container)
             .setName("Source Folder")
             .setDesc("Select a folder to import markdown files from")
@@ -107,7 +107,7 @@ export class ImportModal extends Modal {
                     .onChange((value) => {
                         this.folderPath = value;
                     });
-                
+
                 this.folderSuggest = new FolderSuggest(this.app, text.inputEl);
             });
     }
@@ -176,7 +176,7 @@ export class ImportModal extends Modal {
                     } else {
                         // Sort files by path for better UX
                         files.sort((a, b) => a.path.localeCompare(b.path));
-                        
+
                         files.forEach((file) => {
                             dropdown.addOption(file.path, file.path);
                         });
@@ -200,10 +200,10 @@ export class ImportModal extends Modal {
             new Notice("Database name is required");
             return;
         }
-        
+
         if (this.mode === "append" && !this.existingDbPath) {
-             new Notice("Existing DB path is required");
-             return;
+            new Notice("Existing DB path is required");
+            return;
         }
 
         if (this.sourceType === "obsidian") {
@@ -227,12 +227,12 @@ export class ImportModal extends Modal {
 
     async saveToDatabase(contentToAppend: string, report: { total: number, skipped?: number, updated?: number }, isFullContent: boolean = false) {
         if (contentToAppend === "") {
-             if (report.skipped && report.skipped === report.total && report.total > 0) {
-                 new Notice("All items were duplicates. Nothing new to import.");
-             } else if (report.total === 0) {
-                 new Notice("No items found to import.");
-             }
-             return;
+            if (report.skipped && report.skipped === report.total && report.total > 0) {
+                new Notice("All items were duplicates. Nothing new to import.");
+            } else if (report.total === 0) {
+                new Notice("No items found to import.");
+            }
+            return;
         }
 
         if (this.mode === "new") {
@@ -274,7 +274,7 @@ export class ImportModal extends Modal {
 
         try {
             const files = folder.children.filter((f): f is TFile => f instanceof TFile && f.extension === "md");
-            
+
             // Read existing content if appending
             let existingContent = "";
             if (this.mode === "append" && this.existingDbPath) {
@@ -290,7 +290,7 @@ export class ImportModal extends Modal {
 
             for (const file of files) {
                 const title = file.basename;
-                
+
                 // Deduplication check: check if Title (Name) already exists in content
                 const titleRegex = new RegExp(`^##\\s+${title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`, 'm');
                 if (existingContent && titleRegex.test(existingContent)) {
@@ -303,16 +303,16 @@ export class ImportModal extends Modal {
                 const fileContent = await this.app.vault.read(file);
 
                 contentToAppend += `## ${title}\n`;
-                
+
                 const propsParts: string[] = [];
-                
+
                 if (frontmatter) {
                     const keys = Object.keys(frontmatter).filter(k => !ignoredColumns.has(k.toLowerCase()));
-                    
+
                     for (const key of keys) {
                         let val = frontmatter[key];
                         if (val === undefined || val === null) continue;
-                        
+
                         const dbType = this.inferType(val);
 
                         // Format value
@@ -324,26 +324,26 @@ export class ImportModal extends Modal {
                         } else {
                             valStr = String(val);
                         }
-                        
+
                         // Special handling for boolean
                         if (dbType === "boolean") {
-                             valStr = String(val); 
+                            valStr = String(val);
                         }
 
                         propsParts.push(`[${key}::${dbType}(${valStr})]`);
                     }
                 }
-                
+
                 if (propsParts.length > 0) {
-                    contentToAppend += `%% ${propsParts.join(" ")} %%\n\n`;
+                    contentToAppend += `%%\n${propsParts.join("\n")}\n%%\n\n`;
                 } else {
-                    contentToAppend += `\n`; 
+                    contentToAppend += `\n`;
                 }
 
                 // Process Body Content
                 // Strip frontmatter
                 const mainContent = fileContent.replace(/^---\n[\s\S]*?\n---\n/, "").trim();
-                
+
                 if (mainContent) {
                     // Shift headers: # -> ###, ## -> ####
                     const shiftedContent = mainContent.replace(/^(#+)/gm, "##$1");
@@ -387,7 +387,7 @@ export class ImportModal extends Modal {
         try {
             const stars = await fetchGithubStars(this.githubUsername, this.githubToken);
             new Notice(`Fetched ${stars.length} starred repositories. Processing...`);
-            
+
             // Read existing content if appending
             let existingContent = "";
             if (this.mode === "append" && this.existingDbPath) {
@@ -405,8 +405,8 @@ export class ImportModal extends Modal {
             );
 
             await this.saveToDatabase(
-                fullContent, 
-                { total: stars.length, updated: updatedCount }, 
+                fullContent,
+                { total: stars.length, updated: updatedCount },
                 this.mode === "append" // isFullContent
             );
 
@@ -426,7 +426,7 @@ export class ImportModal extends Modal {
             const prs = allPrs.filter(pr => !(pr.state === 'closed' && !pr.pull_request?.merged_at));
 
             new Notice(`Fetched ${allPrs.length} PRs. Processing ${prs.length} valid items...`);
-            
+
             // Read existing content if appending
             let existingContent = "";
             if (this.mode === "append" && this.existingDbPath) {
@@ -444,8 +444,8 @@ export class ImportModal extends Modal {
             );
 
             await this.saveToDatabase(
-                fullContent, 
-                { total: prs.length, updated: updatedCount }, 
+                fullContent,
+                { total: prs.length, updated: updatedCount },
                 this.mode === "append" // isFullContent
             );
 

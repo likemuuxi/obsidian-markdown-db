@@ -1,10 +1,11 @@
-import { Plugin, WorkspaceLeaf, TFile, TFolder, debounce, FileView, MarkdownRenderChild } from "obsidian";
+import { Plugin, WorkspaceLeaf, TFile, TFolder, debounce, FileView, Notice } from "obsidian";
 import * as React from "react";
 import { createRoot, Root } from "react-dom/client";
 import { MarkdownDBApp, MarkdownDBView, VIEW_TYPE_MARKDOWN_DB } from "./views/view";
 import { EmbedDBView } from "./views/EmbedDBView";
 import { MarkdownDBSettings, DEFAULT_SETTINGS, MarkdownDBSettingTab, PropertyConfig } from "./settings";
 import { parseFile } from "./database/parser";
+import { extractProperties } from "./database/utils";
 import { addCssClassToFiles, HIDDEN_CSS_CLASS } from "./database/writer";
 
 import { DashboardModal } from "./modals/DashboardModal";
@@ -173,6 +174,49 @@ export default class MarkdownDBPlugin extends Plugin {
             name: "Scan Database Files for Property Values",
             callback: () => {
                 this.scanAllDatabaseFiles();
+            }
+        });
+
+        this.addCommand({
+            id: "format-markdown-db-file",
+            name: "Format Database Files",
+            callback: async () => {
+                const files = this.app.vault.getMarkdownFiles();
+                let convertedCount = 0;
+                new Notice("Starting to format DB files...");
+                for (const file of files) {
+                    const cache = this.app.metadataCache.getFileCache(file);
+                    if (cache?.frontmatter?.["markdown-db"]) {
+                        let content = await this.app.vault.read(file);
+                        let hasChanges = false;
+
+                        // Match %% block and all immediately following blank lines/newlines
+                        let newContent = content.replace(/%%([\s\S]*?)%%(?:[ \t]*\r?\n)*/g, (match, innerText) => {
+                            if (!innerText.includes("::")) return match;
+                            const props = extractProperties(innerText);
+                            if (props.length > 0) {
+                                hasChanges = true;
+                                return `%%\n${props.map(p => p.full).join('\n')}\n%%\n\n`;
+                            }
+                            return match;
+                        });
+
+                        // Add empty line above ## headings if not already present
+                        // Regex looks for "## " at the start of a line. We ensuring it's preceded by 2 newlines (unless it's the very first line after frontmatter).
+                        // It's safer to just replace `\n## ` with `\n\n## ` and then deduplicate multiple empty lines.
+                        const beforeHeadingReplace = newContent.replace(/([^\n])\n## /g, '$1\n\n## ');
+                        if (beforeHeadingReplace !== newContent) {
+                            newContent = beforeHeadingReplace;
+                            hasChanges = true;
+                        }
+
+                        if (hasChanges && newContent !== content) {
+                            await this.app.vault.modify(file, newContent);
+                            convertedCount++;
+                        }
+                    }
+                }
+                new Notice(`Formatted properties and spacing in ${convertedCount} files.`);
             }
         });
 

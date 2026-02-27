@@ -7,6 +7,33 @@ function escapeRegExp(string: string) {
     return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+function findCommentBlock(lines: string[], startIndex: number, endIndex: number) {
+    for (let i = startIndex; i < endIndex; i++) {
+        const line = lines[i].trim();
+        if (line.startsWith("%%")) {
+            const blockStartIndex = i;
+            let blockEndIndex = i;
+            let contentLines: string[] = [line];
+            if (!(line.endsWith("%%") && line.length >= 4)) {
+                for (let j = i + 1; j < endIndex; j++) {
+                    const nextLine = lines[j];
+                    contentLines.push(nextLine);
+                    if (nextLine.trim().endsWith("%%")) {
+                        blockEndIndex = j;
+                        break;
+                    }
+                }
+            }
+            return {
+                startIndex: blockStartIndex,
+                endIndex: blockEndIndex,
+                content: contentLines.join("\n")
+            };
+        }
+    }
+    return null;
+}
+
 function upsertPropertyInBlock(blockContent: string, key: string, newPropertyStr: string | null, overwrite: boolean = true): string {
     const properties = extractProperties(blockContent);
 
@@ -35,7 +62,8 @@ function upsertPropertyInBlock(blockContent: string, key: string, newPropertyStr
         newProperties.push(newPropertyStr);
     }
 
-    return newProperties.join(" ");
+    if (newProperties.length === 0) return "";
+    return "\n" + newProperties.join("\n") + "\n";
 }
 
 export const updateProperty = async (
@@ -70,16 +98,15 @@ export const updateProperty = async (
         }
 
         // Look for %% block in the record
-        let commentBlockIndex = -1;
+        let commentBlockStartIndex = -1;
+        let commentBlockEndIndex = -1;
         let commentBlockContent = "";
 
-        for (let i = startLine + 1; i < endLine; i++) {
-            const line = lines[i].trim();
-            if (line.startsWith("%%") && line.endsWith("%%")) {
-                commentBlockIndex = i;
-                commentBlockContent = line;
-                break;
-            }
+        const blockMatch = findCommentBlock(lines, startLine + 1, endLine);
+        if (blockMatch) {
+            commentBlockStartIndex = blockMatch.startIndex;
+            commentBlockEndIndex = blockMatch.endIndex;
+            commentBlockContent = blockMatch.content;
         }
 
         const shouldDelete = newValue === "" || newValue === null || newValue === undefined;
@@ -104,21 +131,18 @@ export const updateProperty = async (
             newPropertyStr = `[${key}::${formatTypedValue(newTypedValue)}]`;
         }
 
-        if (commentBlockIndex !== -1) {
+        if (commentBlockStartIndex !== -1) {
             // Update existing block
             let innerContent = commentBlockContent.substring(2, commentBlockContent.length - 2).trim();
             innerContent = upsertPropertyInBlock(innerContent, key, newPropertyStr, true);
 
-            // If innerContent becomes empty after deletion, remove the line?
-            // The user requested to remove [Category::] if empty.
-            // If the whole block becomes empty (e.g. `%%  %%`), we could remove it.
             if (innerContent.trim() === "") {
-                lines.splice(commentBlockIndex, 1);
+                lines.splice(commentBlockStartIndex, commentBlockEndIndex - commentBlockStartIndex + 1);
             } else {
-                lines[commentBlockIndex] = `%% ${innerContent} %%`;
+                lines.splice(commentBlockStartIndex, commentBlockEndIndex - commentBlockStartIndex + 1, `%%${innerContent}%%`);
 
                 // Ensure empty line after if followed by content
-                const nextLineIdx = commentBlockIndex + 1;
+                const nextLineIdx = commentBlockStartIndex + 1;
                 if (nextLineIdx < lines.length) {
                     const nextLine = lines[nextLineIdx];
                     if (nextLine.trim() !== "") {
@@ -134,9 +158,9 @@ export const updateProperty = async (
                 const hasContentFollowing = nextLineIdx < lines.length && lines[nextLineIdx].trim() !== "";
 
                 if (hasContentFollowing) {
-                    lines.splice(startLine + 1, 0, `%% ${newPropertyStr} %%`, "");
+                    lines.splice(startLine + 1, 0, `%%\n${newPropertyStr}\n%%`, "");
                 } else {
-                    lines.splice(startLine + 1, 0, `%% ${newPropertyStr} %%`);
+                    lines.splice(startLine + 1, 0, `%%\n${newPropertyStr}\n%%`);
                 }
             }
         }
@@ -164,21 +188,25 @@ export const addPropertyToAllRecords = async (app: App, file: TFile, key: string
 
                 // Peek next lines (skipping empty lines?)
                 // Usually it's immediately after.
-                if (nextLineIndex < lines.length && lines[nextLineIndex].trim().startsWith("%%") && lines[nextLineIndex].trim().endsWith("%%")) {
+                const blockMatch = findCommentBlock(lines, nextLineIndex, lines.length);
+                if (blockMatch && (blockMatch.startIndex === nextLineIndex || (blockMatch.startIndex === nextLineIndex + 1 && lines[nextLineIndex].trim() === ""))) {
                     // Update existing block
-                    let blockLine = lines[nextLineIndex];
-                    let innerContent = blockLine.trim().substring(2, blockLine.trim().length - 2).trim();
+                    let innerContent = blockMatch.content.substring(2, blockMatch.content.length - 2).trim();
 
                     const updatedInner = upsertPropertyInBlock(innerContent, key, newPropertyStr, false);
-                    newLines.push(`%% ${updatedInner} %%`);
+                    if (updatedInner !== "") {
+                        newLines.push(`%%${updatedInner}%%`);
+                    }
+                    i = blockMatch.endIndex; // Skip the original block lines
 
-                    i++; // Skip the original block line
+                    // If we matched nextLineIndex + 1 (empty line in between), we should have pushed that empty line?
+                    // Let's just keep it simple.
                     foundBlock = true;
                 }
 
                 if (!foundBlock) {
                     // Create new block
-                    newLines.push(`%% ${newPropertyStr} %%`);
+                    newLines.push(`%%\n${newPropertyStr}\n%%`);
 
                     // Add empty line if next line has content
                     if (i + 1 < lines.length && lines[i + 1].trim() !== "") {
@@ -204,22 +232,28 @@ export const renamePropertyInAllRecords = async (app: App, file: TFile, oldKey: 
             let line = lines[i];
             const trimmed = line.trim();
 
-            if (trimmed.startsWith("%%") && trimmed.endsWith("%%")) {
-                let innerContent = trimmed.substring(2, trimmed.length - 2).trim();
+            if (trimmed.startsWith("%%")) {
+                const blockMatch = findCommentBlock(lines, i, lines.length);
+                if (blockMatch) {
+                    let innerContent = blockMatch.content.substring(2, blockMatch.content.length - 2).trim();
 
-                // Regex to find property [oldKey:: ...]
-                const propertyRegex = new RegExp(`\\[\\s*${escapeRegExp(oldKey)}\\s*::`, 'g');
+                    // Regex to find property [oldKey:: ...]
+                    const propertyRegex = new RegExp(`\\[\\s*${escapeRegExp(oldKey)}\\s*::`, 'g');
 
-                if (propertyRegex.test(innerContent)) {
-                    innerContent = innerContent.replace(propertyRegex, `[${newKey}::`);
-                    newLines.push(`%% ${innerContent} %%`);
+                    if (propertyRegex.test(innerContent)) {
+                        innerContent = innerContent.replace(propertyRegex, `[${newKey}::`);
+                        newLines.push(`%%\n${innerContent}\n%%`);
+                    } else {
+                        newLines.push(blockMatch.content);
+                    }
+                    i = blockMatch.endIndex;
+
+                    // Add empty line if next line has content
+                    if (i + 1 < lines.length && lines[i + 1].trim() !== "") {
+                        newLines.push("");
+                    }
                 } else {
                     newLines.push(line);
-                }
-
-                // Add empty line if next line has content
-                if (i + 1 < lines.length && lines[i + 1].trim() !== "") {
-                    newLines.push("");
                 }
             } else {
                 newLines.push(line);
@@ -239,32 +273,39 @@ export const deletePropertyFromAllRecords = async (app: App, file: TFile, key: s
             let line = lines[i];
             const trimmed = line.trim();
 
-            if (trimmed.startsWith("%%") && trimmed.endsWith("%%")) {
-                let innerContent = trimmed.substring(2, trimmed.length - 2).trim();
+            if (trimmed.startsWith("%%")) {
+                const blockMatch = findCommentBlock(lines, i, lines.length);
+                if (blockMatch) {
+                    let innerContent = blockMatch.content.substring(2, blockMatch.content.length - 2).trim();
 
-                // Regex to find and remove property [key:: ...]
-                // Need to be careful about spacing
-                const propertyRegex = new RegExp(`\\[\\s*${escapeRegExp(key)}\\s*::\\s*.*?\\]`, 'g');
+                    // Regex to find and remove property [key:: ...]
+                    // Need to be careful about spacing
+                    const propertyRegex = new RegExp(`\\[\\s*${escapeRegExp(key)}\\s*::\\s*.*?\\]`, 'g');
 
-                if (propertyRegex.test(innerContent)) {
-                    innerContent = innerContent.replace(propertyRegex, "").trim();
-                    // Clean up double spaces
-                    innerContent = innerContent.replace(/\s\s+/g, " ");
+                    if (propertyRegex.test(innerContent)) {
+                        innerContent = innerContent.replace(propertyRegex, "").trim();
+                        // Clean up double spaces
+                        innerContent = innerContent.replace(/\s\s+/g, " ");
+                        // Remove empty lines
+                        innerContent = innerContent.split("\\n").map(l => l.trim()).filter(l => l).join("\\n");
 
-                    if (innerContent.length === 0) {
-                        // Empty block? Remove it?
-                        // If it's empty, we can remove the line entirely
-                        continue;
+                        if (innerContent.length === 0) {
+                            // Empty block? Remove it?
+                            // If it's empty, we can remove the line entirely
+                        } else {
+                            newLines.push(`%%\n${innerContent}\n%%`);
+                        }
                     } else {
-                        newLines.push(`%% ${innerContent} %%`);
+                        newLines.push(blockMatch.content);
+                    }
+                    i = blockMatch.endIndex;
+
+                    // Add empty line if next line has content
+                    if (i + 1 < lines.length && lines[i + 1].trim() !== "") {
+                        newLines.push("");
                     }
                 } else {
                     newLines.push(line);
-                }
-
-                // Add empty line if next line has content
-                if (i + 1 < lines.length && lines[i + 1].trim() !== "") {
-                    newLines.push("");
                 }
             } else {
                 newLines.push(line);
@@ -302,8 +343,11 @@ export const updateContent = async (app: App, file: TFile, record: DatabaseRecor
         // Identify existing property block (%% ... %%)
         let propertyBlockLine = "";
         for (let i = startLine + 1; i < endLine; i++) {
-            if (lines[i].trim().startsWith("%%") && lines[i].trim().endsWith("%%")) {
-                propertyBlockLine = lines[i];
+            if (lines[i].trim().startsWith("%%")) {
+                const blockMatch = findCommentBlock(lines, i, endLine);
+                if (blockMatch) {
+                    propertyBlockLine = blockMatch.content;
+                }
                 break;
             }
         }
@@ -427,7 +471,7 @@ export const addRecord = async (app: App, file: TFile, title: string, initialPro
         }
 
         // Construct properties block
-        let propsBlock = "%%  %%";
+        let propsBlock = "";
         if (initialProperties && Object.keys(initialProperties).length > 0) {
             const propsList: string[] = [];
             for (const [key, value] of Object.entries(initialProperties)) {
@@ -463,7 +507,7 @@ export const addRecord = async (app: App, file: TFile, title: string, initialPro
                 // If template provides raw string, user might expect it to work
                 propsList.push(`[${key}::${type}(${valStr})]`);
             }
-            propsBlock = `%% ${propsList.join(" ")} %%`;
+            propsBlock = `%%\n${propsList.join("\n")}\n%%`;
         }
 
         const newRecord = `${prefix}## ${newTitle}\n${propsBlock}\n`;
@@ -609,27 +653,38 @@ export const updateConfig = async (app: App, file: TFile, key: string, value: st
         }
 
         // Look for %% block between targetLineIndex and searchEndIndex
-        let configBlockIndex = -1;
+        let configBlockStartIndex = -1;
+        let configBlockEndIndex = -1;
+        let configBlockContent = "";
         const startSearch = targetLineIndex !== -1 ? targetLineIndex + 1 : 0;
 
         for (let i = startSearch; i < searchEndIndex; i++) {
-            if (lines[i].trim().startsWith("%%") && lines[i].trim().endsWith("%%")) {
-                configBlockIndex = i;
+            if (lines[i].trim().startsWith("%%")) {
+                const blockMatch = findCommentBlock(lines, i, searchEndIndex);
+                if (blockMatch) {
+                    configBlockStartIndex = blockMatch.startIndex;
+                    configBlockEndIndex = blockMatch.endIndex;
+                    configBlockContent = blockMatch.content;
+                }
                 break;
             }
         }
 
         const newPropertyStr = `[${key}::${value}]`;
 
-        if (configBlockIndex !== -1) {
-            let inner = lines[configBlockIndex].trim().substring(2, lines[configBlockIndex].trim().length - 2).trim();
+        if (configBlockStartIndex !== -1) {
+            let inner = configBlockContent.trim().substring(2, configBlockContent.trim().length - 2).trim();
             inner = upsertPropertyInBlock(inner, key, newPropertyStr, true);
-            lines[configBlockIndex] = `%% ${inner} %%`;
+            if (inner.trim() === "") {
+                lines.splice(configBlockStartIndex, configBlockEndIndex - configBlockStartIndex + 1);
+            } else {
+                lines.splice(configBlockStartIndex, configBlockEndIndex - configBlockStartIndex + 1, `%%${inner}%%`);
+            }
         } else {
             // Create block
             // Insert after targetLineIndex
             const insertAt = targetLineIndex !== -1 ? targetLineIndex + 1 : 0;
-            lines.splice(insertAt, 0, `%% ${newPropertyStr} %%`);
+            lines.splice(insertAt, 0, `%%\n${newPropertyStr}\n%%`);
             // Ensure newline after config block
             if (insertAt + 1 >= lines.length || lines[insertAt + 1].trim() !== "") {
                 lines.splice(insertAt + 1, 0, "");
@@ -1069,7 +1124,7 @@ export const updateRecordRaw = async (app: App, file: TFile, record: DatabaseRec
     });
 };
 
-export const HIDDEN_CSS_CLASS = "markdown-db-hidden";
+export const HIDDEN_CSS_CLASS = "db-property-hidden";
 
 export async function addCssClassToFiles(app: App, files: TFile[], cssClass: string) {
     for (const file of files) {
