@@ -517,11 +517,20 @@ export const addRecord = async (app: App, file: TFile, title: string, initialPro
 export const updateTitle = async (app: App, file: TFile, newTitle: string) => {
     await app.vault.process(file, (data) => {
         const lines = data.split(/\r?\n/);
-        // Find H1
+        let inCodeBlock = false;
         for (let i = 0; i < lines.length; i++) {
-            if (lines[i].startsWith("# ")) {
-                lines[i] = "# " + newTitle;
-                break;
+            if (lines[i].trim().startsWith("```")) {
+                inCodeBlock = !inCodeBlock;
+            }
+            if (!inCodeBlock && lines[i].startsWith("# ")) {
+                const currentH1 = lines[i].substring(2).trim();
+                const parenIndex = currentH1.search(/[(（]/);
+                if (parenIndex !== -1) {
+                    const suffix = currentH1.substring(parenIndex);
+                    lines[i] = "# " + newTitle + suffix;
+                } else {
+                    lines[i] = "# " + newTitle;
+                }
             }
         }
         return lines.join("\n");

@@ -518,12 +518,11 @@ export class MarkdownDBView extends TextFileView implements IMarkdownDBView {
 
     handleUpdateTitle = async (newTitle: string) => {
         if (this.file) {
-            // Check if we need to rename the file
             const currentFilename = this.file.basename;
 
             // Preserve suffix (e.g. " (View)")
-            const suffixMatch = currentFilename.match(/(\s*\(.*\))$/);
-            const suffix = suffixMatch ? suffixMatch[1] : "";
+            const suffixMatch = currentFilename.match(/(\s*\(.*\))|(\s*（.*）)$/);
+            const suffix = suffixMatch ? suffixMatch[0] : "";
 
             const newFilename = `${newTitle}${suffix}`;
 
@@ -539,9 +538,9 @@ export class MarkdownDBView extends TextFileView implements IMarkdownDBView {
                     new Notice("Failed to rename file");
                     console.error(e);
                 }
-            } else {
-                await updateTitle(this.app, this.file, newTitle);
             }
+
+            await updateTitle(this.app, this.file, newTitle);
         }
     }
 
