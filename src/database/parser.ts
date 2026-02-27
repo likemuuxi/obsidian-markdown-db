@@ -227,5 +227,10 @@ function handleConfigProperty(key: string, typedValue: TypedValue, config: Datab
                 } catch (e2) { }
             }
         }
+    } else if (key === "db-page-size") {
+        const parsed = parseInt(value, 10);
+        if (!isNaN(parsed) && parsed > 0) {
+            config.pageSize = parsed;
+        }
     }
 }

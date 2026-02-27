@@ -991,6 +991,21 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                                     </select>
                                 </div>
                                 <div className="markdown-db-config-item" style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                                    <span className="markdown-db-config-label" style={{ marginBottom: 0 }}>Page Size</span>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        style={{ width: "60px", padding: "2px 6px", border: "1px solid var(--background-modifier-border)", borderRadius: "4px", background: "var(--background-primary)", color: "var(--text-normal)", fontSize: "14px" }}
+                                        value={config.pageSize || 25}
+                                        onChange={(e) => {
+                                            const val = parseInt(e.target.value, 10);
+                                            if (!isNaN(val) && val > 0) {
+                                                onUpdateConfig("db-page-size", val.toString());
+                                            }
+                                        }}
+                                    />
+                                </div>
+                                <div className="markdown-db-config-item" style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
                                     <span className="markdown-db-config-label" style={{ marginBottom: 0 }}>Show Content</span>
                                     <div
                                         className={`checkbox-container ${config.showContent !== false ? "is-enabled" : ""}`}

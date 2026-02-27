@@ -127,9 +127,15 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
     }, [data.records, data.config.filters, data.config.sort]);
 
     // Pagination state
-    const [pageSize, setPageSize] = useState(25);
+    const [pageSize, setPageSize] = useState(data.config.pageSize || 25);
     const [currentPage, setCurrentPage] = useState(1);
     const [pageInputValue, setPageInputValue] = useState("1");
+
+    React.useEffect(() => {
+        if (data.config.pageSize) {
+            setPageSize(data.config.pageSize);
+        }
+    }, [data.config.pageSize]);
 
     const isAddingRow = React.useRef(false);
 
@@ -402,9 +408,9 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
     return (
         <div className="markdown-db-table-container">
             <table className="markdown-db-table" style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0 }}>
-                <thead>
+                <thead style={{ position: "sticky", top: 0, zIndex: 10, backgroundColor: "var(--background-primary)" }}>
                     <tr>
-                        <th style={{ width: "32px", padding: "8px 4px", borderBottom: "2px solid var(--background-modifier-border)" }}></th>
+                        <th style={{ width: "32px", padding: "8px 4px", borderBottom: "2px solid var(--background-modifier-border)", position: "sticky", top: 0, zIndex: 10, backgroundColor: "var(--background-primary)" }}></th>
                         {columns.map(col => {
                             const isProperty = col !== "Name" && col !== "Content";
                             let columnType = isProperty && data.config.columnTypes ? data.config.columnTypes[col] : undefined;
@@ -436,11 +442,14 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                                         padding: "8px",
                                         borderBottom: "2px solid var(--background-modifier-border)",
                                         boxShadow: dragOverColumn === col ? "inset 3px 0 0 0 var(--interactive-accent)" : "none",
-                                        backgroundColor: dragOverColumn === col ? "var(--background-modifier-hover)" : undefined,
                                         transition: "box-shadow 0.1s, background-color 0.1s",
                                         fontWeight: "600",
                                         color: "var(--text-muted)",
                                         fontSize: "12px",
+                                        position: "sticky",
+                                        top: 0,
+                                        zIndex: 10,
+                                        backgroundColor: dragOverColumn === col ? "var(--background-modifier-hover)" : "var(--background-primary)",
                                         cursor: (isProperty && !readonly) ? "grab" : "default",
                                         userSelect: "none"
                                     }}
@@ -474,6 +483,10 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                                 borderRight: "none",
                                 textAlign: "center",
                                 cursor: "pointer",
+                                position: "sticky",
+                                top: 0,
+                                zIndex: 10,
+                                backgroundColor: "var(--background-primary)",
                                 color: "var(--text-muted)"
                             }} onClick={(e) => !readonly && handleAddClick(e)} title="Add Property Column">
                             +
@@ -643,11 +656,19 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                             isAddingRow.current = true;
                             onAddRecord();
                         }}
-                        style={{
-                            borderBottom: "1px solid var(--background-modifier-border)"
-                        }}
                     >
-                        <td colSpan={columns.length + 2} style={{ padding: "0", color: "var(--text-muted)", cursor: readonly ? "default" : "pointer", borderRight: "none" }}>
+                        <td colSpan={columns.length + 2} style={{
+                            padding: "0",
+                            color: "var(--text-muted)",
+                            cursor: readonly ? "default" : "pointer",
+                            borderRight: "none",
+                            borderBottom: "1px solid var(--background-modifier-border)",
+                            position: "sticky",
+                            bottom: 0,
+                            zIndex: 10,
+                            backgroundColor: "var(--background-primary)",
+                            boxShadow: "0 -1px 0 var(--background-modifier-border)"
+                        }}>
                             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px" }}>
                                 <span className="markdown-db-add-record-button" style={{
                                     position: "sticky",

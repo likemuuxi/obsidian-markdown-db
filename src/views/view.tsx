@@ -355,7 +355,11 @@ export class MarkdownDBView extends TextFileView implements IMarkdownDBView {
 
     async onOpen() {
         this.contentEl.empty();
+        this.contentEl.style.padding = "0";
+        this.contentEl.style.overflow = "hidden";
         const reactContainer = this.contentEl.createDiv();
+        reactContainer.style.height = "100%";
+        reactContainer.style.width = "100%";
         this.root = createRoot(reactContainer);
         this.refresh();
 

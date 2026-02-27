@@ -1,11 +1,11 @@
 
-export type PropertyType = 
-    | "text" 
-    | "number" 
-    | "boolean" 
-    | "date" 
-    | "select" 
-    | "multi" 
+export type PropertyType =
+    | "text"
+    | "number"
+    | "boolean"
+    | "date"
+    | "select"
+    | "multi"
     | "link";
 
 export const VALID_PROPERTY_TYPES: PropertyType[] = [
@@ -49,6 +49,7 @@ export interface DatabaseConfig {
     filters?: FilterRule[];
     columnTypes?: Record<string, PropertyType>;
     hiddenColumns?: string[];
+    pageSize?: number;
 }
 
 export interface TypedValue {
@@ -65,7 +66,7 @@ export interface DatabaseRecord {
     lineStart: number;
     lineEnd: number;
     // 记录属性所在的行号（用于快速更新）
-    propertyLineIndex?: number; 
+    propertyLineIndex?: number;
 }
 
 export interface DatabaseData {
@@ -93,7 +94,7 @@ export const parseTypedValue = (typeStr: string, valueStr: string): TypedValue =
             break;
         case "date":
             // 保持字符串或解析为 Date 对象，视需求而定。暂时保持字符串以便于回写。
-            value = valueStr; 
+            value = valueStr;
             break;
         case "multi":
             // 多选通常以逗号分隔，或者在存储时就是 split 好的
@@ -116,12 +117,12 @@ export const formatTypedValue = (typedValue: TypedValue): string => {
         case "text":
             return String(typedValue.value);
         case "multi":
-             if (Array.isArray(typedValue.value)) {
-                 valStr = typedValue.value.join(", ");
-             } else {
-                 valStr = String(typedValue.value);
-             }
-             break;
+            if (Array.isArray(typedValue.value)) {
+                valStr = typedValue.value.join(", ");
+            } else {
+                valStr = String(typedValue.value);
+            }
+            break;
         default:
             valStr = String(typedValue.value);
     }
