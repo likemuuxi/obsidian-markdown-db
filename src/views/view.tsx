@@ -38,7 +38,7 @@ export interface IMarkdownDBView {
     handleDeleteView: (viewName: string) => Promise<void>;
     handleRenameView: (oldName: string, newName: string) => Promise<void>;
     handleReorderViews: (viewNames: string[]) => Promise<void>;
-    handleRowContextMenu: (record: DatabaseRecord, event: React.MouseEvent) => void;
+    handleRowContextMenu: (record: DatabaseRecord, selectedRecords: DatabaseRecord[], event: React.MouseEvent) => void;
     handleHeaderContextMenu: (key: string, event: React.MouseEvent, config?: DatabaseConfig, records?: DatabaseRecord[], viewName?: string) => void;
     handleSyncItem: (record: DatabaseRecord) => Promise<void>;
     handleAddTemplate: () => Promise<void>;
@@ -218,8 +218,8 @@ export const MarkdownDBApp = (props: {
         if (props.file) props.view.handleUpdateTitle(newTitle);
     };
 
-    const handleRowContextMenu = (record: DatabaseRecord, event: React.MouseEvent) => {
-        props.view.handleRowContextMenu(record, event);
+    const handleRowContextMenu = (record: DatabaseRecord, selectedRecords: DatabaseRecord[], event: React.MouseEvent) => {
+        props.view.handleRowContextMenu(record, selectedRecords, event);
     };
 
     const handleHeaderContextMenu = (key: string, event: React.MouseEvent) => {
@@ -646,7 +646,7 @@ export class MarkdownDBView extends TextFileView implements IMarkdownDBView {
         }
     }
 
-    handleRowContextMenu = (record: DatabaseRecord, event: React.MouseEvent) => {
+    handleRowContextMenu = (record: DatabaseRecord, selectedRecords: DatabaseRecord[], event: React.MouseEvent) => {
         // Prevent default browser context menu
         event.preventDefault();
 
@@ -654,11 +654,15 @@ export class MarkdownDBView extends TextFileView implements IMarkdownDBView {
 
         menu.addItem((item) => {
             item
-                .setTitle("Delete")
+                .setTitle(selectedRecords.length > 1 ? `Delete ${selectedRecords.length} records` : "Delete")
                 .setIcon("trash")
                 .onClick(async () => {
                     if (this.file) {
-                        await deleteRecord(this.app, this.file, record);
+                        const recordsToDelete = selectedRecords.length > 0 ? selectedRecords : [record];
+                        const sortedRecords = [...recordsToDelete].sort((a, b) => b.lineStart - a.lineStart);
+                        for (const targetRecord of sortedRecords) {
+                            await deleteRecord(this.app, this.file, targetRecord);
+                        }
                     }
                 });
         });

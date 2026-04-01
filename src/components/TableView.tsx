@@ -20,7 +20,7 @@ interface TableViewProps {
     onAddProperty: (name: string, type?: PropertyType) => void;
     onSaveToGlobal: (name: string, type?: PropertyType) => void;
     onRemoveGlobalValue: (key: string, value: string) => void;
-    onRowContextMenu: (record: DatabaseRecord, event: React.MouseEvent) => void;
+    onRowContextMenu: (record: DatabaseRecord, selectedRecords: DatabaseRecord[], event: React.MouseEvent) => void;
     onHeaderContextMenu: (key: string, event: React.MouseEvent) => void;
     onUpdateConfig: (key: string, value: string) => void;
     onReorderRecord?: (fromIndex: number, toIndex: number) => void;
@@ -33,6 +33,9 @@ interface TableViewProps {
 }
 
 export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourcePath, globalProperties, onUpdateProperty, onUpdateContent, onRenameRecord, onOpenRecord, onAddRecord, onAddProperty, onSaveToGlobal, onRemoveGlobalValue, onRowContextMenu, onHeaderContextMenu, onUpdateConfig, onReorderRecord, onSyncItem, isSyncing, syncDirection, portalContainer, component, readonly }) => {
+    const getRecordSelectionKey = React.useCallback((record: DatabaseRecord) => {
+        return `${record.lineStart}:${record.title}`;
+    }, []);
 
     const propertyKeys = useMemo(() => {
         const all = Array.from(data.allKeys);
@@ -175,6 +178,9 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
     const [menuOpen, setMenuOpen] = useState(false);
     const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 });
     const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
+    const [selectedRowKeys, setSelectedRowKeys] = useState<Set<string>>(new Set());
+    const [selectionAnchorIndex, setSelectionAnchorIndex] = useState<number | null>(null);
+    const [isSelectionDragging, setIsSelectionDragging] = useState(false);
 
     const handleAddClick = (e: React.MouseEvent) => {
         const rect = (e.target as HTMLElement).getBoundingClientRect();
@@ -224,8 +230,129 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
     const [dropTarget, setDropTarget] = useState<{ index: number, position: 'top' | 'bottom' } | null>(null);
     const [hoveredRowIndex, setHoveredRowIndex] = useState<number | null>(null);
     const isManualSort = (!data.config.sort || data.config.sort.length === 0) && (!data.config.filters || data.config.filters.length === 0);
+    const isSelectionMode = isSelectionDragging || selectedRowKeys.size > 0;
+    const selectedRecords = useMemo(() => {
+        return paginatedRecords.filter((record) => selectedRowKeys.has(getRecordSelectionKey(record)));
+    }, [paginatedRecords, selectedRowKeys, getRecordSelectionKey]);
+
+    React.useEffect(() => {
+        setSelectedRowKeys((prev) => {
+            const next = new Set<string>();
+            paginatedRecords.forEach((record) => {
+                const key = getRecordSelectionKey(record);
+                if (prev.has(key)) {
+                    next.add(key);
+                }
+            });
+
+            if (next.size === prev.size) {
+                let same = true;
+                prev.forEach((key) => {
+                    if (!next.has(key)) {
+                        same = false;
+                    }
+                });
+                if (same) {
+                    return prev;
+                }
+            }
+
+            return next;
+        });
+    }, [paginatedRecords, getRecordSelectionKey]);
+
+    React.useEffect(() => {
+        if (!isSelectionDragging) return;
+
+        const endSelectionDrag = () => {
+            setIsSelectionDragging(false);
+            setSelectionAnchorIndex(null);
+        };
+
+        window.addEventListener("pointerup", endSelectionDrag);
+        window.addEventListener("pointercancel", endSelectionDrag);
+
+        return () => {
+            window.removeEventListener("pointerup", endSelectionDrag);
+            window.removeEventListener("pointercancel", endSelectionDrag);
+        };
+    }, [isSelectionDragging]);
+
+    const updateSelectionRange = React.useCallback((fromIndex: number, toIndex: number) => {
+        const start = Math.min(fromIndex, toIndex);
+        const end = Math.max(fromIndex, toIndex);
+        const next = new Set<string>();
+
+        for (let i = start; i <= end; i++) {
+            const record = paginatedRecords[i];
+            if (record) {
+                next.add(getRecordSelectionKey(record));
+            }
+        }
+
+        setSelectedRowKeys(next);
+    }, [paginatedRecords, getRecordSelectionKey]);
+
+    const handleSelectionGestureStart = React.useCallback((e: React.PointerEvent, index: number) => {
+        if (readonly) return;
+        if (e.button !== 0) return;
+        if (!isSelectionMode && (e.target as HTMLElement).closest(".markdown-db-drag-handle")) return;
+        if ((e.target as HTMLElement).closest("input, textarea, button, select, a, [contenteditable='true']")) return;
+
+        e.preventDefault();
+        e.stopPropagation();
+        setIsSelectionDragging(true);
+        setSelectionAnchorIndex(index);
+        updateSelectionRange(index, index);
+    }, [readonly, isSelectionMode, updateSelectionRange]);
+
+    const handleSelectionGestureEnter = React.useCallback((index: number) => {
+        if (!isSelectionDragging || selectionAnchorIndex === null) return;
+        updateSelectionRange(selectionAnchorIndex, index);
+    }, [isSelectionDragging, selectionAnchorIndex, updateSelectionRange]);
+
+    const toggleRowSelection = React.useCallback((record: DatabaseRecord) => {
+        const key = getRecordSelectionKey(record);
+        setSelectedRowKeys((prev) => {
+            const next = new Set(prev);
+            if (next.has(key)) {
+                next.delete(key);
+            } else {
+                next.add(key);
+            }
+            return next;
+        });
+    }, [getRecordSelectionKey]);
+
+    const clearSelection = React.useCallback(() => {
+        setSelectedRowKeys(new Set());
+        setIsSelectionDragging(false);
+        setSelectionAnchorIndex(null);
+    }, []);
+
+    const selectAllVisibleRows = React.useCallback(() => {
+        setSelectedRowKeys(new Set(paginatedRecords.map(getRecordSelectionKey)));
+    }, [paginatedRecords, getRecordSelectionKey]);
+
+    React.useEffect(() => {
+        if (!isSelectionMode) return;
+
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === "Escape") {
+                event.preventDefault();
+                clearSelection();
+            }
+        };
+
+        window.addEventListener("keydown", handleKeyDown);
+        return () => window.removeEventListener("keydown", handleKeyDown);
+    }, [isSelectionMode, clearSelection]);
 
     const handleRowDragStart = (e: React.DragEvent, index: number) => {
+        if (isSelectionMode) {
+            e.preventDefault();
+            return;
+        }
         e.dataTransfer.setData("text/plain", "row-" + index);
         e.dataTransfer.effectAllowed = "move";
         // e.stopPropagation(); // Don't stop propagation, let it bubble if needed
@@ -405,12 +532,76 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
         return "S";
     }, []);
 
+    const checkIcon = useMemo(() => {
+        const icon = getIcon("check");
+        if (icon) {
+            icon.style.width = "12px";
+            icon.style.height = "12px";
+            return icon.outerHTML;
+        }
+        return "";
+    }, []);
+
     return (
         <div className="markdown-db-table-container">
             <table className="markdown-db-table" style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0 }}>
                 <thead style={{ position: "sticky", top: 0, zIndex: 10, backgroundColor: "var(--background-primary)" }}>
-                    <tr>
-                        <th style={{ width: "32px", padding: "8px 4px", borderBottom: "2px solid var(--background-modifier-border)", position: "sticky", top: 0, zIndex: 10, backgroundColor: "var(--background-primary)" }}></th>
+                    <tr style={{ height: "42px" }}>
+                        <th style={{ width: "40px", height: "42px", minHeight: "42px", padding: "8px 4px", borderBottom: "2px solid var(--background-modifier-border)", position: "sticky", top: 0, zIndex: 10, backgroundColor: "var(--background-primary)", textAlign: "center", boxSizing: "border-box", verticalAlign: "middle", lineHeight: 0 }}>
+                            <div
+                                style={{
+                                    width: "26px",
+                                    height: "26px",
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    margin: "0 auto",
+                                    lineHeight: 0
+                                }}
+                            >
+                                {!readonly && (
+                                    <div
+                                        onClick={(e) => {
+                                            if (!isSelectionMode) return;
+                                            e.stopPropagation();
+                                            if (selectedRowKeys.size === paginatedRecords.length && paginatedRecords.length > 0) {
+                                                clearSelection();
+                                            } else {
+                                                selectAllVisibleRows();
+                                            }
+                                        }}
+                                        title={selectedRowKeys.size === paginatedRecords.length && paginatedRecords.length > 0 ? "Clear selection" : "Select all visible rows"}
+                                        style={{
+                                            width: "26px",
+                                            height: "26px",
+                                            display: "inline-flex",
+                                            alignItems: "center",
+                                            justifyContent: "center",
+                                            cursor: isSelectionMode ? "pointer" : "default",
+                                            visibility: isSelectionMode ? "visible" : "hidden",
+                                            lineHeight: 0
+                                        }}
+                                    >
+                                        <span
+                                            style={{
+                                                width: "14px",
+                                                height: "14px",
+                                                border: "1px solid var(--background-modifier-border)",
+                                                borderRadius: "3px",
+                                                backgroundColor: selectedRowKeys.size === paginatedRecords.length && paginatedRecords.length > 0 ? "var(--interactive-accent)" : "var(--background-primary-alt)",
+                                                color: "var(--text-on-accent)",
+                                                display: "inline-flex",
+                                                alignItems: "center",
+                                                justifyContent: "center",
+                                                boxSizing: "border-box",
+                                                lineHeight: 0
+                                            }}
+                                            dangerouslySetInnerHTML={{ __html: selectedRowKeys.size === paginatedRecords.length && paginatedRecords.length > 0 ? checkIcon : "" }}
+                                        />
+                                    </div>
+                                )}
+                            </div>
+                        </th>
                         {columns.map(col => {
                             const isProperty = col !== "Name" && col !== "Content";
                             let columnType = isProperty && data.config.columnTypes ? data.config.columnTypes[col] : undefined;
@@ -439,6 +630,8 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                                     onDragEnd={handleDragEnd}
                                     style={{
                                         textAlign: "left",
+                                        height: "42px",
+                                        minHeight: "42px",
                                         padding: "8px",
                                         borderBottom: "2px solid var(--background-modifier-border)",
                                         boxShadow: dragOverColumn === col ? "inset 3px 0 0 0 var(--interactive-accent)" : "none",
@@ -451,7 +644,9 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                                         zIndex: 10,
                                         backgroundColor: dragOverColumn === col ? "var(--background-modifier-hover)" : "var(--background-primary)",
                                         cursor: (isProperty && !readonly) ? "grab" : "default",
-                                        userSelect: "none"
+                                        userSelect: "none",
+                                        boxSizing: "border-box",
+                                        verticalAlign: "middle"
                                     }}
                                     onContextMenu={(e) => {
                                         if (!readonly && (isProperty || col === "Name")) {
@@ -478,6 +673,8 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                             className="markdown-db-add-column-header"
                             style={{
                                 width: "40px",
+                                height: "42px",
+                                minHeight: "42px",
                                 padding: "8px",
                                 borderBottom: "2px solid var(--background-modifier-border)",
                                 borderRight: "none",
@@ -487,56 +684,126 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                                 top: 0,
                                 zIndex: 10,
                                 backgroundColor: "var(--background-primary)",
-                                color: "var(--text-muted)"
+                                color: "var(--text-muted)",
+                                boxSizing: "border-box",
+                                verticalAlign: "middle"
                             }} onClick={(e) => !readonly && handleAddClick(e)} title="Add Property Column">
                             +
                         </th>
                     </tr>
                 </thead>
-                <tbody>
+                    <tbody>
                     {paginatedRecords.map((record, index) => (
+                        (() => {
+                            const rowKey = getRecordSelectionKey(record);
+                            const isSelected = selectedRowKeys.has(rowKey);
+                            return (
                         <tr
-                            key={index}
+                            key={rowKey}
                             style={{
                                 borderBottom: "1px solid var(--background-modifier-border)",
+                                backgroundColor: isSelected ? "color-mix(in srgb, var(--interactive-accent) 18%, var(--background-primary))" : "transparent",
                                 boxShadow: (dropTarget?.index === index && dropTarget.position === 'top')
                                     ? "inset 0 2px 0 0 var(--interactive-accent)"
                                     : (dropTarget?.index === index && dropTarget.position === 'bottom')
                                         ? "inset 0 -2px 0 0 var(--interactive-accent)"
                                         : "none"
                             }}
-                            className="markdown-db-row"
-                            onContextMenu={(e) => !readonly && onRowContextMenu(record, e)}
+                            className={`markdown-db-row${isSelected ? " markdown-db-row-selected" : ""}${isSelectionMode ? " markdown-db-selection-mode" : ""}`}
+                            onContextMenu={(e) => {
+                                if (readonly) return;
+                                const contextRecords = isSelected && selectedRecords.length > 0 ? selectedRecords : [record];
+                                onRowContextMenu(record, contextRecords, e);
+                            }}
+                            onPointerDown={(e) => handleSelectionGestureStart(e, index)}
+                            onPointerEnter={() => handleSelectionGestureEnter(index)}
                             onMouseEnter={() => setHoveredRowIndex(index)}
                             onMouseLeave={() => setHoveredRowIndex(null)}
-                            onDragOver={(isManualSort && !readonly) ? (e) => handleRowDragOver(e, index) : undefined}
-                            onDrop={(isManualSort && !readonly) ? (e) => handleRowDrop(e, index) : undefined}
+                            onDragOver={(isManualSort && !readonly && !isSelectionMode) ? (e) => handleRowDragOver(e, index) : undefined}
+                            onDrop={(isManualSort && !readonly && !isSelectionMode) ? (e) => handleRowDrop(e, index) : undefined}
                             onDragEnd={handleRowDragEnd}
                         >
-                            <td style={{ padding: "0", verticalAlign: "top", textAlign: "center" }}>
-                                {isManualSort && !readonly && (
-                                    <div
-                                        draggable
-                                        onDragStart={(e) => handleRowDragStart(e, index)}
-                                        className="markdown-db-drag-handle"
-                                        style={{
-                                            cursor: "grab",
-                                            padding: "6px",
-                                            marginTop: "4px",
-                                            opacity: hoveredRowIndex === index ? 1 : 0,
-                                            transition: "opacity 0.2s",
-                                            color: "var(--text-muted)",
-                                            display: "inline-block"
-                                        }}
-                                        title="Drag to reorder"
-                                    >
-                                        <span
-                                            style={{ display: "inline-flex", alignItems: "center", color: "var(--text-muted)" }}
-                                            title="Drag to reorder"
-                                            dangerouslySetInnerHTML={{ __html: dragHandleIcon }}
-                                        />
-                                    </div>
-                                )}
+                            <td
+                                style={{ padding: "0", verticalAlign: "top", textAlign: "center", userSelect: "none", width: "40px" }}
+                            >
+                                <div
+                                    style={{
+                                        width: "26px",
+                                        height: "26px",
+                                        margin: "4px auto",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "center"
+                                    }}
+                                >
+                                    {!readonly && (
+                                        isSelectionMode ? (
+                                            <label
+                                                onPointerDown={(e) => e.stopPropagation()}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    toggleRowSelection(record);
+                                                }}
+                                                style={{
+                                                    cursor: "pointer",
+                                                    display: "inline-flex",
+                                                    alignItems: "center",
+                                                    justifyContent: "center",
+                                                    width: "14px",
+                                                    height: "14px"
+                                                }}
+                                                title={isSelected ? "Deselect row" : "Select row"}
+                                            >
+                                                <input
+                                                    type="hidden"
+                                                    style={{
+                                                        display: "none"
+                                                    }}
+                                                />
+                                                <span
+                                                    style={{
+                                                        width: "14px",
+                                                        height: "14px",
+                                                        border: "1px solid var(--background-modifier-border)",
+                                                        borderRadius: "3px",
+                                                        backgroundColor: isSelected ? "var(--interactive-accent)" : "var(--background-primary-alt)",
+                                                        color: "var(--text-on-accent)",
+                                                        display: "inline-flex",
+                                                        alignItems: "center",
+                                                        justifyContent: "center",
+                                                        boxSizing: "border-box"
+                                                    }}
+                                                    dangerouslySetInnerHTML={{ __html: isSelected ? checkIcon : "" }}
+                                                />
+                                            </label>
+                                        ) : (
+                                            isManualSort && (
+                                                <div
+                                                    draggable
+                                                    onDragStart={(e) => handleRowDragStart(e, index)}
+                                                    className="markdown-db-drag-handle"
+                                                    style={{
+                                                        cursor: "grab",
+                                                        padding: "6px",
+                                                        opacity: hoveredRowIndex === index ? 1 : 0,
+                                                        transition: "opacity 0.2s",
+                                                        color: "var(--text-muted)",
+                                                        display: "inline-block",
+                                                        lineHeight: 0,
+                                                        touchAction: "none"
+                                                    }}
+                                                    title="Drag to reorder or drag across rows to multi-select"
+                                                >
+                                                    <span
+                                                        style={{ display: "inline-flex", alignItems: "center", color: "var(--text-muted)" }}
+                                                        title="Drag to reorder or drag across rows to multi-select"
+                                                        dangerouslySetInnerHTML={{ __html: dragHandleIcon }}
+                                                    />
+                                                </div>
+                                            )
+                                        )
+                                    )}
+                                </div>
                             </td>
                             <td style={{
                                 padding: "0",
@@ -648,6 +915,8 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                             {/* Empty cell for the add column button column */}
                             <td className="markdown-db-add-column-cell" style={{ borderBottom: "1px solid var(--background-modifier-border)", borderRight: "none" }}></td>
                         </tr>
+                            );
+                        })()
                     ))}
                     <tr
                         className="markdown-db-new-row"

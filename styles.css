@@ -129,14 +129,6 @@
     background-color: var(--background-secondary);
 }
 
-.markdown-db-table tr.markdown-db-row-selected td {
-    background-color: color-mix(in srgb, var(--interactive-accent) 18%, var(--background-primary));
-}
-
-.markdown-db-table tr.markdown-db-row-selected:hover td {
-    background-color: color-mix(in srgb, var(--interactive-accent) 18%, var(--background-primary));
-}
-
 /* Editable Cell */
 /* Container td handles sizing/border */
 
@@ -1320,16 +1312,16 @@
 .markdown-db-split-btn {
     display: flex;
     align-items: center;
-    background: var(--interactive-accent);
     border-radius: 4px;
     height: 28px;
     overflow: hidden;
+    background: var(--interactive-accent) !important;
 }
 
 .markdown-db-new-btn-main {
     background: var(--interactive-accent) !important;
     border: none;
-    color: var(--text-on-accent);
+    color: var(--text-on-accent) !important;
     padding: 0 12px;
     height: 100%;
     cursor: pointer;
@@ -1347,7 +1339,7 @@
 .markdown-db-new-btn-arrow {
     background: var(--interactive-accent) !important;
     border: none;
-    color: var(--text-on-accent);
+    color: var(--text-on-accent) !important;
     padding: 0 6px;
     height: 100%;
     cursor: pointer;

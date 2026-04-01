@@ -395,16 +395,20 @@ export class EmbedDBView implements IMarkdownDBView {
         }
     }
 
-    handleRowContextMenu = (record: DatabaseRecord, event: React.MouseEvent) => {
+    handleRowContextMenu = (record: DatabaseRecord, selectedRecords: DatabaseRecord[], event: React.MouseEvent) => {
         event.preventDefault();
         const menu = new Menu();
         menu.addItem((item) => {
             item
-                .setTitle("Delete")
+                .setTitle(selectedRecords.length > 1 ? `Delete ${selectedRecords.length} records` : "Delete")
                 .setIcon("trash")
                 .onClick(async () => {
                     if (this.file) {
-                        await deleteRecord(this.app, this.file, record);
+                        const recordsToDelete = selectedRecords.length > 0 ? selectedRecords : [record];
+                        const sortedRecords = [...recordsToDelete].sort((a, b) => b.lineStart - a.lineStart);
+                        for (const targetRecord of sortedRecords) {
+                            await deleteRecord(this.app, this.file, targetRecord);
+                        }
                     }
                 });
         });
