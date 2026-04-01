@@ -1,0 +1,4 @@
+interface:
+  display_name: "Obsidian Markdown DB"
+  short_description: "Work with Markdown DB files used by this Obsidian plugin."
+  default_prompt: "Use $obsidian-markdown-db to modify or generate Markdown DB files that this plugin can parse safely."

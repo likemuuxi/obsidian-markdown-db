@@ -129,6 +129,14 @@
     background-color: var(--background-secondary);
 }
 
+.markdown-db-table tr.markdown-db-row-selected td {
+    background-color: color-mix(in srgb, var(--interactive-accent) 18%, var(--background-primary));
+}
+
+.markdown-db-table tr.markdown-db-row-selected:hover td {
+    background-color: color-mix(in srgb, var(--interactive-accent) 18%, var(--background-primary));
+}
+
 /* Editable Cell */
 /* Container td handles sizing/border */
 

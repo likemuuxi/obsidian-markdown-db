@@ -2,6 +2,7 @@ import { Setting, setIcon, Notice, normalizePath, TFile, stringifyYaml } from "o
 import type MyPlugin from "../main";
 import type { NotionSyncConfig } from "../settings";
 import { NotionAPI } from "../utils/notion-api";
+import { FileSuggest } from "../suggest/suggest";
 
 export class IntegrationSettingsView {
     plugin: MyPlugin;
@@ -140,61 +141,32 @@ export class IntegrationSettingsView {
                     await this.plugin.saveSettings();
                 }));
 
-        // DB File Picker for Stars
         new Setting(containerEl)
             .setName('Target Database (Stars)')
-            .setDesc('Select the database file to sync Stars into.')
-            .addDropdown((dropdown) => {
-                const files = this.plugin.app.vault.getMarkdownFiles().filter(file => {
-                    const cache = this.plugin.app.metadataCache.getFileCache(file);
-                    return cache?.frontmatter?.["markdown-db"] === true || cache?.frontmatter?.["markdown-db"] === "true";
-                });
-
-                if (files.length === 0) {
-                    dropdown.addOption("", "No databases found");
-                } else {
-                    files.sort((a, b) => a.path.localeCompare(b.path));
-                    files.forEach((file) => {
-                        dropdown.addOption(file.path, file.path);
+            .setDesc('Database file path to sync Stars into (e.g. "Databases/Stars.md").')
+            .addText(text => {
+                new FileSuggest(this.plugin.app, text.inputEl);
+                text
+                    .setPlaceholder('Example: Databases/Stars.md')
+                    .setValue(this.plugin.settings.githubSyncStarsDb)
+                    .onChange(async (value) => {
+                        this.plugin.settings.githubSyncStarsDb = value;
+                        await this.plugin.saveSettings();
                     });
-
-                    // Default if empty
-                    if (!this.plugin.settings.githubSyncStarsDb && files.length > 0) {
-                        // Don't auto-set, let user choose
-                    }
-                }
-
-                dropdown.setValue(this.plugin.settings.githubSyncStarsDb);
-                dropdown.onChange(async (value) => {
-                    this.plugin.settings.githubSyncStarsDb = value;
-                    await this.plugin.saveSettings();
-                });
             });
 
-        // DB File Picker for PRs
         new Setting(containerEl)
             .setName('Target Database (PRs)')
-            .setDesc('Select the database file to sync PRs into.')
-            .addDropdown((dropdown) => {
-                const files = this.plugin.app.vault.getMarkdownFiles().filter(file => {
-                    const cache = this.plugin.app.metadataCache.getFileCache(file);
-                    return cache?.frontmatter?.["markdown-db"] === true || cache?.frontmatter?.["markdown-db"] === "true";
-                });
-
-                if (files.length === 0) {
-                    dropdown.addOption("", "No databases found");
-                } else {
-                    files.sort((a, b) => a.path.localeCompare(b.path));
-                    files.forEach((file) => {
-                        dropdown.addOption(file.path, file.path);
+            .setDesc('Database file path to sync PRs into (e.g. "Databases/PRs.md").')
+            .addText(text => {
+                new FileSuggest(this.plugin.app, text.inputEl);
+                text
+                    .setPlaceholder('Example: Databases/PRs.md')
+                    .setValue(this.plugin.settings.githubSyncPrsDb)
+                    .onChange(async (value) => {
+                        this.plugin.settings.githubSyncPrsDb = value;
+                        await this.plugin.saveSettings();
                     });
-                }
-
-                dropdown.setValue(this.plugin.settings.githubSyncPrsDb);
-                dropdown.onChange(async (value) => {
-                    this.plugin.settings.githubSyncPrsDb = value;
-                    await this.plugin.saveSettings();
-                });
             });
 
         new Setting(containerEl)
