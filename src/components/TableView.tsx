@@ -15,7 +15,7 @@ interface TableViewProps {
     onUpdateProperty: (record: DatabaseRecord, key: string, value: string, explicitType?: string) => void;
     onUpdateContent: (record: DatabaseRecord, newContent: string) => void;
     onRenameRecord: (record: DatabaseRecord, newName: string) => void;
-    onOpenRecord: (record: DatabaseRecord) => void;
+    onOpenRecord: (record: DatabaseRecord, records: DatabaseRecord[], index: number) => void;
     onAddRecord: () => void;
     onAddProperty: (name: string, type?: PropertyType) => void;
     onSaveToGlobal: (name: string, type?: PropertyType) => void;
@@ -23,6 +23,7 @@ interface TableViewProps {
     onRowContextMenu: (record: DatabaseRecord, selectedRecords: DatabaseRecord[], event: React.MouseEvent) => void;
     onHeaderContextMenu: (key: string, event: React.MouseEvent) => void;
     onUpdateConfig: (key: string, value: string) => void;
+    onSelectionModeChange?: (isSelectionMode: boolean, clearSelection: (() => void) | null) => void;
     onReorderRecord?: (fromIndex: number, toIndex: number) => void;
     onSyncItem?: (record: DatabaseRecord) => void;
     isSyncing?: boolean;
@@ -32,7 +33,8 @@ interface TableViewProps {
     readonly?: boolean;
 }
 
-export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourcePath, globalProperties, onUpdateProperty, onUpdateContent, onRenameRecord, onOpenRecord, onAddRecord, onAddProperty, onSaveToGlobal, onRemoveGlobalValue, onRowContextMenu, onHeaderContextMenu, onUpdateConfig, onReorderRecord, onSyncItem, isSyncing, syncDirection, portalContainer, component, readonly }) => {
+export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourcePath, globalProperties, onUpdateProperty, onUpdateContent, onRenameRecord, onOpenRecord, onAddRecord, onAddProperty, onSaveToGlobal, onRemoveGlobalValue, onRowContextMenu, onHeaderContextMenu, onUpdateConfig, onSelectionModeChange, onReorderRecord, onSyncItem, isSyncing, syncDirection, portalContainer, component, readonly }) => {
+    const selectionGestureRef = React.useRef<{ index: number; clientX: number; clientY: number } | null>(null);
     const getRecordSelectionKey = React.useCallback((record: DatabaseRecord) => {
         return `${record.lineStart}:${record.title}`;
     }, []);
@@ -261,23 +263,6 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
         });
     }, [paginatedRecords, getRecordSelectionKey]);
 
-    React.useEffect(() => {
-        if (!isSelectionDragging) return;
-
-        const endSelectionDrag = () => {
-            setIsSelectionDragging(false);
-            setSelectionAnchorIndex(null);
-        };
-
-        window.addEventListener("pointerup", endSelectionDrag);
-        window.addEventListener("pointercancel", endSelectionDrag);
-
-        return () => {
-            window.removeEventListener("pointerup", endSelectionDrag);
-            window.removeEventListener("pointercancel", endSelectionDrag);
-        };
-    }, [isSelectionDragging]);
-
     const updateSelectionRange = React.useCallback((fromIndex: number, toIndex: number) => {
         const start = Math.min(fromIndex, toIndex);
         const end = Math.max(fromIndex, toIndex);
@@ -293,18 +278,53 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
         setSelectedRowKeys(next);
     }, [paginatedRecords, getRecordSelectionKey]);
 
+    React.useEffect(() => {
+        const activateDistance = 6;
+
+        const handlePointerMove = (event: PointerEvent) => {
+            if (!selectionGestureRef.current || isSelectionDragging) return;
+
+            const dx = event.clientX - selectionGestureRef.current.clientX;
+            const dy = event.clientY - selectionGestureRef.current.clientY;
+            const distance = Math.hypot(dx, dy);
+
+            if (distance < activateDistance) return;
+
+            setIsSelectionDragging(true);
+            setSelectionAnchorIndex(selectionGestureRef.current.index);
+            updateSelectionRange(selectionGestureRef.current.index, selectionGestureRef.current.index);
+        };
+
+        const handlePointerEnd = () => {
+            selectionGestureRef.current = null;
+            if (!isSelectionDragging) return;
+            setIsSelectionDragging(false);
+            setSelectionAnchorIndex(null);
+        };
+
+        window.addEventListener("pointermove", handlePointerMove);
+        window.addEventListener("pointerup", handlePointerEnd);
+        window.addEventListener("pointercancel", handlePointerEnd);
+
+        return () => {
+            window.removeEventListener("pointermove", handlePointerMove);
+            window.removeEventListener("pointerup", handlePointerEnd);
+            window.removeEventListener("pointercancel", handlePointerEnd);
+        };
+    }, [isSelectionDragging, updateSelectionRange]);
+
     const handleSelectionGestureStart = React.useCallback((e: React.PointerEvent, index: number) => {
         if (readonly) return;
         if (e.button !== 0) return;
         if (!isSelectionMode && (e.target as HTMLElement).closest(".markdown-db-drag-handle")) return;
         if ((e.target as HTMLElement).closest("input, textarea, button, select, a, [contenteditable='true']")) return;
 
-        e.preventDefault();
-        e.stopPropagation();
-        setIsSelectionDragging(true);
-        setSelectionAnchorIndex(index);
-        updateSelectionRange(index, index);
-    }, [readonly, isSelectionMode, updateSelectionRange]);
+        selectionGestureRef.current = {
+            index,
+            clientX: e.clientX,
+            clientY: e.clientY
+        };
+    }, [readonly, isSelectionMode]);
 
     const handleSelectionGestureEnter = React.useCallback((index: number) => {
         if (!isSelectionDragging || selectionAnchorIndex === null) return;
@@ -329,6 +349,10 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
         setIsSelectionDragging(false);
         setSelectionAnchorIndex(null);
     }, []);
+
+    React.useEffect(() => {
+        onSelectionModeChange?.(isSelectionMode, isSelectionMode ? clearSelection : null);
+    }, [isSelectionMode, clearSelection, onSelectionModeChange]);
 
     const selectAllVisibleRows = React.useCallback(() => {
         setSelectedRowKeys(new Set(paginatedRecords.map(getRecordSelectionKey)));
@@ -825,7 +849,7 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                                         onSave={(newVal) => {
                                             onRenameRecord(record, newVal);
                                         }}
-                                        onLinkClick={() => onOpenRecord(record)}
+                                        onLinkClick={() => onOpenRecord(record, processedRecords, (currentPage - 1) * pageSize + index)}
                                         portalContainer={portalContainer}
                                         readonly={readonly}
                                         leftAction={(!readonly && onSyncItem) ? (

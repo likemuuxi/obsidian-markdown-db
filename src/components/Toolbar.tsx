@@ -46,7 +46,7 @@ const ViewConfigPopup = ({
     isEditing = false
 }: ViewConfigPopupProps) => {
     const [name, setName] = useState(initialName);
-    const [openMode, setOpenMode] = useState(initialConfig?.openMode || "split");
+    const [openMode, setOpenMode] = useState(initialConfig?.openMode || "modal");
     const [showContent, setShowContent] = useState(initialConfig?.showContent !== false);
     const [contentHeight, setContentHeight] = useState(initialConfig?.contentHeight || "compact");
     const [filters, setFilters] = useState<FilterRule[]>(initialConfig?.filters || []);
@@ -126,9 +126,9 @@ const ViewConfigPopup = ({
                         onChange={(e) => setOpenMode(e.target.value as "split" | "tab" | "modal")}
                         style={{ width: "120px", flex: "none" }}
                     >
+                        <option value="modal">Modal</option>
                         <option value="split">Split Pane</option>
                         <option value="tab">Current Tab</option>
-                        <option value="modal">Modal</option>
                     </select>
                 </div>
 
@@ -979,15 +979,15 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                                 <div className="markdown-db-config-item">
                                     <span className="markdown-db-config-label">Open Mode</span>
                                     <select
-                                        value={config.openMode || "split"}
+                                        value={config.openMode || "modal"}
                                         onChange={(e) => {
                                             onUpdateConfig("db-open-mode", e.target.value);
                                             setShowConfig(false);
                                         }}
                                     >
-                                        <option value="tab">Current Tab</option>
-                                        <option value="split">Split Pane</option>
                                         <option value="modal">Modal</option>
+                                        <option value="split">Split Pane</option>
+                                        <option value="tab">Current Tab</option>
                                     </select>
                                 </div>
                                 <div className="markdown-db-config-item" style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>

@@ -10,7 +10,7 @@ export const parseFile = (content: string): DatabaseData => {
 
     // Default config
     const defaultConfig: DatabaseConfig = {
-        openMode: "split",
+        openMode: "modal",
         layout: "table",
         contentHeight: "compact"
     };

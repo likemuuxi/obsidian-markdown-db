@@ -102,6 +102,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
     const [searchTerm, setSearchTerm] = useState("");
     const [currentView, setCurrentView] = useState<string | null>(null);
     const [templates, setTemplates] = useState<string[]>(plugin.settings.templates);
+    const [isTableSelectionMode, setIsTableSelectionMode] = useState(false);
+    const clearTableSelectionRef = useRef<(() => void) | null>(null);
 
     // Reset view when file changes
     useEffect(() => {
@@ -422,19 +424,25 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
         setTemplates([...plugin.settings.templates]);
     };
 
-    const handleRowContextMenu = (record: DatabaseRecord, event: React.MouseEvent) => {
+    const handleRowContextMenu = (record: DatabaseRecord, selectedRecords: DatabaseRecord[], event: React.MouseEvent) => {
         const menu = new Menu();
 
         menu.addItem((item) => {
             item
-                .setTitle("Delete")
+                .setTitle(selectedRecords.length > 1 ? `Delete ${selectedRecords.length} records` : "Delete")
                 .setIcon("trash")
                 .setWarning(true)
                 .onClick(async () => {
                     if (selectedFile) {
-                        await deleteRecord(app, selectedFile, record);
+                        const recordsToDelete = selectedRecords.length > 0 ? selectedRecords : [record];
+                        const sortedRecords = [...recordsToDelete].sort((a, b) => b.lineStart - a.lineStart);
+
+                        for (const targetRecord of sortedRecords) {
+                            await deleteRecord(app, selectedFile, targetRecord);
+                        }
+
                         await reloadCurrentFile();
-                        new Notice("Record deleted");
+                        new Notice(recordsToDelete.length > 1 ? `${recordsToDelete.length} records deleted` : "Record deleted");
                     }
                 });
         });
@@ -787,7 +795,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
     return (
         <div className="markdown-db-dashboard">
             {/* Sidebar */}
-            <div className="markdown-db-dashboard-sidebar">
+            <div
+                className="markdown-db-dashboard-sidebar"
+                onMouseDown={() => {
+                    if (!isTableSelectionMode) {
+                        return;
+                    }
+
+                    clearTableSelectionRef.current?.();
+                }}
+            >
                 <div className="markdown-db-sidebar-header">
                     <h3>Database</h3>
                     {/* <button className="markdown-db-icon-btn"><Icon name="plus" /></button> */}
@@ -896,10 +913,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
                                 onReorderRecord={handleReorderRecord}
                                 portalContainer={portalContainer}
                                 component={component}
-                                onOpenRecord={(record) => {
+                                onOpenRecord={(record, records, index) => {
                                     if (selectedFile) {
                                         // Always use modal as requested, ignoring db-open-mode
-                                        const modal = new RecordModal(app, selectedFile, record);
+                                        const modal = new RecordModal(app, selectedFile, record, plugin.settings.properties, records, index);
                                         const originalOnClose = modal.onClose;
                                         modal.onClose = async () => {
                                             if (originalOnClose) await originalOnClose();
@@ -915,6 +932,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
                                 onRowContextMenu={handleRowContextMenu}
                                 onHeaderContextMenu={handleHeaderContextMenu}
                                 onUpdateConfig={handleUpdateConfig}
+                                onSelectionModeChange={(isSelectionMode, clearSelection) => {
+                                    setIsTableSelectionMode(isSelectionMode);
+                                    clearTableSelectionRef.current = clearSelection;
+                                }}
                                 onSyncItem={(() => {
                                     if (!selectedFile) return undefined;
                                     const config = plugin.notionSyncService.getSyncConfigForFile(selectedFile);

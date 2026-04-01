@@ -30,7 +30,7 @@ export interface IMarkdownDBView {
     handleUpdateProperty: (record: DatabaseRecord, key: string, value: string, explicitType?: string) => Promise<void>;
     handleUpdateContent: (record: DatabaseRecord, newContent: string) => Promise<void>;
     handleRenameRecord: (record: DatabaseRecord, newName: string) => Promise<void>;
-    handleOpenRecord: (record: DatabaseRecord, config: DatabaseConfig) => Promise<void>;
+    handleOpenRecord: (record: DatabaseRecord, config: DatabaseConfig, records?: DatabaseRecord[], index?: number) => Promise<void>;
     handleAddProperty: (name: string, type?: string) => Promise<void>;
     handleUpdateConfig: (key: string, value: string, viewName?: string) => Promise<void>;
     handleUpdateTitle: (newTitle: string) => Promise<void>;
@@ -160,8 +160,8 @@ export const MarkdownDBApp = (props: {
         if (props.file) props.view.handleRenameRecord(record, newName);
     };
 
-    const handleOpenRecord = (record: DatabaseRecord) => {
-        props.view.handleOpenRecord(record, currentConfig);
+    const handleOpenRecord = (record: DatabaseRecord, records: DatabaseRecord[], index: number) => {
+        props.view.handleOpenRecord(record, currentConfig, records, index);
     };
 
     const handleAddRecord = (templatePath?: string) => {
@@ -617,13 +617,13 @@ export class MarkdownDBView extends TextFileView implements IMarkdownDBView {
         return found;
     }
 
-    handleOpenRecord = async (record: DatabaseRecord, config: DatabaseConfig) => {
+    handleOpenRecord = async (record: DatabaseRecord, config: DatabaseConfig, records?: DatabaseRecord[], index?: number) => {
         if (!this.file) return;
 
         const mode = config.openMode;
 
         if (mode === "modal") {
-            new RecordModal(this.app, this.file, record).open();
+            new RecordModal(this.app, this.file, record, this.plugin.settings.properties, records, index).open();
         } else if (mode === "split") {
             let leaf = this.splitLeaf;
 

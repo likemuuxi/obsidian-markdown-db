@@ -47,6 +47,14 @@ export class EmbedDBView implements IMarkdownDBView {
         this.file = file;
     }
 
+    handleAddTemplate = async () => {
+        return;
+    }
+
+    handleRemoveTemplate = async (_path: string) => {
+        return;
+    }
+
     static async markdownPostProcessor(plugin: MarkdownDBPlugin, el: HTMLElement, ctx: MarkdownPostProcessorContext) {
         const findCandidates = () => {
             const candidates: Set<HTMLElement> = new Set();
@@ -270,6 +278,7 @@ export class EmbedDBView implements IMarkdownDBView {
             file: file,
             view: embedView,
             globalProperties: plugin.settings.properties,
+            templates: plugin.settings.templates || [],
             component: renderComponent,
             readonly: true,
             initialView: viewName,
@@ -291,6 +300,12 @@ export class EmbedDBView implements IMarkdownDBView {
             },
             onRemoveGlobalValue: (key, value) => {
                 // Optional implementation
+            },
+            onAddTemplate: () => {
+                return;
+            },
+            onRemoveTemplate: (_path) => {
+                return;
             }
         });
 
@@ -373,13 +388,13 @@ export class EmbedDBView implements IMarkdownDBView {
         }
     }
 
-    handleOpenRecord = async (record: DatabaseRecord, config: DatabaseConfig) => {
+    handleOpenRecord = async (record: DatabaseRecord, config: DatabaseConfig, records?: DatabaseRecord[], index?: number) => {
         if (!this.file) return;
 
         const mode = config.openMode;
 
         if (mode === "modal") {
-            new RecordModal(this.app, this.file, record).open();
+            new RecordModal(this.app, this.file, record, this.plugin.settings.properties, records, index).open();
         } else if (mode === "split") {
              const leaf = this.app.workspace.getLeaf('split', 'vertical');
              await leaf.openFile(this.file, {
