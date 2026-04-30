@@ -30,7 +30,7 @@ export interface IMarkdownDBView {
     handleUpdateProperty: (record: DatabaseRecord, key: string, value: string, explicitType?: string) => Promise<void>;
     handleUpdateContent: (record: DatabaseRecord, newContent: string) => Promise<void>;
     handleRenameRecord: (record: DatabaseRecord, newName: string) => Promise<void>;
-    handleOpenRecord: (record: DatabaseRecord, config: DatabaseConfig, records?: DatabaseRecord[], index?: number) => Promise<void>;
+    handleOpenRecord: (record: DatabaseRecord, config: DatabaseConfig, records?: DatabaseRecord[], index?: number, event?: React.MouseEvent) => Promise<void>;
     handleAddProperty: (name: string, type?: string) => Promise<void>;
     handleUpdateConfig: (key: string, value: string, viewName?: string) => Promise<void>;
     handleUpdateTitle: (newTitle: string) => Promise<void>;
@@ -160,8 +160,8 @@ export const MarkdownDBApp = (props: {
         if (props.file) props.view.handleRenameRecord(record, newName);
     };
 
-    const handleOpenRecord = (record: DatabaseRecord, records: DatabaseRecord[], index: number) => {
-        props.view.handleOpenRecord(record, currentConfig, records, index);
+    const handleOpenRecord = (record: DatabaseRecord, records: DatabaseRecord[], index: number, event?: React.MouseEvent) => {
+        props.view.handleOpenRecord(record, currentConfig, records, index, event);
     };
 
     const handleAddRecord = (templatePath?: string) => {
@@ -617,12 +617,21 @@ export class MarkdownDBView extends TextFileView implements IMarkdownDBView {
         return found;
     }
 
-    handleOpenRecord = async (record: DatabaseRecord, config: DatabaseConfig, records?: DatabaseRecord[], index?: number) => {
+    handleOpenRecord = async (record: DatabaseRecord, config: DatabaseConfig, records?: DatabaseRecord[], index?: number, event?: React.MouseEvent) => {
         if (!this.file) return;
 
+        const forceNewTab = Boolean(event?.ctrlKey || event?.metaKey);
         const mode = config.openMode;
 
         if (mode === "modal") {
+            if (forceNewTab) {
+                const leaf = this.app.workspace.getLeaf("tab");
+                await leaf.openFile(this.file, {
+                    state: { mode: "source" },
+                    eState: { line: record.lineStart }
+                });
+                return;
+            }
             new RecordModal(this.app, this.file, record, this.plugin.settings.properties, records, index).open();
         } else if (mode === "split") {
             let leaf = this.splitLeaf;
@@ -638,8 +647,8 @@ export class MarkdownDBView extends TextFileView implements IMarkdownDBView {
                 eState: { line: record.lineStart }
             });
         } else {
-            // Default to current tab (mode === "tab")
-            await this.leaf.openFile(this.file, {
+            const leaf = forceNewTab ? this.app.workspace.getLeaf("tab") : this.leaf;
+            await leaf.openFile(this.file, {
                 state: { mode: "source" },
                 eState: { line: record.lineStart }
             });

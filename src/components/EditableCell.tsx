@@ -13,7 +13,7 @@ interface EditableCellProps {
     app: App;
     component: Component;
     sourcePath: string;
-    onLinkClick?: () => void;
+    onLinkClick?: (event: React.MouseEvent) => void;
     isContentColumn?: boolean;
     suggestions?: string[];
     isPropertyColumn?: boolean;
@@ -638,7 +638,7 @@ export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, on
             if (onLinkClick) {
                 e.preventDefault();
                 e.stopPropagation();
-                onLinkClick();
+                onLinkClick(e);
             }
             return;
         }

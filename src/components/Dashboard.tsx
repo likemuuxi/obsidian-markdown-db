@@ -913,8 +913,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
                                 onReorderRecord={handleReorderRecord}
                                 portalContainer={portalContainer}
                                 component={component}
-                                onOpenRecord={(record, records, index) => {
+                                onOpenRecord={async (record, records, index, event) => {
                                     if (selectedFile) {
+                                        if (event?.ctrlKey || event?.metaKey) {
+                                            const leaf = app.workspace.getLeaf("tab");
+                                            await leaf.openFile(selectedFile, {
+                                                state: { mode: "source" },
+                                                eState: { line: record.lineStart }
+                                            });
+                                            return;
+                                        }
                                         // Always use modal as requested, ignoring db-open-mode
                                         const modal = new RecordModal(app, selectedFile, record, plugin.settings.properties, records, index);
                                         const originalOnClose = modal.onClose;

@@ -388,12 +388,21 @@ export class EmbedDBView implements IMarkdownDBView {
         }
     }
 
-    handleOpenRecord = async (record: DatabaseRecord, config: DatabaseConfig, records?: DatabaseRecord[], index?: number) => {
+    handleOpenRecord = async (record: DatabaseRecord, config: DatabaseConfig, records?: DatabaseRecord[], index?: number, event?: React.MouseEvent) => {
         if (!this.file) return;
 
+        const forceNewTab = Boolean(event?.ctrlKey || event?.metaKey);
         const mode = config.openMode;
 
         if (mode === "modal") {
+            if (forceNewTab) {
+                const leaf = this.app.workspace.getLeaf("tab");
+                await leaf.openFile(this.file, {
+                    state: { mode: "source" },
+                    eState: { line: record.lineStart }
+                });
+                return;
+            }
             new RecordModal(this.app, this.file, record, this.plugin.settings.properties, records, index).open();
         } else if (mode === "split") {
              const leaf = this.app.workspace.getLeaf('split', 'vertical');
@@ -402,7 +411,7 @@ export class EmbedDBView implements IMarkdownDBView {
                 eState: { line: record.lineStart }
             });
         } else {
-            const leaf = this.app.workspace.getLeaf("tab");
+            const leaf = forceNewTab ? this.app.workspace.getLeaf("tab") : this.app.workspace.getLeaf("tab");
             await leaf.openFile(this.file, {
                 state: { mode: "source" },
                 eState: { line: record.lineStart }

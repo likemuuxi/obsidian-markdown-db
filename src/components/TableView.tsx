@@ -15,7 +15,7 @@ interface TableViewProps {
     onUpdateProperty: (record: DatabaseRecord, key: string, value: string, explicitType?: string) => void;
     onUpdateContent: (record: DatabaseRecord, newContent: string) => void;
     onRenameRecord: (record: DatabaseRecord, newName: string) => void;
-    onOpenRecord: (record: DatabaseRecord, records: DatabaseRecord[], index: number) => void;
+    onOpenRecord: (record: DatabaseRecord, records: DatabaseRecord[], index: number, event?: React.MouseEvent) => void;
     onAddRecord: () => void;
     onAddProperty: (name: string, type?: PropertyType) => void;
     onSaveToGlobal: (name: string, type?: PropertyType) => void;
@@ -849,7 +849,7 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                                         onSave={(newVal) => {
                                             onRenameRecord(record, newVal);
                                         }}
-                                        onLinkClick={() => onOpenRecord(record, processedRecords, (currentPage - 1) * pageSize + index)}
+                                        onLinkClick={(event) => onOpenRecord(record, processedRecords, (currentPage - 1) * pageSize + index, event)}
                                         portalContainer={portalContainer}
                                         readonly={readonly}
                                         leftAction={(!readonly && onSyncItem) ? (

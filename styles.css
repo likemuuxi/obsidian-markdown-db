@@ -217,8 +217,8 @@
 
 /* Modal Styling for Content Editing */
 .modal.markdown-db-record-modal-shell {
-    width: 920px !important;
-    max-width: 92vw !important;
+    width: 760px !important;
+    max-width: 88vw !important;
     height: 760px !important;
     max-height: 88vh !important;
     padding: 0 !important;
