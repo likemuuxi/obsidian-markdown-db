@@ -149,18 +149,17 @@ export abstract class TextInputSuggest<T> implements ISuggestOwner<T> {
       placement: 'bottom-start',
       modifiers: [
         {
-          name: 'sameWidth',
+          name: 'minWidth',
           enabled: true,
           fn: ({state, instance}) => {
-            // Note: positioning needs to be calculated twice -
-            // first pass - positioning it according to the width of the popper
-            // second pass - position it with the width bound to the reference element
-            // we need to early exit to avoid an infinite loop
-            const targetWidth = `${state.rects.reference.width}px`;
-            if (state.styles.popper.width === targetWidth) {
+            const minWidth = `${state.rects.reference.width}px`;
+            if (state.styles.popper.minWidth === minWidth) {
               return;
             }
-            state.styles.popper.width = targetWidth;
+            state.styles.popper.minWidth = minWidth;
+            state.styles.popper.width = 'max-content';
+            state.styles.popper.maxWidth = '80vw';
+            state.styles.popper.overflow = 'hidden';
             instance.update();
           },
           phase: 'beforeWrite',

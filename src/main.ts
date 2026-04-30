@@ -77,6 +77,19 @@ export default class MarkdownDBPlugin extends Plugin {
             }
         }));
 
+        this.registerEvent(this.app.vault.on("rename", async (file, oldPath) => {
+            let changed = false;
+            for (const config of this.settings.notionSyncConfigs) {
+                if (config.targetDbPath === oldPath) {
+                    config.targetDbPath = file.path;
+                    changed = true;
+                }
+            }
+            if (changed) {
+                await this.saveSettings();
+            }
+        }));
+
         // Monkey patch WorkspaceLeaf.openFile to support seamless DB view opening
         this.monkeyPatchOpenFile();
 

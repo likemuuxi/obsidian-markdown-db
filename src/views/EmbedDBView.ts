@@ -422,6 +422,20 @@ export class EmbedDBView implements IMarkdownDBView {
     handleRowContextMenu = (record: DatabaseRecord, selectedRecords: DatabaseRecord[], event: React.MouseEvent) => {
         event.preventDefault();
         const menu = new Menu();
+
+        const syncConfig = this.file ? this.plugin.notionSyncService?.getSyncConfigForFile(this.file) : undefined;
+        if (syncConfig && !this.plugin.notionSyncService?.isSyncing) {
+            const direction = syncConfig.syncDirection || 'push';
+            menu.addItem((item) => {
+                item
+                    .setTitle(direction === 'pull' ? "Pull from Notion" : "Push to Notion")
+                    .setIcon("refresh-cw")
+                    .onClick(async () => {
+                        await this.handleSyncItem(record);
+                    });
+            });
+        }
+
         menu.addItem((item) => {
             item
                 .setTitle(selectedRecords.length > 1 ? `Delete ${selectedRecords.length} records` : "Delete")
@@ -563,6 +577,23 @@ export class EmbedDBView implements IMarkdownDBView {
     }
 
     handleSyncItem = async (record: DatabaseRecord) => {
-        // No-op for embed view
+        if (!this.file) return;
+
+        const config = this.plugin.settings.notionSyncConfigs.find(c => c.targetDbPath === this.file?.path);
+        if (!config) return;
+
+        let url = "";
+        const notionUrlProp = record.properties["notionUrl"];
+        if (notionUrlProp && notionUrlProp.length > 0) {
+            url = String(notionUrlProp[0].value);
+        }
+
+        if (this.plugin.notionSyncService) {
+            if (url) {
+                await this.plugin.notionSyncService.syncPage(url, config, this.file, record);
+            } else {
+                await this.plugin.notionSyncService.syncByTitle(record, config, this.file);
+            }
+        }
     }
 }

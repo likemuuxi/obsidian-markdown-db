@@ -32,7 +32,6 @@ export interface NotionSyncConfig {
 export interface MarkdownDBSettings {
     properties: PropertyConfig[];
     defaultDbFolder: string;
-    lastOpenedDbPath?: string;
     hideProperties: boolean;
 
     // Github Auto-Sync Settings

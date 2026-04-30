@@ -155,7 +155,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
         });
 
         if (dbFiles.length > 0) {
-            const lastOpenedPath = plugin.settings.lastOpenedDbPath;
+            const lastOpenedPath = sessionStorage.getItem('markdown-db-last-opened');
             const lastOpenedFile = lastOpenedPath ? dbFiles.find(f => f.path === lastOpenedPath) : null;
             if (lastOpenedFile) setSelectedFile(lastOpenedFile);
             else if (!selectedFile) setSelectedFile(dbFiles[0]);
@@ -178,8 +178,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
     // Save last opened when selectedFile changes
     useEffect(() => {
         if (selectedFile) {
-            plugin.settings.lastOpenedDbPath = selectedFile.path;
-            plugin.saveSettings();
+            sessionStorage.setItem('markdown-db-last-opened', selectedFile.path);
         }
     }, [selectedFile]);
 
@@ -426,6 +425,31 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
 
     const handleRowContextMenu = (record: DatabaseRecord, selectedRecords: DatabaseRecord[], event: React.MouseEvent) => {
         const menu = new Menu();
+
+        if (selectedFile) {
+            const syncConfig = plugin.notionSyncService?.getSyncConfigForFile(selectedFile);
+            if (syncConfig && !plugin.notionSyncService?.isSyncing) {
+                const direction = syncConfig.syncDirection || 'push';
+                menu.addItem((item) => {
+                    item
+                        .setTitle(direction === 'pull' ? "Pull from Notion" : "Push to Notion")
+                        .setIcon("refresh-cw")
+                        .onClick(async () => {
+                            plugin.notionSyncService.setSyncStatus(true);
+                            try {
+                                if (record.properties['notionUrl'] && record.properties['notionUrl'].length > 0) {
+                                    await plugin.notionSyncService.syncPage(String(record.properties['notionUrl'][0].value), syncConfig, selectedFile, record);
+                                } else {
+                                    await plugin.notionSyncService.syncByTitle(record, syncConfig, selectedFile);
+                                }
+                            } finally {
+                                plugin.notionSyncService.setSyncStatus(false);
+                                await reloadCurrentFile();
+                            }
+                        });
+                });
+            }
+        }
 
         menu.addItem((item) => {
             item
@@ -944,31 +968,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
                                     setIsTableSelectionMode(isSelectionMode);
                                     clearTableSelectionRef.current = clearSelection;
                                 }}
-                                onSyncItem={(() => {
-                                    if (!selectedFile) return undefined;
-                                    const config = plugin.notionSyncService.getSyncConfigForFile(selectedFile);
-                                    if (!config) return undefined;
-
-                                    return async (record: DatabaseRecord) => {
-                                        plugin.notionSyncService.setSyncStatus(true);
-                                        try {
-                                            if (record.properties['notionUrl'] && record.properties['notionUrl'].length > 0) {
-                                                await plugin.notionSyncService.syncPage(String(record.properties['notionUrl'][0].value), config, selectedFile, record);
-                                            } else {
-                                                await plugin.notionSyncService.syncByTitle(record, config, selectedFile);
-                                            }
-                                        } finally {
-                                            plugin.notionSyncService.setSyncStatus(false);
-                                            await reloadCurrentFile();
-                                        }
-                                    };
-                                })()}
-                                isSyncing={plugin.notionSyncService.isSyncing}
-                                syncDirection={(() => {
-                                    if (!selectedFile) return 'push';
-                                    const config = plugin.notionSyncService.getSyncConfigForFile(selectedFile);
-                                    return config?.syncDirection || 'push';
-                                })()}
                             />
                         </div>
                     </>

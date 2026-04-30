@@ -366,7 +366,8 @@ export class IntegrationSettingsView {
         testBtnContainer.style.justifyContent = 'flex-end';
         testBtnContainer.style.gap = '10px';
 
-        const testBtn = testBtnContainer.createEl('button', { text: 'Test Connection' });
+        const testBtn = testBtnContainer.createEl('button', { text: 'Test' });
+        testBtn.setAttribute('aria-label', 'Test the connection');
         testBtn.onclick = async () => {
             const token = this.plugin.settings.notionApiKey;
             if (!token || !config.databaseId) {
@@ -387,7 +388,7 @@ export class IntegrationSettingsView {
                 new Notice(`Connection failed: ${error.message || 'Unknown error'}`);
             } finally {
                 testBtn.disabled = false;
-                testBtn.setText('Test Connection');
+                testBtn.setText('Test');
             }
         };
 
@@ -566,6 +567,7 @@ export class IntegrationSettingsView {
         const actionsDiv = containerEl.createDiv();
         actionsDiv.style.marginTop = '30px';
         actionsDiv.style.display = 'flex';
+        actionsDiv.style.alignItems = 'center';
         actionsDiv.style.justifyContent = 'flex-end';
         actionsDiv.style.gap = '10px';
 
@@ -793,14 +795,53 @@ export class IntegrationSettingsView {
                 };
             } else {
                 const hasTarget = !!config.targetDbPath;
-                let fileExists = false;
-                if (hasTarget) {
-                    const file = this.plugin.app.vault.getAbstractFileByPath(config.targetDbPath);
-                    fileExists = file instanceof TFile;
-                }
 
-                if (!hasTarget || !fileExists) {
-                    const genBtn = actionsDiv.createEl('button', { text: 'Generate DB File' });
+                if (hasTarget) {
+                    const targetRow = actionsDiv.createDiv();
+                    targetRow.style.display = 'flex';
+                    targetRow.style.alignItems = 'center';
+                    targetRow.style.gap = '8px';
+                    targetRow.style.flex = '1';
+
+                    const targetLabel = targetRow.createEl('span', { text: 'Target:' });
+                    targetLabel.style.color = 'var(--text-muted)';
+                    targetLabel.style.whiteSpace = 'nowrap';
+
+                    const targetInput = targetRow.createEl('input', { type: 'text', placeholder: 'e.g. Databases/MyDB.md' });
+                    targetInput.value = config.targetDbPath;
+                    targetInput.style.flex = '1';
+                    targetInput.disabled = true;
+                    new FileSuggest(this.plugin.app, targetInput);
+
+                    const editBtn = actionsDiv.createEl('button', { text: 'Edit' });
+                    editBtn.onclick = () => {
+                        targetInput.disabled = false;
+                        targetInput.focus();
+                        editBtn.style.display = 'none';
+                        updateBtn.style.display = 'inline-flex';
+                    };
+
+                    const updateBtn = actionsDiv.createEl('button', { text: 'Update' });
+                    updateBtn.style.display = 'none';
+                    updateBtn.onclick = async () => {
+                        const newPath = targetInput.value.trim();
+                        if (newPath && newPath !== config.targetDbPath) {
+                            config.targetDbPath = newPath;
+                            const idx = this.plugin.settings.notionSyncConfigs.findIndex(c => c.id === config.id);
+                            if (idx !== -1) {
+                                this.plugin.settings.notionSyncConfigs[idx].targetDbPath = newPath;
+                            }
+                            await this.plugin.saveSettings();
+                            new Notice(`Target DB file updated to: ${config.targetDbPath}`);
+                        }
+                        targetInput.disabled = true;
+                        editBtn.style.display = 'inline-flex';
+                        updateBtn.style.display = 'none';
+                    };
+                } else {
+                    const genBtn = actionsDiv.createEl('button', { text: 'Generate' });
+                    genBtn.setAttribute('aria-label', 'Generate the database file');
+
                     genBtn.onclick = async () => {
                         await generateOrUpdateDbFile(config);
                     };

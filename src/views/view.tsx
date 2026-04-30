@@ -26,7 +26,6 @@ export interface IMarkdownDBView {
     plugin: MarkdownDBPlugin;
     app: App;
     file: TFile | null;
-    isSyncing?: boolean; // Add sync state
     handleUpdateProperty: (record: DatabaseRecord, key: string, value: string, explicitType?: string) => Promise<void>;
     handleUpdateContent: (record: DatabaseRecord, newContent: string) => Promise<void>;
     handleRenameRecord: (record: DatabaseRecord, newName: string) => Promise<void>;
@@ -98,30 +97,6 @@ export const MarkdownDBApp = (props: {
 
     const [searchTerm, setSearchTerm] = useState("");
     const [currentViewName, setCurrentViewName] = useState<string | null>(resolvedInitialView);
-
-    // Listen for sync status
-    const [isSyncing, setIsSyncing] = useState(false);
-    const [syncDirection, setSyncDirection] = useState<'push' | 'pull'>('push');
-
-    React.useEffect(() => {
-        if (props.view.plugin.notionSyncService) {
-            // Initial state
-            setIsSyncing(props.view.plugin.notionSyncService.isSyncing);
-
-            // Get sync direction
-            if (props.file) {
-                const config = props.view.plugin.notionSyncService.getSyncConfigForFile(props.file);
-                if (config) {
-                    setSyncDirection(config.syncDirection || 'push');
-                }
-            }
-
-            // Register listener
-            props.view.plugin.notionSyncService.registerSyncStatusListener((status) => {
-                setIsSyncing(status);
-            });
-        }
-    }, [props.view.plugin.notionSyncService, props.file]);
 
     const viewNotFound = useMemo(() => {
         if (props.initialView) {
@@ -254,10 +229,6 @@ export const MarkdownDBApp = (props: {
         if (props.file) props.view.handleUpdateConfig(key, value, viewName);
     };
 
-    const handleSyncItem = async (record: DatabaseRecord) => {
-        if (props.file && props.view.handleSyncItem) await props.view.handleSyncItem(record);
-    };
-
     // Override data records with filtered ones for display
     const displayData = { ...dbData, config: currentConfig, records: filteredRecords };
 
@@ -313,8 +284,6 @@ export const MarkdownDBApp = (props: {
                 onHeaderContextMenu={handleHeaderContextMenu}
                 onUpdateConfig={handleUpdateConfig}
                 onReorderRecord={handleReorderRecord}
-                onSyncItem={props.view.handleSyncItem ? handleSyncItem : undefined}
-                isSyncing={isSyncing}
                 readonly={props.readonly}
             />
         </div>
@@ -656,15 +625,29 @@ export class MarkdownDBView extends TextFileView implements IMarkdownDBView {
     }
 
     handleRowContextMenu = (record: DatabaseRecord, selectedRecords: DatabaseRecord[], event: React.MouseEvent) => {
-        // Prevent default browser context menu
         event.preventDefault();
 
         const menu = new Menu();
 
+        const syncConfig = this.file ? this.plugin.notionSyncService?.getSyncConfigForFile(this.file) : undefined;
+        if (syncConfig && !this.plugin.notionSyncService?.isSyncing) {
+            const direction = syncConfig.syncDirection || 'push';
+            menu.addItem((item) => {
+                item
+                    .setTitle(direction === 'pull' ? "Pull from Notion" : "Push to Notion")
+                    .setIcon("refresh-cw")
+                    .onClick(async () => {
+                        await this.handleSyncItem(record);
+                    });
+            });
+            menu.addSeparator();
+        }
+        
         menu.addItem((item) => {
             item
                 .setTitle(selectedRecords.length > 1 ? `Delete ${selectedRecords.length} records` : "Delete")
                 .setIcon("trash")
+                .setWarning(true)
                 .onClick(async () => {
                     if (this.file) {
                         const recordsToDelete = selectedRecords.length > 0 ? selectedRecords : [record];

@@ -25,15 +25,12 @@ interface TableViewProps {
     onUpdateConfig: (key: string, value: string) => void;
     onSelectionModeChange?: (isSelectionMode: boolean, clearSelection: (() => void) | null) => void;
     onReorderRecord?: (fromIndex: number, toIndex: number) => void;
-    onSyncItem?: (record: DatabaseRecord) => void;
-    isSyncing?: boolean;
-    syncDirection?: 'push' | 'pull';
     portalContainer?: HTMLElement;
     component?: any; // Component type from obsidian
     readonly?: boolean;
 }
 
-export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourcePath, globalProperties, onUpdateProperty, onUpdateContent, onRenameRecord, onOpenRecord, onAddRecord, onAddProperty, onSaveToGlobal, onRemoveGlobalValue, onRowContextMenu, onHeaderContextMenu, onUpdateConfig, onSelectionModeChange, onReorderRecord, onSyncItem, isSyncing, syncDirection, portalContainer, component, readonly }) => {
+export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourcePath, globalProperties, onUpdateProperty, onUpdateContent, onRenameRecord, onOpenRecord, onAddRecord, onAddProperty, onSaveToGlobal, onRemoveGlobalValue, onRowContextMenu, onHeaderContextMenu, onUpdateConfig, onSelectionModeChange, onReorderRecord, portalContainer, component, readonly }) => {
     const selectionGestureRef = React.useRef<{ index: number; clientX: number; clientY: number } | null>(null);
     const getRecordSelectionKey = React.useCallback((record: DatabaseRecord) => {
         return `${record.lineStart}:${record.title}`;
@@ -546,16 +543,6 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
         return "&gt;";
     }, []);
 
-    const syncIcon = useMemo(() => {
-        const icon = getIcon("refresh-cw");
-        if (icon) {
-            icon.style.width = "12px";
-            icon.style.height = "12px";
-            return icon.outerHTML;
-        }
-        return "S";
-    }, []);
-
     const checkIcon = useMemo(() => {
         const icon = getIcon("check");
         if (icon) {
@@ -852,36 +839,6 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                                         onLinkClick={(event) => onOpenRecord(record, processedRecords, (currentPage - 1) * pageSize + index, event)}
                                         portalContainer={portalContainer}
                                         readonly={readonly}
-                                        leftAction={(!readonly && onSyncItem) ? (
-                                            <div
-                                                style={{
-                                                    cursor: "pointer",
-                                                    padding: "4px",
-                                                    borderRadius: "4px",
-                                                    display: "flex",
-                                                    alignItems: "center",
-                                                    color: "var(--text-muted)",
-                                                }}
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    if (isSyncing) return;
-                                                    onSyncItem && onSyncItem(record);
-                                                }}
-                                                title={isSyncing ? "Syncing..." : (syncDirection === 'pull' ? "Pull from Notion" : "Push to Notion")}
-                                                onMouseEnter={(e) => {
-                                                    e.currentTarget.style.color = "var(--interactive-accent)";
-                                                }}
-                                                onMouseLeave={(e) => {
-                                                    e.currentTarget.style.color = "var(--text-muted)";
-                                                }}
-                                            >
-                                                <span
-                                                    className={isSyncing ? "markdown-db-syncing-icon" : ""}
-                                                    style={{ display: "flex", alignItems: "center", width: "14px", height: "14px" }}
-                                                    dangerouslySetInnerHTML={{ __html: syncIcon }}
-                                                />
-                                            </div>
-                                        ) : undefined}
                                     />
                                 </div>
                             </td>

@@ -5,6 +5,12 @@ import { DatabaseRecord } from "../database/schema";
 import { updateProperty } from "../database/writer";
 import { markdownToNotionBlocks, notionBlocksToMarkdown } from "../utils/markdown-notion-converter";
 
+function formatSyncTime(): string {
+    const d = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
 export class NotionSyncService {
     app: App;
     settings: MarkdownDBSettings;
@@ -166,11 +172,17 @@ export class NotionSyncService {
                 // Force unarchive if archived
                 await api.updatePage(pageId, notionProps, { archived: false });
                 await this.syncContentToNotion(record, pageId, api);
+                if (record) {
+                    await updateProperty(this.app, file, record, 'lastSynced', formatSyncTime(), 'text');
+                }
                 new Notice("Synced to Notion (Push).");
             } else {
                 // Pull Notion changes to local
                 const page = await api.retrievePage(pageId);
                 await this.updatePageInFile(page, config, file);
+                if (record) {
+                    await updateProperty(this.app, file, record, 'lastSynced', formatSyncTime(), 'text');
+                }
                 new Notice("Synced 1 item from Notion (Pull).");
             }
 
@@ -224,11 +236,13 @@ export class NotionSyncService {
 
                     // 2. Push Content
                     await this.syncContentToNotion(record, page.id, api);
+                    await updateProperty(this.app, file, record, 'lastSynced', formatSyncTime(), 'text');
                     new Notice("Synced to Notion (Push).");
 
                 } else {
                     // Pull
                     await this.updatePageInFile(page, config, file, record, true); // true = pull content
+                    await updateProperty(this.app, file, record, 'lastSynced', formatSyncTime(), 'text');
                     new Notice("Synced from Notion (Pull).");
                 }
 
@@ -285,6 +299,8 @@ export class NotionSyncService {
 
             // Check for content column with wikilink to sync content
             await this.syncContentToNotion(record, newPageId, api);
+
+            await updateProperty(this.app, file, record, 'lastSynced', formatSyncTime(), 'text');
 
             new Notice("Created new page in Notion and linked.");
         } catch (error) {
