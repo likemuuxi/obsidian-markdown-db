@@ -20,7 +20,11 @@ export class GithubSyncService {
     }
 
     async syncStars() {
-        const { githubUsername, githubToken, githubSyncStarsDb } = this.settings;
+        const { githubUsername, githubSyncStarsDb } = this.settings;
+        let githubToken = "";
+        if ((this.app as any).secretStorage) {
+            githubToken = await (this.app as any).secretStorage.getSecret("db-github-token") || "";
+        }
 
         if (!githubUsername) {
             new Notice("Github Auto-Sync skipped: Username not set.");
@@ -51,7 +55,11 @@ export class GithubSyncService {
     }
 
     async syncPRs() {
-        const { githubUsername, githubToken, githubSyncPrsDb } = this.settings;
+        const { githubUsername, githubSyncPrsDb } = this.settings;
+        let githubToken = "";
+        if ((this.app as any).secretStorage) {
+            githubToken = await (this.app as any).secretStorage.getSecret("db-github-token") || "";
+        }
 
         if (!githubUsername) return; 
         if (!githubSyncPrsDb) {

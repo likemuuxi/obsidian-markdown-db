@@ -37,12 +37,10 @@ export interface MarkdownDBSettings {
     // Github Auto-Sync Settings
     autoSyncGithub: boolean;
     githubUsername: string;
-    githubToken: string;
     githubSyncStarsDb: string;
     githubSyncPrsDb: string;
 
     // Notion Sync Settings
-    notionApiKey: string;
     notionSyncConfigs: NotionSyncConfig[];
     templates: string[];
 }
@@ -53,10 +51,8 @@ export const DEFAULT_SETTINGS: MarkdownDBSettings = {
     hideProperties: false,
     autoSyncGithub: false,
     githubUsername: "",
-    githubToken: "",
     githubSyncStarsDb: "",
     githubSyncPrsDb: "",
-    notionApiKey: "",
     notionSyncConfigs: [],
     templates: []
 }

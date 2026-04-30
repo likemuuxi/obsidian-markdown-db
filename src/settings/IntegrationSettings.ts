@@ -2,6 +2,7 @@ import { Setting, setIcon, Notice, normalizePath, TFile, stringifyYaml } from "o
 import type MyPlugin from "../main";
 import type { NotionSyncConfig } from "../settings";
 import { NotionAPI } from "../utils/notion-api";
+import { SecretSelectionModal } from "../modals/SecretSelectionModal";
 import { FileSuggest } from "../suggest/suggest";
 
 export class IntegrationSettingsView {
@@ -130,16 +131,38 @@ export class IntegrationSettingsView {
                     await this.plugin.saveSettings();
                 }));
 
+        let githubTokenText: any;
         new Setting(containerEl)
             .setName('Github Token')
             .setDesc('Optional, but recommended for private repos and higher rate limits.')
-            .addText(text => text
-                .setPlaceholder('ghp_...')
-                .setValue(this.plugin.settings.githubToken)
-                .onChange(async (value) => {
-                    this.plugin.settings.githubToken = value;
-                    await this.plugin.saveSettings();
-                }));
+            .addText(text => {
+                githubTokenText = text;
+                text.inputEl.type = "password";
+                text.setPlaceholder('ghp_...');
+                // Load token asynchronously
+                if ((this.plugin.app as any).secretStorage) {
+                    const token = (this.plugin.app as any).secretStorage.getSecret('db-github-token');
+                    if (token) text.setValue(token);
+                }
+
+                text.onChange(async (value) => {
+                    if ((this.plugin.app as any).secretStorage) {
+                        await (this.plugin.app as any).secretStorage.setSecret('db-github-token', value);
+                    }
+                });
+            })
+            .addButton(btn => btn
+                .setButtonText("Select")
+                .onClick(() => {
+                    const currentVal = githubTokenText.getValue();
+                    new SecretSelectionModal(this.plugin.app, currentVal, async (selectedVal) => {
+                        githubTokenText.setValue(selectedVal);
+                        if ((this.plugin.app as any).secretStorage) {
+                            await (this.plugin.app as any).secretStorage.setSecret('db-github-token', selectedVal);
+                        }
+                    }).open();
+                })
+            );
 
         new Setting(containerEl)
             .setName('Target Database (Stars)')
@@ -183,16 +206,38 @@ export class IntegrationSettingsView {
     renderNotionSettings(containerEl: HTMLElement) {
         this.renderHeader(containerEl, 'Notion Database Sync');
 
+        let notionTokenText: any;
         new Setting(containerEl)
-            .setName('Global Notion Integration Token')
+            .setName('Notion Token')
             .setDesc('Default token for all databases. Can be overridden in individual database configs.')
-            .addText(text => text
-                .setPlaceholder('secret_...')
-                .setValue(this.plugin.settings.notionApiKey)
-                .onChange(async (value) => {
-                    this.plugin.settings.notionApiKey = value;
-                    await this.plugin.saveSettings();
-                }));
+            .addText(text => {
+                notionTokenText = text;
+                text.inputEl.type = "password";
+                text.setPlaceholder('secret_...');
+                // Load token asynchronously
+                if ((this.plugin.app as any).secretStorage) {
+                    const token = (this.plugin.app as any).secretStorage.getSecret('db-notion-api-key');
+                    if (token) text.setValue(token);
+                }
+
+                text.onChange(async (value) => {
+                    if ((this.plugin.app as any).secretStorage) {
+                        await (this.plugin.app as any).secretStorage.setSecret('db-notion-api-key', value);
+                    }
+                });
+            })
+            .addButton(btn => btn
+                .setButtonText("Select")
+                .onClick(() => {
+                    const currentVal = notionTokenText.getValue();
+                    new SecretSelectionModal(this.plugin.app, currentVal, async (selectedVal) => {
+                        notionTokenText.setValue(selectedVal);
+                        if ((this.plugin.app as any).secretStorage) {
+                            await (this.plugin.app as any).secretStorage.setSecret('db-notion-api-key', selectedVal);
+                        }
+                    }).open();
+                })
+            );
 
         new Setting(containerEl)
             .setName('Notion Databases')
@@ -369,7 +414,10 @@ export class IntegrationSettingsView {
         const testBtn = testBtnContainer.createEl('button', { text: 'Test' });
         testBtn.setAttribute('aria-label', 'Test the connection');
         testBtn.onclick = async () => {
-            const token = this.plugin.settings.notionApiKey;
+            let token = "";
+            if ((this.plugin.app as any).secretStorage) {
+                token = await (this.plugin.app as any).secretStorage.getSecret('db-notion-api-key') || "";
+            }
             if (!token || !config.databaseId) {
                 new Notice('Please fill in Token (global or local) and Database ID first.');
                 return;
@@ -488,7 +536,11 @@ export class IntegrationSettingsView {
                             config.properties.splice(index, 0, item);
 
                             // Auto-save logic
-                            if (!config.name || !this.plugin.settings.notionApiKey || !config.databaseId) {
+                            let globalToken = "";
+                            if ((this.plugin.app as any).secretStorage) {
+                                globalToken = await (this.plugin.app as any).secretStorage.getSecret('db-notion-api-key') || "";
+                            }
+                            if (!config.name || !globalToken || !config.databaseId) {
                                 new Notice('Reordered, but not saved. Please fill in Name, Database ID, and ensure Global Token is set.');
                                 this.isDirty = true;
                                 renderProperties();
@@ -579,7 +631,10 @@ export class IntegrationSettingsView {
 
             if (config.syncDirection === 'pull' && config.properties.length === 0) {
                 try {
-                    const token = this.plugin.settings.notionApiKey;
+                    let token = "";
+                    if ((this.plugin.app as any).secretStorage) {
+                        token = await (this.plugin.app as any).secretStorage.getSecret('db-notion-api-key') || "";
+                    }
                     if (!token || !config.databaseId) {
                         new Notice('Please fill in Token and Database ID first.');
                         return;
@@ -750,7 +805,11 @@ export class IntegrationSettingsView {
                 const saveBtn = actionsDiv.createEl('button', { text: 'Save' });
                 saveBtn.setAttr('type', 'submit');
                 saveBtn.onclick = async () => {
-                    if (!config.name || !this.plugin.settings.notionApiKey || !config.databaseId) {
+                    let globalToken = "";
+                    if ((this.plugin.app as any).secretStorage) {
+                        globalToken = await (this.plugin.app as any).secretStorage.getSecret('db-notion-api-key') || "";
+                    }
+                    if (!config.name || !globalToken || !config.databaseId) {
                         new Notice('Please fill in Name, Database ID, and ensure Global Token is set.');
                         return;
                     }

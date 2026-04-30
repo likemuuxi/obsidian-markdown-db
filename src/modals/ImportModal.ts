@@ -31,11 +31,16 @@ export class ImportModal extends Modal {
         super(app);
         this.plugin = plugin;
         this.githubUsername = this.plugin.settings.githubUsername || "";
-        this.githubToken = this.plugin.settings.githubToken || "";
     }
 
     onOpen() {
-        this.display();
+        if ((this.plugin.app as any).secretStorage) {
+            const token = (this.plugin.app as any).secretStorage.getSecret("db-github-token");
+            if (token) this.githubToken = token;
+            this.display();
+        } else {
+            this.display();
+        }
     }
 
     onClose() {
@@ -128,14 +133,15 @@ export class ImportModal extends Modal {
         new Setting(container)
             .setName("Github Token (Optional)")
             .setDesc("Required for private repos or to increase rate limits")
-            .addText((text) =>
+            .addText((text) => {
+                text.inputEl.type = "password";
                 text
                     .setPlaceholder("ghp_...")
                     .setValue(this.githubToken)
                     .onChange((value) => {
                         this.githubToken = value;
-                    })
-            );
+                    });
+            });
     }
 
     renderDestination(container: HTMLElement) {

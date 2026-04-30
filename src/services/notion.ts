@@ -90,7 +90,10 @@ export class NotionSyncService {
     }
 
     async syncDatabase(config: NotionSyncConfig, forceFull: boolean = false) {
-        const token = this.settings.notionApiKey;
+        let token = "";
+        if ((this.app as any).secretStorage) {
+            token = await (this.app as any).secretStorage.getSecret("db-notion-api-key") || "";
+        }
         if (!token || !config.databaseId || !config.targetDbPath) {
             console.warn(`Skipping sync for ${config.name}: Missing token, DB ID, or target path.`);
             return;
@@ -155,7 +158,10 @@ export class NotionSyncService {
             return;
         }
 
-        const token = this.settings.notionApiKey;
+        let token = "";
+        if ((this.app as any).secretStorage) {
+            token = await (this.app as any).secretStorage.getSecret("db-notion-api-key") || "";
+        }
         if (!token) {
             new Notice("Missing Notion Token.");
             return;
@@ -193,7 +199,10 @@ export class NotionSyncService {
     }
 
     async syncByTitle(record: DatabaseRecord, config: NotionSyncConfig, file: TFile) {
-        const token = this.settings.notionApiKey;
+        let token = "";
+        if ((this.app as any).secretStorage) {
+            token = await (this.app as any).secretStorage.getSecret("db-notion-api-key") || "";
+        }
         if (!token) {
             new Notice("Missing Notion Token.");
             return;
@@ -270,7 +279,10 @@ export class NotionSyncService {
     }
 
     async createPageInNotion(record: DatabaseRecord, config: NotionSyncConfig, file: TFile) {
-        const token = this.settings.notionApiKey;
+        let token = "";
+        if ((this.app as any).secretStorage) {
+            token = await (this.app as any).secretStorage.getSecret("db-notion-api-key") || "";
+        }
         if (!token) {
             new Notice("Missing Notion Token.");
             return;
@@ -645,7 +657,10 @@ export class NotionSyncService {
 
             // Sync Content if linked
             if (contentWikilink && pullContent) {
-                const token = this.settings.notionApiKey;
+                let token = "";
+                if ((this.app as any).secretStorage) {
+                    token = await (this.app as any).secretStorage.getSecret("db-notion-api-key") || "";
+                }
                 if (token) {
                     const api = new NotionAPI(token);
                     await this.syncContentFromNotion(contentWikilink, page.id, api);

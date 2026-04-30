@@ -21,7 +21,6 @@ export default class MarkdownDBPlugin extends Plugin {
 
     async onload() {
         await this.loadSettings();
-        await this.migrateSettings();
 
         // Initialize services immediately so views can subscribe
         this.notionSyncService = new NotionSyncService(this.app, this.settings, this.saveSettings.bind(this));
@@ -319,67 +318,10 @@ export default class MarkdownDBPlugin extends Plugin {
         })
     }
 
+
+
     async loadSettings() {
         this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
-    }
-
-    async migrateSettings() {
-        const data = await this.loadData();
-        // Check if we need migration: properties is empty but old data might exist
-        if ((!this.settings.properties || this.settings.properties.length === 0) && data) {
-            const old = data as any;
-            let migrated = false;
-
-            // Gather all known property names from old fields
-            const allProps = new Set<string>();
-            if (Array.isArray(old.knownProperties)) old.knownProperties.forEach((p: string) => allProps.add(p));
-            if (Array.isArray(old.propertyTypes)) old.propertyTypes.forEach((p: any) => allProps.add(p.name));
-            if (old.propertyValues && typeof old.propertyValues === 'object') Object.keys(old.propertyValues).forEach(p => allProps.add(p));
-
-            if (allProps.size > 0) {
-                console.log("Markdown DB: Migrating old settings...");
-                const newProperties: PropertyConfig[] = [];
-
-                for (const name of allProps) {
-                    // Find type
-                    const typeObj = Array.isArray(old.propertyTypes) ? old.propertyTypes.find((pt: any) => pt.name === name) : undefined;
-                    const type = typeObj?.type || 'text';
-
-                    // Find values
-                    const values = (old.propertyValues && old.propertyValues[name]) ? old.propertyValues[name] : [];
-
-                    // Find ignored values
-                    const ignoredValues = (old.ignoredPropertyValues && old.ignoredPropertyValues[name]) ? old.ignoredPropertyValues[name] : [];
-
-                    newProperties.push({
-                        name,
-                        type,
-                        values,
-                        ignoredValues
-                    });
-                }
-
-                this.settings.properties = newProperties;
-
-                // We don't delete old fields from the object in memory immediately to avoid strict type issues if they were typed,
-                // but since we assigned to this.settings (which is typed as MarkdownDBSettings), the old fields are gone from the type view.
-                // When we save, only the fields in MarkdownDBSettings will be saved? 
-                // Object.assign merged them, so they are actually still there in the object!
-                // We should clean them up to avoid cluttering data.json
-                delete (this.settings as any).knownProperties;
-                delete (this.settings as any).propertyTypes;
-                delete (this.settings as any).propertyValues;
-                delete (this.settings as any).ignoredPropertyValues;
-                delete (this.settings as any).blockStyleProperties; // User mentioned this might be there
-
-                migrated = true;
-            }
-
-            if (migrated) {
-                await this.saveSettings();
-                console.log("Markdown DB: Migration complete.");
-            }
-        }
     }
 
     async saveSettings() {
