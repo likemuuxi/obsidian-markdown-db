@@ -7,7 +7,7 @@ import { TableView } from "./TableView";
 import { Toolbar } from "./Toolbar";
 import { RecordModal } from "../modals/RecordModal";
 import { DatabaseData, DatabaseRecord, DatabaseConfig, FilterRule, SortRule } from "../database/schema";
-import { parseFile } from "../database/parser";
+import { parseFile, flattenRecords } from "../database/parser";
 import { PropertyType } from "../database/schema";
 import { PropertyConfig } from "../settings";
 import type MyPlugin from "../main";
@@ -29,7 +29,9 @@ import {
     renamePropertyInAllRecords,
     deleteView,
     renameView,
-    reorderViews
+    reorderViews,
+    addChildRecord,
+    moveRecord
 } from "../database/writer";
 
 const Icon = ({ name, className }: { name: string; className?: string }) => {
@@ -299,7 +301,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
 
     const handleRenameRecord = async (record: DatabaseRecord, newName: string) => {
         if (selectedFile) {
-            await renameRecord(app, selectedFile, record.title, newName);
+            await renameRecord(app, selectedFile, record.title, newName, record.level);
             await reloadCurrentFile();
         }
     };
@@ -360,6 +362,20 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
             }
 
             await addRecord(app, selectedFile, "Untitled", initialProperties);
+            await reloadCurrentFile();
+        }
+    };
+
+    const handleAddChildRecord = async (parentRecord: DatabaseRecord) => {
+        if (selectedFile) {
+            await addChildRecord(app, selectedFile, parentRecord, parentRecord.level + 1, "Untitled");
+            await reloadCurrentFile();
+        }
+    };
+
+    const handleMoveRecord = async (sourceRecord: DatabaseRecord, targetRecord: DatabaseRecord, position: "before" | "after" | "child") => {
+        if (selectedFile) {
+            await moveRecord(app, selectedFile, sourceRecord, targetRecord, position);
             await reloadCurrentFile();
         }
     };
@@ -481,16 +497,21 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
     }, [dbData, currentView]);
 
     // Filtered records for view (Search only, filters/sorts applied by TableView based on config)
-    const filteredRecords = useMemo(() => {
+    const flatRecords = useMemo(() => {
         if (!dbData) return [];
-        if (!searchTerm) return dbData.records;
+        return flattenRecords(dbData.records);
+    }, [dbData]);
+
+    const filteredRecords = useMemo(() => {
+        if (!flatRecords.length) return [];
+        if (!searchTerm) return flatRecords;
         const lowerTerm = searchTerm.toLowerCase();
-        return dbData.records.filter(r =>
+        return flatRecords.filter(r =>
             r.title.toLowerCase().includes(lowerTerm) ||
             Object.values(r.properties).some(vals => vals.some(v => String(v.value).toLowerCase().includes(lowerTerm))) ||
             (r.content && r.content.toLowerCase().includes(lowerTerm))
         );
-    }, [dbData, searchTerm]);
+    }, [flatRecords, searchTerm]);
 
     const displayData = useMemo(() => {
         if (!dbData) return null;
@@ -958,6 +979,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
                                     }
                                 }}
                                 onAddRecord={handleAddRecord}
+                                onAddChildRecord={handleAddChildRecord}
+                                onMoveRecord={handleMoveRecord}
                                 onAddProperty={handleAddProperty}
                                 onSaveToGlobal={onSaveToGlobal}
                                 onRemoveGlobalValue={onRemoveGlobalValue}

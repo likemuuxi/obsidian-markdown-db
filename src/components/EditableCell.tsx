@@ -970,7 +970,7 @@ export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, on
                         if (onLinkClick) {
                             e.preventDefault();
                             e.stopPropagation();
-                            onLinkClick();
+                            onLinkClick(e);
                         }
                     }
                 } : handleViewClick}

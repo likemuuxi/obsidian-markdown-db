@@ -1,24 +1,29 @@
 import { DatabaseData, DatabaseRecord, DatabaseConfig, parseTypedValue, TypedValue, VALID_PROPERTY_TYPES, PropertyType } from "./schema";
 import { extractProperties } from "./utils";
 
+function getHeadingLevel(line: string): number | null {
+    const match = line.match(/^(#{1,6})\s/);
+    if (match) {
+        return match[1].length;
+    }
+    return null;
+}
+
 export const parseFile = (content: string): DatabaseData => {
     const lines = content.split(/\r?\n/);
-    const records: DatabaseRecord[] = [];
+    const flatRecords: DatabaseRecord[] = [];
     let currentRecord: DatabaseRecord | null = null;
     const allKeys = new Set<string>();
     let title = "";
 
-    // Default config
     const defaultConfig: DatabaseConfig = {
         openMode: "modal",
         layout: "table",
         contentHeight: "compact"
     };
 
-    // Copy for global config
     const config: DatabaseConfig = { ...defaultConfig };
 
-    // Views
     const views: Record<string, DatabaseConfig> = {};
     let currentViewName: string | null = null;
 
@@ -29,64 +34,68 @@ export const parseFile = (content: string): DatabaseData => {
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
 
-        // Toggle code block state
         if (line.trim().startsWith("```")) {
             inCodeBlock = !inCodeBlock;
         }
 
-        // Check for H1 (File Title or View)
         const trimmedLine = line.trimStart();
-        if (!inCodeBlock && trimmedLine.startsWith("# ")) {
-            const h1Content = trimmedLine.substring(2).trim();
-            if (!title) {
-                title = h1Content;
-                // Don't continue, might have properties immediately?
-                // Actually existing logic used continue, which is fine as properties are usually on next lines
-            } else {
-                // Check for View Header: Title-ViewName or Title(ViewName) or Title（ViewName）
-                if (h1Content.startsWith(title)) {
-                    const remainder = h1Content.substring(title.length).trim();
-                    if (remainder.startsWith("(") && remainder.endsWith(")")) {
-                        currentViewName = remainder.substring(1, remainder.length - 1).trim();
-                    } else if (remainder.startsWith("（") && remainder.endsWith("）")) {
-                        currentViewName = remainder.substring(1, remainder.length - 1).trim();
-                    }
 
-                    if (currentViewName) {
-                        if (!views[currentViewName]) {
-                            views[currentViewName] = { ...defaultConfig };
+        if (!inCodeBlock) {
+            const headingLevel = getHeadingLevel(trimmedLine);
+
+            if (headingLevel !== null) {
+                if (headingLevel === 1) {
+                    const h1Content = trimmedLine.substring(2).trim();
+                    if (!title) {
+                        title = h1Content;
+                    } else {
+                        if (h1Content.startsWith(title)) {
+                            const remainder = h1Content.substring(title.length).trim();
+                            if (remainder.startsWith("(") && remainder.endsWith(")")) {
+                                currentViewName = remainder.substring(1, remainder.length - 1).trim();
+                            } else if (remainder.startsWith("（") && remainder.endsWith("）")) {
+                                currentViewName = remainder.substring(1, remainder.length - 1).trim();
+                            }
+
+                            if (currentViewName) {
+                                if (!views[currentViewName]) {
+                                    views[currentViewName] = { ...defaultConfig };
+                                }
+                            }
                         }
                     }
+                    continue;
+                }
+
+                if (headingLevel >= 2) {
+                    if (currentRecord) {
+                        currentRecord.lineEnd = i - 1;
+                        flatRecords.push(currentRecord);
+                    }
+
+                    if (headingLevel === 2) {
+                        currentViewName = null;
+                    }
+
+                    const headingPrefix = "#".repeat(headingLevel);
+                    const recordTitle = trimmedLine.substring(headingPrefix.length).trim();
+                    currentRecord = {
+                        id: recordTitle,
+                        title: recordTitle,
+                        properties: {},
+                        content: "",
+                        lineStart: i,
+                        lineEnd: i,
+                        level: headingLevel - 1,
+                        depth: 1,
+                        parentId: null,
+                        children: []
+                    };
+                    continue;
                 }
             }
         }
 
-        // Check for H2 (Record)
-        if (!inCodeBlock && trimmedLine.startsWith("## ")) {
-            // Close previous record
-            if (currentRecord) {
-                currentRecord.lineEnd = i - 1;
-                records.push(currentRecord);
-            }
-
-            // Reset view context when records start?
-            // Usually views are defined before records.
-            // If we are in a view definition section, encountering a record ends that section.
-            currentViewName = null;
-
-            const recordTitle = trimmedLine.substring(3).trim();
-            currentRecord = {
-                id: recordTitle,
-                title: recordTitle,
-                properties: {},
-                content: "",
-                lineStart: i,
-                lineEnd: i
-            };
-            continue;
-        }
-
-        // Parse properties inside %% ... %%
         const trimmedForComment = line.trim();
 
         if (!inCodeBlock && inCommentBlock) {
@@ -102,7 +111,6 @@ export const parseFile = (content: string): DatabaseData => {
             continue;
         } else if (!inCodeBlock && trimmedForComment.startsWith("%%")) {
             if (trimmedForComment.endsWith("%%") && trimmedForComment.length >= 4) {
-                // Single line block
                 const blockContent = trimmedForComment.substring(2, trimmedForComment.length - 2);
                 processProperties(blockContent, currentRecord, currentViewName, views, config, allKeys, i);
             } else {
@@ -113,7 +121,7 @@ export const parseFile = (content: string): DatabaseData => {
             continue;
         }
 
-        if (currentRecord && !inCommentBlock && !line.startsWith("## ")) {
+        if (currentRecord && !inCommentBlock) {
             if (currentRecord.content) {
                 currentRecord.content += "\n" + line;
             } else {
@@ -124,8 +132,10 @@ export const parseFile = (content: string): DatabaseData => {
 
     if (currentRecord) {
         currentRecord.lineEnd = lines.length - 1;
-        records.push(currentRecord);
+        flatRecords.push(currentRecord);
     }
+
+    const records = buildHierarchy(flatRecords);
 
     return {
         title,
@@ -135,6 +145,51 @@ export const parseFile = (content: string): DatabaseData => {
         allKeys
     };
 };
+
+function buildHierarchy(flatRecords: DatabaseRecord[]): DatabaseRecord[] {
+    const rootRecords: DatabaseRecord[] = [];
+    const stack: DatabaseRecord[] = [];
+
+    for (const record of flatRecords) {
+        while (stack.length > 0 && stack[stack.length - 1].level >= record.level) {
+            stack.pop();
+        }
+
+        if (stack.length > 0) {
+            const parent = stack[stack.length - 1];
+            record.parentId = parent.id;
+            parent.children.push(record);
+        } else {
+            record.parentId = null;
+            rootRecords.push(record);
+        }
+
+        stack.push(record);
+    }
+
+    const assignDepth = (records: DatabaseRecord[], baseDepth: number) => {
+        for (const record of records) {
+            record.depth = baseDepth;
+            if (record.children.length > 0) {
+                assignDepth(record.children, baseDepth + 1);
+            }
+        }
+    };
+    assignDepth(rootRecords, 1);
+
+    return rootRecords;
+}
+
+export function flattenRecords(records: DatabaseRecord[]): DatabaseRecord[] {
+    const result: DatabaseRecord[] = [];
+    for (const record of records) {
+        result.push(record);
+        if (record.children.length > 0) {
+            result.push(...flattenRecords(record.children));
+        }
+    }
+    return result;
+}
 
 function processProperties(blockContent: string, currentRecord: DatabaseRecord | null, currentViewName: string | null, views: Record<string, DatabaseConfig>, config: DatabaseConfig, allKeys: Set<string>, lineIndex: number) {
     const properties = extractProperties(blockContent);

@@ -17,6 +17,8 @@ interface TableViewProps {
     onRenameRecord: (record: DatabaseRecord, newName: string) => void;
     onOpenRecord: (record: DatabaseRecord, records: DatabaseRecord[], index: number, event?: React.MouseEvent) => void;
     onAddRecord: () => void;
+    onAddChildRecord: (parentRecord: DatabaseRecord) => void;
+    onMoveRecord: (sourceRecord: DatabaseRecord, targetRecord: DatabaseRecord, position: "before" | "after" | "child") => void;
     onAddProperty: (name: string, type?: PropertyType) => void;
     onSaveToGlobal: (name: string, type?: PropertyType) => void;
     onRemoveGlobalValue: (key: string, value: string) => void;
@@ -26,15 +28,48 @@ interface TableViewProps {
     onSelectionModeChange?: (isSelectionMode: boolean, clearSelection: (() => void) | null) => void;
     onReorderRecord?: (fromIndex: number, toIndex: number) => void;
     portalContainer?: HTMLElement;
-    component?: any; // Component type from obsidian
+    component?: any;
     readonly?: boolean;
 }
 
-export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourcePath, globalProperties, onUpdateProperty, onUpdateContent, onRenameRecord, onOpenRecord, onAddRecord, onAddProperty, onSaveToGlobal, onRemoveGlobalValue, onRowContextMenu, onHeaderContextMenu, onUpdateConfig, onSelectionModeChange, onReorderRecord, portalContainer, component, readonly }) => {
+export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourcePath, globalProperties, onUpdateProperty, onUpdateContent, onRenameRecord, onOpenRecord, onAddRecord, onAddChildRecord, onMoveRecord, onAddProperty, onSaveToGlobal, onRemoveGlobalValue, onRowContextMenu, onHeaderContextMenu, onUpdateConfig, onSelectionModeChange, onReorderRecord, portalContainer, component, readonly }) => {
+    const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
     const selectionGestureRef = React.useRef<{ index: number; clientX: number; clientY: number } | null>(null);
     const getRecordSelectionKey = React.useCallback((record: DatabaseRecord) => {
         return `${record.lineStart}:${record.title}`;
     }, []);
+
+    const toggleCollapse = React.useCallback((recordId: string) => {
+        setCollapsedIds(prev => {
+            const next = new Set(prev);
+            if (next.has(recordId)) {
+                next.delete(recordId);
+            } else {
+                next.add(recordId);
+            }
+            return next;
+        });
+    }, []);
+
+    const hasChildrenMap = useMemo(() => {
+        const map = new Map<string, boolean>();
+        for (const record of data.records) {
+            if (record.children && record.children.length > 0) {
+                map.set(record.id, true);
+            }
+        }
+        return map;
+    }, [data.records]);
+
+    const parentIdMap = useMemo(() => {
+        const map = new Map<string, string>();
+        for (const record of data.records) {
+            if (record.parentId) {
+                map.set(record.id, record.parentId);
+            }
+        }
+        return map;
+    }, [data.records]);
 
     const propertyKeys = useMemo(() => {
         const all = Array.from(data.allKeys);
@@ -128,6 +163,20 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
         return records;
     }, [data.records, data.config.filters, data.config.sort]);
 
+    const visibleRecords = useMemo(() => {
+        const isAncestorCollapsed = (record: DatabaseRecord): boolean => {
+            let currentId: string | null = record.parentId;
+            while (currentId) {
+                if (collapsedIds.has(currentId)) return true;
+                const parentRecord = data.records.find(r => r.id === currentId);
+                currentId = parentRecord?.parentId || null;
+            }
+            return false;
+        };
+
+        return processedRecords.filter(record => !isAncestorCollapsed(record));
+    }, [processedRecords, collapsedIds, data.records]);
+
     // Pagination state
     const [pageSize, setPageSize] = useState(data.config.pageSize || 25);
     const [currentPage, setCurrentPage] = useState(1);
@@ -153,7 +202,7 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
 
     // Adjust pagination when data length changes (Add/Remove)
     React.useEffect(() => {
-        const newTotal = Math.ceil(processedRecords.length / pageSize) || 1;
+        const newTotal = Math.ceil(visibleRecords.length / pageSize) || 1;
 
         if (isAddingRow.current) {
             setCurrentPage(newTotal);
@@ -161,15 +210,15 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
         } else if (currentPage > newTotal) {
             setCurrentPage(newTotal);
         }
-    }, [processedRecords.length, pageSize, currentPage]);
+    }, [visibleRecords.length, pageSize, currentPage]);
 
     const paginatedRecords = useMemo(() => {
         const start = (currentPage - 1) * pageSize;
         const end = start + pageSize;
-        return processedRecords.slice(start, end);
-    }, [processedRecords, currentPage, pageSize]);
+        return visibleRecords.slice(start, end);
+    }, [visibleRecords, currentPage, pageSize]);
 
-    const totalPages = Math.ceil(processedRecords.length / pageSize);
+    const totalPages = Math.ceil(visibleRecords.length / pageSize);
 
     const columns = ["Name", ...propertyKeys, ...(data.config.showContent !== false ? ["Content"] : [])];
     const displayTitle = fileName || data.title;
@@ -226,7 +275,7 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
         }
     };
 
-    const [dropTarget, setDropTarget] = useState<{ index: number, position: 'top' | 'bottom' } | null>(null);
+    const [dropTarget, setDropTarget] = useState<{ index: number, position: 'top' | 'bottom' | 'middle' } | null>(null);
     const [hoveredRowIndex, setHoveredRowIndex] = useState<number | null>(null);
     const isManualSort = (!data.config.sort || data.config.sort.length === 0) && (!data.config.filters || data.config.filters.length === 0);
     const isSelectionMode = isSelectionDragging || selectedRowKeys.size > 0;
@@ -388,13 +437,21 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
 
     const handleRowDragOver = (e: React.DragEvent, index: number) => {
         e.preventDefault();
-        e.stopPropagation(); // Ensure we handle the dragover
+        e.stopPropagation();
         e.dataTransfer.dropEffect = "move";
 
-        // Calculate position relative to row
         const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-        const midY = rect.top + rect.height / 2;
-        const position = e.clientY < midY ? 'top' : 'bottom';
+        const relY = e.clientY - rect.top;
+        const height = rect.height;
+
+        let position: 'top' | 'bottom' | 'middle';
+        if (relY < height * 0.25) {
+            position = 'top';
+        } else if (relY > height * 0.75) {
+            position = 'bottom';
+        } else {
+            position = 'middle';
+        }
 
         setDropTarget({ index, position });
     };
@@ -408,7 +465,7 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
 
     const handleRowDrop = (e: React.DragEvent, targetIndex: number) => {
         e.preventDefault();
-        e.stopPropagation(); // Stop bubbling to prevent other handlers
+        e.stopPropagation();
         handleRowDragEnd();
 
         const data = e.dataTransfer.getData("text/plain");
@@ -416,26 +473,29 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
 
         const sourceIndex = parseInt(data.replace("row-", ""));
         if (isNaN(sourceIndex)) return;
+        if (sourceIndex === targetIndex) return;
 
-        // Recalculate position to avoid stale state
         const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-        const midY = rect.top + rect.height / 2;
-        const position = e.clientY < midY ? 'top' : 'bottom';
+        const relY = e.clientY - rect.top;
+        const height = rect.height;
 
-        let finalToIndex = targetIndex;
-        if (position === 'bottom') {
-            finalToIndex = targetIndex + 1;
+        let position: 'top' | 'bottom' | 'middle';
+        if (relY < height * 0.25) {
+            position = 'top';
+        } else if (relY > height * 0.75) {
+            position = 'bottom';
+        } else {
+            position = 'middle';
         }
 
-        // Correction for removing item from array before insertion if source < target
-        if (sourceIndex < finalToIndex) {
-            finalToIndex--;
-        }
+        const sourceRecord = paginatedRecords[sourceIndex];
+        const targetRecord = paginatedRecords[targetIndex];
+        if (!sourceRecord || !targetRecord) return;
 
-        if (sourceIndex === finalToIndex) return; // No move
-
-        if (onReorderRecord) {
-            onReorderRecord(sourceIndex, finalToIndex);
+        if (position === 'middle') {
+            onMoveRecord(sourceRecord, targetRecord, "child");
+        } else {
+            onMoveRecord(sourceRecord, targetRecord, position === 'top' ? "before" : "after");
         }
     };
 
@@ -713,12 +773,14 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                             key={rowKey}
                             style={{
                                 borderBottom: "1px solid var(--background-modifier-border)",
-                                backgroundColor: isSelected ? "color-mix(in srgb, var(--interactive-accent) 18%, var(--background-primary))" : "transparent",
+                                backgroundColor: isSelected ? "color-mix(in srgb, var(--interactive-accent) 18%, var(--background-primary))" : (dropTarget?.index === index && dropTarget.position === 'middle') ? "color-mix(in srgb, var(--interactive-accent) 12%, var(--background-primary))" : "transparent",
                                 boxShadow: (dropTarget?.index === index && dropTarget.position === 'top')
                                     ? "inset 0 2px 0 0 var(--interactive-accent)"
                                     : (dropTarget?.index === index && dropTarget.position === 'bottom')
                                         ? "inset 0 -2px 0 0 var(--interactive-accent)"
-                                        : "none"
+                                        : (dropTarget?.index === index && dropTarget.position === 'middle')
+                                            ? "inset 0 0 0 2px var(--interactive-accent)"
+                                            : "none"
                             }}
                             className={`markdown-db-row${isSelected ? " markdown-db-row-selected" : ""}${isSelectionMode ? " markdown-db-selection-mode" : ""}`}
                             onContextMenu={(e) => {
@@ -803,11 +865,11 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                                                         lineHeight: 0,
                                                         touchAction: "none"
                                                     }}
-                                                    title="Drag to reorder or drag across rows to multi-select"
+                                                    title="Drag to reorder. Drop on center of a row to make it a child."
                                                 >
                                                     <span
                                                         style={{ display: "inline-flex", alignItems: "center", color: "var(--text-muted)" }}
-                                                        title="Drag to reorder or drag across rows to multi-select"
+                                                        title="Drag to reorder. Drop on center of a row to make it a child."
                                                         dangerouslySetInnerHTML={{ __html: dragHandleIcon }}
                                                     />
                                                 </div>
@@ -826,7 +888,36 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                                 onMouseEnter={() => setHoveredRowIndex(index)}
                                 onMouseLeave={() => setHoveredRowIndex(null)}
                             >
-                                <div style={{ position: "relative", width: "100%", height: "100%", display: "flex", alignItems: "center" }}>
+                                <div
+                                    draggable={isManualSort && !readonly && !isSelectionMode}
+                                    onDragStart={(isManualSort && !readonly && !isSelectionMode) ? (e) => handleRowDragStart(e, index) : undefined}
+                                    onDragEnd={handleRowDragEnd}
+                                    style={{ position: "relative", width: "100%", height: "100%", display: "flex", alignItems: "center", paddingLeft: `${(record.level - 1) * 20}px`, cursor: (isManualSort && !readonly && !isSelectionMode) ? "grab" : "default" }}
+                                >
+                                    {hasChildrenMap.has(record.id) && (
+                                        <div
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                toggleCollapse(record.id);
+                                            }}
+                                            style={{
+                                                cursor: "pointer",
+                                                display: "inline-flex",
+                                                alignItems: "center",
+                                                justifyContent: "center",
+                                                width: "18px",
+                                                height: "18px",
+                                                marginRight: "2px",
+                                                flexShrink: 0,
+                                                transition: "transform 0.15s ease",
+                                                transform: collapsedIds.has(record.id) ? "rotate(-90deg)" : "rotate(0deg)"
+                                            }}
+                                            dangerouslySetInnerHTML={{ __html: getIcon("chevron-down")?.outerHTML || "" }}
+                                        />
+                                    )}
+                                    {!hasChildrenMap.has(record.id) && record.level > 1 && (
+                                        <div style={{ width: "20px", flexShrink: 0 }} />
+                                    )}
                                     <EditableCell
                                         app={app}
                                         component={component || null}

@@ -2,9 +2,54 @@ import { App, TFile, Notice } from "obsidian";
 import { TypedValue, formatTypedValue, parseTypedValue, DatabaseRecord } from "./schema";
 import { extractProperties } from "./utils";
 
-// Helper to escape regex special characters
 function escapeRegExp(string: string) {
     return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function getRecordHeading(record: DatabaseRecord): string {
+    const prefix = "#".repeat(record.level + 1);
+    return `${prefix} ${record.id}`;
+}
+
+function isHeadingLine(line: string, minLevel: number = 2): boolean {
+    const match = line.match(/^(#{2,6})\s/);
+    if (match) {
+        return match[1].length >= minLevel;
+    }
+    return false;
+}
+
+function isRecordEndLine(line: string, currentLevel: number): boolean {
+    const match = line.match(/^(#{1,6})\s/);
+    if (match) {
+        const level = match[1].length;
+        return level <= currentLevel + 1;
+    }
+    return false;
+}
+
+function findRecordStart(lines: string[], record: DatabaseRecord): number {
+    const heading = getRecordHeading(record);
+    for (let i = 0; i < lines.length; i++) {
+        if (lines[i].trim() === heading) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+function findRecordEnd(lines: string[], startLine: number, record: DatabaseRecord): number {
+    const currentLevel = record.level + 1;
+    for (let i = startLine + 1; i < lines.length; i++) {
+        const match = lines[i].match(/^(#{1,6})\s/);
+        if (match) {
+            const level = match[1].length;
+            if (level <= currentLevel) {
+                return i;
+            }
+        }
+    }
+    return lines.length;
 }
 
 function findCommentBlock(lines: string[], startIndex: number, endIndex: number) {
@@ -77,25 +122,10 @@ export const updateProperty = async (
     await app.vault.process(file, (content) => {
         const lines = content.split(/\r?\n/);
 
-        // Re-find record
-        let startLine = -1;
-        for (let i = 0; i < lines.length; i++) {
-            if (lines[i].trim() === "## " + record.id) { // match by ID (title)
-                startLine = i;
-                break;
-            }
-        }
-
+        let startLine = findRecordStart(lines, record);
         if (startLine === -1) return content;
 
-        // Find end of record (next ## or end of file)
-        let endLine = lines.length;
-        for (let i = startLine + 1; i < lines.length; i++) {
-            if (lines[i].startsWith("## ")) {
-                endLine = i;
-                break;
-            }
-        }
+        let endLine = findRecordEnd(lines, startLine, record);
 
         // Look for %% block in the record
         let commentBlockStartIndex = -1;
@@ -179,15 +209,12 @@ export const addPropertyToAllRecords = async (app: App, file: TFile, key: string
         while (i < lines.length) {
             const line = lines[i];
 
-            if (line.startsWith("## ")) {
+            if (isHeadingLine(line)) {
                 newLines.push(line);
 
-                // Check if next line is already a comment block
                 let nextLineIndex = i + 1;
                 let foundBlock = false;
 
-                // Peek next lines (skipping empty lines?)
-                // Usually it's immediately after.
                 const blockMatch = findCommentBlock(lines, nextLineIndex, lines.length);
                 if (blockMatch && (blockMatch.startIndex === nextLineIndex || (blockMatch.startIndex === nextLineIndex + 1 && lines[nextLineIndex].trim() === ""))) {
                     // Update existing block
@@ -320,25 +347,10 @@ export const updateContent = async (app: App, file: TFile, record: DatabaseRecor
     await app.vault.process(file, (data) => {
         const lines = data.split(/\r?\n/);
 
-        // Re-find record
-        let startLine = -1;
-        for (let i = 0; i < lines.length; i++) {
-            if (lines[i].trim() === "## " + record.id) {
-                startLine = i;
-                break;
-            }
-        }
-
+        let startLine = findRecordStart(lines, record);
         if (startLine === -1) return data;
 
-        // Find end of record
-        let endLine = lines.length;
-        for (let i = startLine + 1; i < lines.length; i++) {
-            if (lines[i].startsWith("## ")) {
-                endLine = i;
-                break;
-            }
-        }
+        let endLine = findRecordEnd(lines, startLine, record);
 
         // Identify existing property block (%% ... %%)
         let propertyBlockLine = "";
@@ -379,45 +391,23 @@ export const updateContent = async (app: App, file: TFile, record: DatabaseRecor
     });
 };
 
-export const renameRecord = async (app: App, file: TFile, oldName: string, newName: string) => {
+export const renameRecord = async (app: App, file: TFile, oldName: string, newName: string, level: number = 1) => {
     await app.vault.process(file, (data) => {
-        return data.replace("## " + oldName, "## " + newName);
+        const prefix = "#".repeat(level + 1);
+        return data.replace(prefix + " " + oldName, prefix + " " + newName);
     });
 };
 
 export const deleteRecord = async (app: App, file: TFile, record: DatabaseRecord) => {
-    // new Notice(`Deleting record: ${record.id}`);
     await app.vault.process(file, (data) => {
         const lines = data.split(/\r?\n/);
 
-        let startLine = -1;
+        let startLine = findRecordStart(lines, record);
 
-        // Strategy 1: Try exact line location from record (fast path & handles duplicates)
-        // Check if the line at record.lineStart matches the record pattern
         if (record.lineStart >= 0 && record.lineStart < lines.length) {
-            const line = lines[record.lineStart].trim();
-            // Compare trimmed versions to handle whitespace inconsistencies
-            // Especially for empty titles: "## " vs "##"
-            const target = `## ${record.id}`.trim();
-            const targetTitle = `## ${record.title}`.trim();
-
-            // Allow matching "##" if record.id is empty
-            if (line === target || line === targetTitle) {
+            const heading = getRecordHeading(record);
+            if (lines[record.lineStart].trim() === heading) {
                 startLine = record.lineStart;
-            }
-        }
-
-        // Strategy 2: Fallback to linear search
-        if (startLine === -1) {
-            for (let i = 0; i < lines.length; i++) {
-                const line = lines[i].trim();
-                const target = `## ${record.id}`.trim();
-                const targetTitle = `## ${record.title}`.trim();
-
-                if (line === target || line === targetTitle) {
-                    startLine = i;
-                    break;
-                }
             }
         }
 
@@ -426,13 +416,7 @@ export const deleteRecord = async (app: App, file: TFile, record: DatabaseRecord
             return data;
         }
 
-        let endLine = lines.length;
-        for (let i = startLine + 1; i < lines.length; i++) {
-            if (lines[i].startsWith("## ")) {
-                endLine = i;
-                break;
-            }
-        }
+        let endLine = findRecordEnd(lines, startLine, record);
 
         lines.splice(startLine, endLine - startLine);
         return lines.join("\n");
@@ -445,8 +429,9 @@ export const addRecord = async (app: App, file: TFile, title: string, initialPro
         const existingTitles = new Set<string>();
         const lines = data.split(/\r?\n/);
         for (const line of lines) {
-            if (line.startsWith("## ")) {
-                existingTitles.add(line.substring(3).trim());
+            const headingMatch = line.match(/^#{2,}\s+(.+)$/);
+            if (headingMatch) {
+                existingTitles.add(headingMatch[1].trim());
             }
         }
 
@@ -512,6 +497,89 @@ export const addRecord = async (app: App, file: TFile, title: string, initialPro
 
         const newRecord = `${prefix}## ${newTitle}\n${propsBlock}\n`;
         return data + newRecord;
+    });
+};
+
+export const addChildRecord = async (
+    app: App,
+    file: TFile,
+    parentRecord: DatabaseRecord,
+    childLevel: number,
+    title: string,
+    initialProperties?: Record<string, any>
+) => {
+    await app.vault.process(file, (data) => {
+        const lines = data.split(/\r?\n/);
+
+        const existingTitles = new Set<string>();
+        for (const line of lines) {
+            const match = line.match(/^#{2,}\s+(.+)$/);
+            if (match) {
+                existingTitles.add(match[1].trim());
+            }
+        }
+
+        let newTitle = title;
+        let counter = 1;
+        while (existingTitles.has(newTitle)) {
+            newTitle = `${title} ${counter}`;
+            counter++;
+        }
+
+        let propsBlock = "";
+        if (initialProperties && Object.keys(initialProperties).length > 0) {
+            const propsList: string[] = [];
+            for (const [key, value] of Object.entries(initialProperties)) {
+                let type = "text";
+                let valStr = "";
+
+                if (value !== null && value !== undefined && value !== "") {
+                    valStr = String(value);
+                    if (typeof value === "boolean") {
+                        type = "boolean";
+                    } else if (typeof value === "number") {
+                        type = "number";
+                    } else if (Array.isArray(value)) {
+                        type = "multi";
+                        valStr = value.join(",");
+                    } else if (typeof value === "string" && (valStr.startsWith("http") || valStr.startsWith("www."))) {
+                        type = "link";
+                    }
+                }
+
+                if (value instanceof Date) {
+                    type = "date";
+                    valStr = value.toISOString().split('T')[0];
+                }
+
+                propsList.push(`[${key}::${type}(${valStr})]`);
+            }
+            propsBlock = `%%\n${propsList.join("\n")}\n%%`;
+        }
+
+        const headingPrefix = "#".repeat(childLevel + 1);
+        const newRecord = `\n${headingPrefix} ${newTitle}\n${propsBlock}\n`;
+
+        let insertLine = parentRecord.lineEnd;
+
+        for (let i = parentRecord.lineStart + 1; i < lines.length; i++) {
+            const trimmed = lines[i].trimStart();
+            const headingMatch = trimmed.match(/^(#{2,})\s/);
+            if (headingMatch) {
+                const hLevel = headingMatch[1].length;
+                if (hLevel <= parentRecord.level + 1 && i > parentRecord.lineStart) {
+                    insertLine = i;
+                    break;
+                }
+            }
+            if (i >= lines.length - 1) {
+                insertLine = lines.length;
+            }
+        }
+
+        lines.splice(insertLine, 0, newRecord);
+
+        return lines.join("\n");
     });
 };
 export const updateTitle = async (app: App, file: TFile, newTitle: string) => {
@@ -1056,14 +1124,12 @@ export const reorderViews = async (app: App, file: TFile, viewNames: string[]) =
 };
 
 export const reorderRecords = async (app: App, file: TFile, fromIndex: number, toIndex: number) => {
-    // new Notice(`Moving record ${fromIndex} -> ${toIndex}`);
     await app.vault.process(file, (data) => {
         const lines = data.split(/\r?\n/);
         const recordStarts: number[] = [];
 
-        // Identify where each record starts (lines starting with "## ")
         for (let i = 0; i < lines.length; i++) {
-            if (lines[i].startsWith("## ")) {
+            if (isHeadingLine(lines[i])) {
                 recordStarts.push(i);
             }
         }
@@ -1104,27 +1170,87 @@ export const reorderRecords = async (app: App, file: TFile, fromIndex: number, t
     });
 };
 
+export const moveRecord = async (
+    app: App,
+    file: TFile,
+    sourceRecord: DatabaseRecord,
+    targetRecord: DatabaseRecord,
+    position: "before" | "after" | "child"
+) => {
+    await app.vault.process(file, (data) => {
+        const lines = data.split(/\r?\n/);
+
+        const srcStart = findRecordStart(lines, sourceRecord);
+        if (srcStart === -1) return data;
+        const srcEnd = findRecordEnd(lines, srcStart, sourceRecord);
+
+        const tgtStartOrig = findRecordStart(lines, targetRecord);
+        if (tgtStartOrig === -1) return data;
+        const tgtEndOrig = findRecordEnd(lines, tgtStartOrig, targetRecord);
+
+        if (tgtStartOrig >= srcStart && tgtStartOrig < srcEnd) {
+            return data;
+        }
+
+        const sourceBlock = lines.slice(srcStart, srcEnd);
+        lines.splice(srcStart, srcEnd - srcStart);
+
+        const removedCount = srcEnd - srcStart;
+
+        let newLevel: number;
+        if (position === "child") {
+            newLevel = targetRecord.depth + 1;
+        } else {
+            newLevel = targetRecord.depth;
+        }
+
+        const sourceOldLevel = sourceRecord.level;
+        const delta = newLevel - sourceOldLevel;
+
+        for (let i = 0; i < sourceBlock.length; i++) {
+            const headingMatch = sourceBlock[i].match(/^(#{2,6})\s(.+)$/);
+            if (headingMatch) {
+                const currentLevel = headingMatch[1].length;
+                const adjustedLevel = Math.min(6, Math.max(2, currentLevel + delta));
+                const adjustedPrefix = "#".repeat(adjustedLevel);
+                sourceBlock[i] = adjustedPrefix + " " + headingMatch[2];
+            }
+        }
+
+        const isTargetAfterSource = tgtStartOrig > srcStart;
+        let adjustedTgtStart: number;
+        let adjustedTgtEnd: number;
+        if (isTargetAfterSource) {
+            adjustedTgtStart = tgtStartOrig - removedCount;
+            adjustedTgtEnd = tgtEndOrig - removedCount;
+        } else {
+            adjustedTgtStart = tgtStartOrig;
+            adjustedTgtEnd = tgtEndOrig;
+        }
+
+        let insertAt: number;
+        if (position === "before") {
+            insertAt = adjustedTgtStart;
+        } else if (position === "after") {
+            insertAt = adjustedTgtEnd;
+        } else {
+            insertAt = adjustedTgtEnd;
+        }
+
+        lines.splice(insertAt, 0, ...sourceBlock);
+
+        return lines.join("\n");
+    });
+};
+
 export const updateRecordRaw = async (app: App, file: TFile, record: DatabaseRecord, newRecordBlock: string) => {
     await app.vault.process(file, (data) => {
         const lines = data.split(/\r?\n/);
 
-        let startLine = -1;
-        for (let i = 0; i < lines.length; i++) {
-            if (lines[i].trim() === "## " + record.id) {
-                startLine = i;
-                break;
-            }
-        }
-
+        let startLine = findRecordStart(lines, record);
         if (startLine === -1) return data;
 
-        let endLine = lines.length;
-        for (let i = startLine + 1; i < lines.length; i++) {
-            if (lines[i].startsWith("## ")) {
-                endLine = i;
-                break;
-            }
-        }
+        let endLine = findRecordEnd(lines, startLine, record);
 
         // Replace lines
         lines.splice(startLine, endLine - startLine, newRecordBlock);

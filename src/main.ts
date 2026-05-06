@@ -4,7 +4,7 @@ import { createRoot, Root } from "react-dom/client";
 import { MarkdownDBApp, MarkdownDBView, VIEW_TYPE_MARKDOWN_DB } from "./views/view";
 import { EmbedDBView } from "./views/EmbedDBView";
 import { MarkdownDBSettings, DEFAULT_SETTINGS, MarkdownDBSettingTab, PropertyConfig } from "./settings";
-import { parseFile } from "./database/parser";
+import { parseFile, flattenRecords } from "./database/parser";
 import { extractProperties } from "./database/utils";
 import { addCssClassToFiles, HIDDEN_CSS_CLASS } from "./database/writer";
 
@@ -335,7 +335,7 @@ export default class MarkdownDBPlugin extends Plugin {
             const data = parseFile(content);
             let updated = false;
 
-            data.records.forEach(record => {
+            flattenRecords(data.records).forEach(record => {
                 Object.entries(record.properties).forEach(([key, values]) => {
                     const propConfig = this.settings.properties.find(p => p.name === key);
 
@@ -378,7 +378,7 @@ export default class MarkdownDBPlugin extends Plugin {
                 const content = await this.app.vault.read(file);
                 const data = parseFile(content);
 
-                data.records.forEach(record => {
+                flattenRecords(data.records).forEach(record => {
                     Object.entries(record.properties).forEach(([key, values]) => {
                         const propConfig = this.settings.properties.find(p => p.name === key);
 

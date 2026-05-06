@@ -1,7 +1,7 @@
 import { App, Modal, TFile, Component, MarkdownRenderer, setIcon } from "obsidian";
 import { DatabaseRecord, TypedValue, formatTypedValue, PropertyType } from "../database/schema";
 import { updateRecordRaw } from "../database/writer";
-import { parseFile } from "../database/parser";
+import { parseFile, flattenRecords } from "../database/parser";
 import type { PropertyConfig } from "../settings";
 
 interface EditableProperty {
@@ -209,15 +209,16 @@ export class RecordModal extends Modal {
 
         const fileContent = await this.app.vault.read(this.file);
         const parsed = parseFile(fileContent);
+        const allRecords = flattenRecords(parsed.records);
         const targetItem = this.navigationItems[nextIndex];
-        const nextRecord = this.findMatchingRecord(parsed.records, targetItem, nextIndex);
+        const nextRecord = this.findMatchingRecord(allRecords, targetItem, nextIndex);
 
         if (!nextRecord) {
             return;
         }
 
         this.navigationItems = this.navigationItems.map((item, index) => {
-            const refreshed = this.findMatchingRecord(parsed.records, item, index);
+            const refreshed = this.findMatchingRecord(allRecords, item, index);
             return refreshed ? this.createNavigationItem(refreshed) : item;
         });
 
@@ -244,7 +245,8 @@ export class RecordModal extends Modal {
     }
 
     private buildRecordBlock(): string {
-        const lines: string[] = [`## ${this.titleValue.trim() || "Untitled"}`];
+        const headingPrefix = "#".repeat(this.record.level + 1);
+        const lines: string[] = [`${headingPrefix} ${this.titleValue.trim() || "Untitled"}`];
 
         const propertyLines = this.propertiesValue
             .map((property) => {
@@ -288,7 +290,7 @@ export class RecordModal extends Modal {
             map[key].push(value);
         };
 
-        dbData.records.forEach((record) => {
+        flattenRecords(dbData.records).forEach((record) => {
             Object.entries(record.properties).forEach(([key, values]) => {
                 values.forEach((typedValue) => {
                     if (typedValue.type === "multi") {

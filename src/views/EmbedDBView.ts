@@ -8,7 +8,7 @@ import {
     updateProperty, renameRecord, addRecord, updateConfig, deleteRecord, 
     updateContent, addPropertyToAllRecords, deletePropertyFromAllRecords, 
     updateTitle, reorderRecords, renamePropertyInAllRecords,
-    deleteView, renameView, reorderViews
+    deleteView, renameView, reorderViews, addChildRecord, moveRecord
 } from "../database/writer";
 import { RecordModal } from "../modals/RecordModal";
 import { RenameModal } from "../modals/RenameModal";
@@ -330,13 +330,25 @@ export class EmbedDBView implements IMarkdownDBView {
 
     handleRenameRecord = async (record: DatabaseRecord, newName: string) => {
         if (this.file) {
-            await renameRecord(this.app, this.file, record.title, newName);
+            await renameRecord(this.app, this.file, record.title, newName, record.level);
         }
     }
 
     handleAddRecord = async () => {
         if (this.file) {
             await addRecord(this.app, this.file, "Untitled");
+        }
+    }
+
+    handleAddChildRecord = async (parentRecord: DatabaseRecord) => {
+        if (this.file) {
+            await addChildRecord(this.app, this.file, parentRecord, parentRecord.level + 1, "Untitled");
+        }
+    }
+
+    handleMoveRecord = async (sourceRecord: DatabaseRecord, targetRecord: DatabaseRecord, position: "before" | "after" | "child") => {
+        if (this.file) {
+            await moveRecord(this.app, this.file, sourceRecord, targetRecord, position);
         }
     }
 
@@ -435,6 +447,15 @@ export class EmbedDBView implements IMarkdownDBView {
                     });
             });
         }
+
+        menu.addItem((item) => {
+            item
+                .setTitle("Add child record")
+                .setIcon("list-tree")
+                .onClick(async () => {
+                    await this.handleAddChildRecord(record);
+                });
+        });
 
         menu.addItem((item) => {
             item

@@ -4,13 +4,15 @@ import { useState, useMemo } from "react";
 import { createRoot, Root } from "react-dom/client";
 import { TableView } from "../components/TableView";
 import { Toolbar } from "../components/Toolbar";
-import { parseFile } from "../database/parser";
+import { parseFile, flattenRecords } from "../database/parser";
 import { DatabaseRecord, DatabaseConfig, PropertyType, FilterRule, SortRule } from "../database/schema";
 import {
     updateProperty, renameRecord, addRecord, updateConfig, deleteRecord, updateContent, addPropertyToAllRecords, deletePropertyFromAllRecords, updateTitle, reorderRecords, renamePropertyInAllRecords,
     deleteView,
     renameView,
-    reorderViews
+    reorderViews,
+    addChildRecord,
+    moveRecord
 } from "../database/writer";
 import { RecordModal } from "../modals/RecordModal";
 import { RenameModal } from "../modals/RenameModal";
@@ -43,6 +45,8 @@ export interface IMarkdownDBView {
     handleAddTemplate: () => Promise<void>;
     handleRemoveTemplate: (path: string) => Promise<void>;
     handleAddRecord: (templatePath?: string) => Promise<void>;
+    handleAddChildRecord: (parentRecord: DatabaseRecord) => Promise<void>;
+    handleMoveRecord: (sourceRecord: DatabaseRecord, targetRecord: DatabaseRecord, position: "before" | "after" | "child") => Promise<void>;
 }
 
 export const MarkdownDBApp = (props: {
@@ -113,15 +117,17 @@ export const MarkdownDBApp = (props: {
         return dbData.config;
     }, [dbData, currentViewName]);
 
+    const flatRecords = useMemo(() => flattenRecords(dbData.records), [dbData.records]);
+
     const filteredRecords = useMemo(() => {
-        if (!searchTerm) return dbData.records;
+        if (!searchTerm) return flatRecords;
         const lowerTerm = searchTerm.toLowerCase();
-        return dbData.records.filter(r =>
+        return flatRecords.filter(r =>
             r.title.toLowerCase().includes(lowerTerm) ||
             Object.values(r.properties).some(vals => vals.some(v => String(v).toLowerCase().includes(lowerTerm))) ||
             (r.content && r.content.toLowerCase().includes(lowerTerm))
         );
-    }, [dbData.records, searchTerm]);
+    }, [flatRecords, searchTerm]);
 
     const handleUpdateProperty = (record: DatabaseRecord, key: string, value: string, explicitType?: string) => {
         if (props.file) props.view.handleUpdateProperty(record, key, value, explicitType);
@@ -141,6 +147,14 @@ export const MarkdownDBApp = (props: {
 
     const handleAddRecord = (templatePath?: string) => {
         if (props.file) props.view.handleAddRecord(templatePath);
+    };
+
+    const handleAddChildRecord = (parentRecord: DatabaseRecord) => {
+        if (props.file) props.view.handleAddChildRecord(parentRecord);
+    };
+
+    const handleMoveRecord = (sourceRecord: DatabaseRecord, targetRecord: DatabaseRecord, position: "before" | "after" | "child") => {
+        if (props.file) props.view.handleMoveRecord(sourceRecord, targetRecord, position);
     };
 
     const handleAddProperty = (name: string, type?: PropertyType) => {
@@ -277,6 +291,8 @@ export const MarkdownDBApp = (props: {
                 onRenameRecord={handleRenameRecord}
                 onOpenRecord={handleOpenRecord}
                 onAddRecord={handleAddRecord}
+                onAddChildRecord={handleAddChildRecord}
+                onMoveRecord={handleMoveRecord}
                 onAddProperty={handleAddProperty}
                 onSaveToGlobal={props.onSaveToGlobal}
                 onRemoveGlobalValue={props.onRemoveGlobalValue}
@@ -367,7 +383,7 @@ export class MarkdownDBView extends TextFileView implements IMarkdownDBView {
 
     handleRenameRecord = async (record: DatabaseRecord, newName: string) => {
         if (this.file) {
-            await renameRecord(this.app, this.file, record.title, newName);
+            await renameRecord(this.app, this.file, record.title, newName, record.level);
         }
     }
 
@@ -408,6 +424,18 @@ export class MarkdownDBView extends TextFileView implements IMarkdownDBView {
                 }
             }
             await addRecord(this.app, this.file, "Untitled", initialProperties);
+        }
+    }
+
+    handleAddChildRecord = async (parentRecord: DatabaseRecord) => {
+        if (this.file) {
+            await addChildRecord(this.app, this.file, parentRecord, parentRecord.level + 1, "Untitled");
+        }
+    }
+
+    handleMoveRecord = async (sourceRecord: DatabaseRecord, targetRecord: DatabaseRecord, position: "before" | "after" | "child") => {
+        if (this.file) {
+            await moveRecord(this.app, this.file, sourceRecord, targetRecord, position);
         }
     }
 
@@ -643,6 +671,15 @@ export class MarkdownDBView extends TextFileView implements IMarkdownDBView {
             menu.addSeparator();
         }
         
+        menu.addItem((item) => {
+            item
+                .setTitle("Add child record")
+                .setIcon("list-tree")
+                .onClick(async () => {
+                    await this.handleAddChildRecord(record);
+                });
+        });
+
         menu.addItem((item) => {
             item
                 .setTitle(selectedRecords.length > 1 ? `Delete ${selectedRecords.length} records` : "Delete")

@@ -60,13 +60,15 @@ export interface TypedValue {
 export interface DatabaseRecord {
     id: string;
     title: string;
-    // 属性现在映射到 TypedValue 数组，以支持同一属性的多个值（尽管通常是一个）
     properties: Record<string, TypedValue[]>;
     content: string;
     lineStart: number;
     lineEnd: number;
-    // 记录属性所在的行号（用于快速更新）
     propertyLineIndex?: number;
+    level: number;
+    depth: number;
+    parentId: string | null;
+    children: DatabaseRecord[];
 }
 
 export interface DatabaseData {
