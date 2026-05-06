@@ -15,6 +15,7 @@ Favor edits that preserve the plugin's parsing assumptions instead of inventing 
 - Treat a file as a database only if its frontmatter includes `markdown-db: true`.
 - Keep the first H1 as the database title: `# Database Name`.
 - Represent each record as an H2: `## Record Title`.
+- Records support hierarchical nesting using H3–H6 headings as child records. A child record's heading level must be exactly one deeper than its parent (e.g. `##` parent → `###` child → `####` grandchild). Do not skip levels.
 - Store record properties inside an Obsidian comment block immediately under the record:
   ```md
   %%
@@ -25,6 +26,7 @@ Favor edits that preserve the plugin's parsing assumptions instead of inventing 
 - Store database config or view config in the same property syntax, but outside records and under the relevant H1.
 - Keep view headers in the form `# Database Name(View Name)` and place them before records.
 - Avoid placing record-defining H2 headings inside fenced code blocks. The parser ignores content inside code fences.
+- If a record's freeform content (body text below the property block) needs to use Markdown formatting (headings, lists, bold, links, etc.), wrap it in a ` ```markdown ``` ` fenced code block. This prevents the parser from mistaking body headings for child record headings.
 
 ## File shape
 
@@ -60,6 +62,18 @@ markdown-db: true
 %%
 
 Freeform notes for the record.
+
+### Sub-task Alpha-1
+%%
+[status::select(todo)]
+[owner::text(Alice)]
+%%
+
+### Sub-task Alpha-2
+%%
+[status::select(done)]
+[owner::text(Bob)]
+%%
 
 ## Project Beta
 %%
@@ -159,7 +173,43 @@ The parser recognizes a view only when the H1 starts with the main title followe
 
 ### Reorder records
 
-Move whole H2 blocks, not individual lines. A record block runs from one `## ` heading to the next `## ` heading or EOF.
+Move whole heading blocks, not individual lines. A record block runs from its heading line to the next heading of equal or higher level, or EOF.
+
+### Add a child record
+
+Insert a heading one level deeper than the parent, inside the parent's block:
+
+```md
+## Parent Task
+%%
+[status::select(todo)]
+%%
+
+### Child Task
+%%
+[status::select(todo)]
+%%
+```
+
+The child heading must be exactly one level deeper than the parent. Do not skip levels (e.g. `##` → `####` is invalid).
+
+### Write formatted body content
+
+If a record's body text needs Markdown formatting, wrap it in a fenced code block to avoid the parser treating body headings as child records:
+
+```md
+## Project Alpha
+%%
+[status::select(todo)]
+%%
+
+```markdown
+## Architecture Overview
+The system uses a **microservices** pattern.
+- Service A handles auth
+- Service B handles data
+```
+```
 
 ## Do not do this
 
@@ -167,6 +217,8 @@ Move whole H2 blocks, not individual lines. A record block runs from one `## ` h
 - Do not place record properties outside `%% ... %%` and expect the plugin to parse them.
 - Do not use a different view header pattern such as `# View: Board`.
 - Do not rely on H2 headings inside code fences; they are ignored by the parser.
+- Do not skip heading levels when nesting records (e.g. `##` → `####`). Always increment by exactly one level.
+- Do not write raw Markdown headings in record body text without wrapping them in a fenced code block, or they will be parsed as child records.
 - Do not convert typed config values into record-style wrappers like `text(split)` for config unless the file already does that intentionally.
 
 ## Response style when using this skill

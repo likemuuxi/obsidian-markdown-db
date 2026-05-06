@@ -222,9 +222,6 @@
     height: 760px !important;
     max-height: 88vh !important;
     padding: 0 !important;
-}
-
-.markdown-db-record-modal .modal {
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -233,7 +230,7 @@
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
-.markdown-db-record-modal .modal-content {
+.modal-content.markdown-db-record-modal {
     padding: 0;
     margin: 0;
     display: flex;
@@ -505,8 +502,8 @@
 
 .markdown-db-record-preview {
     flex: 1;
-    min-height: 180px;
-    overflow: auto;
+    min-height: 0;
+    overflow-y: auto;
     border: 1px solid var(--background-modifier-border);
     border-radius: 6px;
     padding: 12px;
