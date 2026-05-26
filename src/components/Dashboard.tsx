@@ -306,9 +306,31 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
         }
     };
 
+    const getViewInheritedProperties = () => {
+        const props: Record<string, any> = {};
+        if (currentConfig?.filters && currentConfig.filters.length > 0) {
+            for (const filter of currentConfig.filters) {
+                if (!filter.value || filter.key === "Name" || filter.key === "Content") continue;
+                if (filter.operator === "is") {
+                    props[filter.key] = filter.value;
+                } else if (filter.operator === "contains") {
+                    const existing = props[filter.key];
+                    if (Array.isArray(existing)) {
+                        existing.push(filter.value);
+                    } else if (existing !== undefined) {
+                        props[filter.key] = [existing, filter.value];
+                    } else {
+                        props[filter.key] = filter.value;
+                    }
+                }
+            }
+        }
+        return props;
+    };
+
     const handleAddRecord = async (templatePath?: string) => {
         if (selectedFile) {
-            let initialProperties: Record<string, any> = {};
+            let initialProperties: Record<string, any> = getViewInheritedProperties();
 
             if (templatePath) {
                 const templateFile = app.vault.getAbstractFileByPath(templatePath);
@@ -361,14 +383,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
                 }
             }
 
-            await addRecord(app, selectedFile, "Untitled", initialProperties);
+            await addRecord(app, selectedFile, "Untitled", initialProperties, currentConfig?.columnTypes);
             await reloadCurrentFile();
         }
     };
 
     const handleAddChildRecord = async (parentRecord: DatabaseRecord) => {
         if (selectedFile) {
-            await addChildRecord(app, selectedFile, parentRecord, parentRecord.level + 1, "Untitled");
+            const inheritedProps = getViewInheritedProperties();
+            await addChildRecord(app, selectedFile, parentRecord, parentRecord.level + 1, "Untitled", Object.keys(inheritedProps).length > 0 ? inheritedProps : undefined, currentConfig?.columnTypes);
             await reloadCurrentFile();
         }
     };

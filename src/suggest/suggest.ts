@@ -158,7 +158,7 @@ export abstract class TextInputSuggest<T> implements ISuggestOwner<T> {
             }
             state.styles.popper.minWidth = minWidth;
             state.styles.popper.width = 'max-content';
-            state.styles.popper.maxWidth = '80vw';
+            state.styles.popper.maxWidth = '300px';
             state.styles.popper.overflow = 'hidden';
             instance.update();
           },

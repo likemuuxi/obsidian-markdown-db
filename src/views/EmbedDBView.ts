@@ -334,15 +334,15 @@ export class EmbedDBView implements IMarkdownDBView {
         }
     }
 
-    handleAddRecord = async () => {
+    handleAddRecord = async (templatePath?: string, initialProperties?: Record<string, any>, columnTypes?: Record<string, string>) => {
         if (this.file) {
-            await addRecord(this.app, this.file, "Untitled");
+            await addRecord(this.app, this.file, "Untitled", initialProperties, columnTypes);
         }
     }
 
-    handleAddChildRecord = async (parentRecord: DatabaseRecord) => {
+    handleAddChildRecord = async (parentRecord: DatabaseRecord, initialProperties?: Record<string, any>, columnTypes?: Record<string, string>) => {
         if (this.file) {
-            await addChildRecord(this.app, this.file, parentRecord, parentRecord.level + 1, "Untitled");
+            await addChildRecord(this.app, this.file, parentRecord, parentRecord.level + 1, "Untitled", initialProperties, columnTypes);
         }
     }
 

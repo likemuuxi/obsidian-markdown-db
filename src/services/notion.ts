@@ -64,7 +64,6 @@ export class NotionSyncService {
     async syncAll() {
         if (this.isSyncing) return;
         this.setSyncStatus(true);
-        new Notice("Starting Notion Sync...");
 
         const configs = this.settings.notionSyncConfigs;
         if (configs.length === 0) {
@@ -77,10 +76,11 @@ export class NotionSyncService {
                 // Check if auto-sync is enabled for this config
                 // strict check: only allow if pull (though settings UI enforces this, good to be safe)
                 if (config.autoSyncOnStartup && config.syncDirection !== 'push') {
+                    new Notice(`Starting Notion Sync for ${config.name}...`);
                     await this.syncDatabase(config);
                 }
             }
-            new Notice("Notion Sync Completed.");
+            // new Notice("Notion Sync Completed.");
         } catch (e) {
             console.error("Sync All Failed", e);
             new Notice("Notion Sync Failed.");

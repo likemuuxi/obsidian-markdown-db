@@ -44,8 +44,8 @@ export interface IMarkdownDBView {
     handleSyncItem: (record: DatabaseRecord) => Promise<void>;
     handleAddTemplate: () => Promise<void>;
     handleRemoveTemplate: (path: string) => Promise<void>;
-    handleAddRecord: (templatePath?: string) => Promise<void>;
-    handleAddChildRecord: (parentRecord: DatabaseRecord) => Promise<void>;
+    handleAddRecord: (templatePath?: string, initialProperties?: Record<string, any>, columnTypes?: Record<string, string>) => Promise<void>;
+    handleAddChildRecord: (parentRecord: DatabaseRecord, initialProperties?: Record<string, any>, columnTypes?: Record<string, string>) => Promise<void>;
     handleMoveRecord: (sourceRecord: DatabaseRecord, targetRecord: DatabaseRecord, position: "before" | "after" | "child") => Promise<void>;
 }
 
@@ -145,12 +145,34 @@ export const MarkdownDBApp = (props: {
         props.view.handleOpenRecord(record, currentConfig, records, index, event);
     };
 
+    const viewInheritedProperties = useMemo(() => {
+        const props: Record<string, any> = {};
+        if (currentConfig.filters && currentConfig.filters.length > 0) {
+            for (const filter of currentConfig.filters) {
+                if (!filter.value || filter.key === "Name" || filter.key === "Content") continue;
+                if (filter.operator === "is") {
+                    props[filter.key] = filter.value;
+                } else if (filter.operator === "contains") {
+                    const existing = props[filter.key];
+                    if (Array.isArray(existing)) {
+                        existing.push(filter.value);
+                    } else if (existing !== undefined) {
+                        props[filter.key] = [existing, filter.value];
+                    } else {
+                        props[filter.key] = filter.value;
+                    }
+                }
+            }
+        }
+        return props;
+    }, [currentConfig.filters]);
+
     const handleAddRecord = (templatePath?: string) => {
-        if (props.file) props.view.handleAddRecord(templatePath);
+        if (props.file) props.view.handleAddRecord(templatePath, viewInheritedProperties, currentConfig.columnTypes);
     };
 
     const handleAddChildRecord = (parentRecord: DatabaseRecord) => {
-        if (props.file) props.view.handleAddChildRecord(parentRecord);
+        if (props.file) props.view.handleAddChildRecord(parentRecord, viewInheritedProperties, currentConfig.columnTypes);
     };
 
     const handleMoveRecord = (sourceRecord: DatabaseRecord, targetRecord: DatabaseRecord, position: "before" | "after" | "child") => {
@@ -387,32 +409,29 @@ export class MarkdownDBView extends TextFileView implements IMarkdownDBView {
         }
     }
 
-    handleAddRecord = async (templatePath?: string) => {
+    handleAddRecord = async (templatePath?: string, viewInheritedProperties?: Record<string, any>, columnTypes?: Record<string, string>) => {
         if (this.file) {
-            let initialProperties = {};
+            let initialProperties: Record<string, any> = { ...viewInheritedProperties };
             if (templatePath) {
-                // console.log(`[MarkdownDB] Using template: ${templatePath}`);
                 const templateFile = this.app.vault.getAbstractFileByPath(templatePath);
                 if (templateFile instanceof TFile) {
                     try {
-                        // Always read file content directly to avoid cache issues
                         const content = await this.app.vault.read(templateFile);
 
                         if (templateFile.extension === "md") {
-                            // Extract YAML frontmatter
                             const match = content.match(/^---\s*\n([\s\S]*?)\n---/);
                             if (match) {
                                 // @ts-ignore
                                 const parsed = parseYaml(match[1]);
                                 if (parsed && typeof parsed === "object") {
-                                    initialProperties = parsed;
+                                    initialProperties = { ...initialProperties, ...parsed };
                                 }
                             }
                         } else if (templateFile.extension === "yaml" || templateFile.extension === "yml") {
                             // @ts-ignore
                             const parsed = parseYaml(content);
                             if (parsed && typeof parsed === "object") {
-                                initialProperties = parsed;
+                                initialProperties = { ...initialProperties, ...parsed };
                             }
                         }
                     } catch (e) {
@@ -423,13 +442,13 @@ export class MarkdownDBView extends TextFileView implements IMarkdownDBView {
                     new Notice(`Template file not found: ${templatePath}`);
                 }
             }
-            await addRecord(this.app, this.file, "Untitled", initialProperties);
+            await addRecord(this.app, this.file, "Untitled", initialProperties, columnTypes);
         }
     }
 
-    handleAddChildRecord = async (parentRecord: DatabaseRecord) => {
+    handleAddChildRecord = async (parentRecord: DatabaseRecord, viewInheritedProperties?: Record<string, any>, columnTypes?: Record<string, string>) => {
         if (this.file) {
-            await addChildRecord(this.app, this.file, parentRecord, parentRecord.level + 1, "Untitled");
+            await addChildRecord(this.app, this.file, parentRecord, parentRecord.level + 1, "Untitled", viewInheritedProperties, columnTypes);
         }
     }
 

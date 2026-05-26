@@ -423,7 +423,7 @@ export const deleteRecord = async (app: App, file: TFile, record: DatabaseRecord
     });
 };
 
-export const addRecord = async (app: App, file: TFile, title: string, initialProperties?: Record<string, any>) => {
+export const addRecord = async (app: App, file: TFile, title: string, initialProperties?: Record<string, any>, columnTypes?: Record<string, string>) => {
     await app.vault.process(file, (data) => {
         // Find all existing titles
         const existingTitles = new Set<string>();
@@ -460,36 +460,32 @@ export const addRecord = async (app: App, file: TFile, title: string, initialPro
         if (initialProperties && Object.keys(initialProperties).length > 0) {
             const propsList: string[] = [];
             for (const [key, value] of Object.entries(initialProperties)) {
-                // If value is simple, format it. Complex types?
-                // Assuming simple string/number/boolean/array for now.
-                // Re-use formatTypedValue? 
-                // We don't have exact types from YAML, so we infer or treat as text/autodetect
-
-                // Simple heuristic for now:
-                let type = "text";
+                let type = columnTypes?.[key] || "text";
                 let valStr = "";
 
                 if (value !== null && value !== undefined && value !== "") {
                     valStr = String(value);
-                    if (typeof value === "boolean") {
-                        type = "boolean";
-                    } else if (typeof value === "number") {
-                        type = "number";
-                    } else if (Array.isArray(value)) {
-                        type = "multi";
+                    if (type === "text") {
+                        if (typeof value === "boolean") {
+                            type = "boolean";
+                        } else if (typeof value === "number") {
+                            type = "number";
+                        } else if (Array.isArray(value)) {
+                            type = "multi";
+                            valStr = value.join(",");
+                        } else if (typeof value === "string" && (valStr.startsWith("http") || valStr.startsWith("www."))) {
+                            type = "link";
+                        }
+                    } else if (type === "multi" && Array.isArray(value)) {
                         valStr = value.join(",");
-                    } else if (typeof value === "string" && (valStr.startsWith("http") || valStr.startsWith("www."))) {
-                        type = "link";
                     }
                 }
 
-                // If date object? (YAML parses dates)
                 if (value instanceof Date) {
                     type = "date";
                     valStr = value.toISOString().split('T')[0];
                 }
 
-                // If template provides raw string, user might expect it to work
                 propsList.push(`[${key}::${type}(${valStr})]`);
             }
             propsBlock = `%%\n${propsList.join("\n")}\n%%`;
@@ -506,7 +502,8 @@ export const addChildRecord = async (
     parentRecord: DatabaseRecord,
     childLevel: number,
     title: string,
-    initialProperties?: Record<string, any>
+    initialProperties?: Record<string, any>,
+    columnTypes?: Record<string, string>
 ) => {
     await app.vault.process(file, (data) => {
         const lines = data.split(/\r?\n/);
@@ -530,20 +527,24 @@ export const addChildRecord = async (
         if (initialProperties && Object.keys(initialProperties).length > 0) {
             const propsList: string[] = [];
             for (const [key, value] of Object.entries(initialProperties)) {
-                let type = "text";
+                let type = columnTypes?.[key] || "text";
                 let valStr = "";
 
                 if (value !== null && value !== undefined && value !== "") {
                     valStr = String(value);
-                    if (typeof value === "boolean") {
-                        type = "boolean";
-                    } else if (typeof value === "number") {
-                        type = "number";
-                    } else if (Array.isArray(value)) {
-                        type = "multi";
+                    if (type === "text") {
+                        if (typeof value === "boolean") {
+                            type = "boolean";
+                        } else if (typeof value === "number") {
+                            type = "number";
+                        } else if (Array.isArray(value)) {
+                            type = "multi";
+                            valStr = value.join(",");
+                        } else if (typeof value === "string" && (valStr.startsWith("http") || valStr.startsWith("www."))) {
+                            type = "link";
+                        }
+                    } else if (type === "multi" && Array.isArray(value)) {
                         valStr = value.join(",");
-                    } else if (typeof value === "string" && (valStr.startsWith("http") || valStr.startsWith("www."))) {
-                        type = "link";
                     }
                 }
 
