@@ -527,24 +527,20 @@ export const addChildRecord = async (
         if (initialProperties && Object.keys(initialProperties).length > 0) {
             const propsList: string[] = [];
             for (const [key, value] of Object.entries(initialProperties)) {
-                let type = columnTypes?.[key] || "text";
+                let type = "text";
                 let valStr = "";
 
                 if (value !== null && value !== undefined && value !== "") {
                     valStr = String(value);
-                    if (type === "text") {
-                        if (typeof value === "boolean") {
-                            type = "boolean";
-                        } else if (typeof value === "number") {
-                            type = "number";
-                        } else if (Array.isArray(value)) {
-                            type = "multi";
-                            valStr = value.join(",");
-                        } else if (typeof value === "string" && (valStr.startsWith("http") || valStr.startsWith("www."))) {
-                            type = "link";
-                        }
-                    } else if (type === "multi" && Array.isArray(value)) {
+                    if (typeof value === "boolean") {
+                        type = "boolean";
+                    } else if (typeof value === "number") {
+                        type = "number";
+                    } else if (Array.isArray(value)) {
+                        type = "multi";
                         valStr = value.join(",");
+                    } else if (typeof value === "string" && (valStr.startsWith("http") || valStr.startsWith("www."))) {
+                        type = "link";
                     }
                 }
 

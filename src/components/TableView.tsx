@@ -1,7 +1,7 @@
 import * as React from "react";
 import { App, Notice, getIcon } from "obsidian";
 import { useState, useMemo } from "react";
-import { DatabaseData, DatabaseRecord, PropertyType, PROPERTY_TYPE_ICONS } from "../database/schema";
+import { DatabaseData, DatabaseRecord, PropertyType, PROPERTY_TYPE_ICONS, SortRule } from "../database/schema";
 import { PropertyConfig } from "../settings";
 import { EditableCell } from "./EditableCell";
 import { PropertyMenu } from "./PropertyMenu";
@@ -235,6 +235,29 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
         setMenuPosition({ x: rect.left, y: rect.bottom + 5 });
         setMenuOpen(true);
     };
+
+    const handleSortClick = React.useCallback((key: string) => {
+        if (readonly) return;
+        const currentSort = data.config.sort || [];
+        const existing = currentSort.find(s => s.key === key);
+        let newSort: SortRule[];
+
+        if (!existing) {
+            newSort = [{ key, direction: "asc" }];
+        } else if (existing.direction === "asc") {
+            newSort = [{ key, direction: "desc" }];
+        } else {
+            newSort = [];
+        }
+
+        onUpdateConfig("db-sort", JSON.stringify(newSort));
+    }, [data.config.sort, onUpdateConfig, readonly]);
+
+    const getSortDirection = React.useCallback((key: string): "asc" | "desc" | null => {
+        if (!data.config.sort || data.config.sort.length === 0) return null;
+        const rule = data.config.sort.find(s => s.key === key);
+        return rule ? rule.direction : null;
+    }, [data.config.sort]);
 
     const handleDragStart = (e: React.DragEvent, key: string) => {
         e.dataTransfer.setData("text/plain", key);
@@ -699,6 +722,8 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                                     onDragOver={(e) => isProperty && !readonly && handleDragOver(e, col)}
                                     onDrop={(e) => isProperty && !readonly && handleDrop(e, col)}
                                     onDragEnd={handleDragEnd}
+                                    onClick={() => handleSortClick(col)}
+                                    title={`Click to sort by ${col}`}
                                     style={{
                                         textAlign: "left",
                                         height: "42px",
@@ -714,7 +739,7 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                                         top: 0,
                                         zIndex: 10,
                                         backgroundColor: dragOverColumn === col ? "var(--background-modifier-hover)" : "var(--background-primary)",
-                                        cursor: (isProperty && !readonly) ? "grab" : "default",
+                                        cursor: (isProperty && !readonly) ? "grab" : "pointer",
                                         userSelect: "none",
                                         boxSizing: "border-box",
                                         verticalAlign: "middle"
@@ -737,6 +762,27 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                                         dangerouslySetInnerHTML={{ __html: iconSvg?.outerHTML || "" }}
                                     />
                                     {col}
+                                    {(() => {
+                                        const direction = getSortDirection(col);
+                                        if (!direction) return null;
+                                        const sortIcon = getIcon(direction === "asc" ? "chevron-up" : "chevron-down");
+                                        if (sortIcon) {
+                                            sortIcon.style.width = "12px";
+                                            sortIcon.style.height = "12px";
+                                        }
+                                        return (
+                                            <span
+                                                style={{
+                                                    display: "inline-flex",
+                                                    alignItems: "center",
+                                                    marginLeft: "4px",
+                                                    color: "var(--interactive-accent)",
+                                                    verticalAlign: "text-bottom"
+                                                }}
+                                                dangerouslySetInnerHTML={{ __html: sortIcon?.outerHTML || "" }}
+                                            />
+                                        );
+                                    })()}
                                 </th>
                             )
                         })}
