@@ -326,9 +326,27 @@ const BufferedInput = ({
         }
     }, [value, isFocused]);
 
+    const commit = () => {
+        if (localValue !== value) {
+            onChange(localValue);
+        }
+        setIsFocused(false);
+    };
+
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setLocalValue(e.target.value);
-        onChange(e.target.value);
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === "Enter") {
+            e.preventDefault();
+            commit();
+            (e.target as HTMLInputElement).blur();
+        }
+        if (e.key === "Escape") {
+            setLocalValue(value);
+            (e.target as HTMLInputElement).blur();
+        }
     };
 
     return (
@@ -336,9 +354,10 @@ const BufferedInput = ({
             className={className}
             value={localValue}
             onChange={handleChange}
+            onKeyDown={handleKeyDown}
+            onBlur={commit}
             placeholder={placeholder}
             onFocus={() => setIsFocused(true)}
-            onBlur={() => setIsFocused(false)}
             autoFocus={autoFocus}
         />
     );

@@ -471,13 +471,6 @@ export default class MarkdownDBPlugin extends Plugin {
                     return originalOpenFile.call(this, file, state);
                 }
 
-                // If opening in a new leaf (empty view), treat as "Split" and allow default Markdown view
-                // This fulfills the requirement: "分栏打开的时候，分栏要使用markdown视图"
-                // When opening in a split (Ctrl+Click), the leaf is new and has 'empty' view type.
-                if (this.view.getViewType() === "empty") {
-                    return originalOpenFile.call(this, file, state);
-                }
-
                 if (!plugin.isToggling) {
                     return this.setViewState({
                         type: VIEW_TYPE_MARKDOWN_DB,

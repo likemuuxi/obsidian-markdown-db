@@ -588,7 +588,12 @@ export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, on
         }
 
         if (e.key === "Enter") {
-            if (isContentColumn && !e.ctrlKey && !e.metaKey) {
+            if (isContentColumn && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
+                e.preventDefault();
+                contentRef.current?.blur();
+                return;
+            }
+            if (isContentColumn && e.shiftKey) {
                 return;
             }
             e.preventDefault();

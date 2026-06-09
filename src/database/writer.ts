@@ -28,10 +28,30 @@ function isRecordEndLine(line: string, currentLevel: number): boolean {
     return false;
 }
 
+function isCodeBlockDelimiter(line: string): boolean {
+    return line.trim().startsWith("```");
+}
+
+function contentContainsHeading(content: string): boolean {
+    return content.split(/\r?\n/).some(line => /^#{1,6}\s/.test(line.trimStart()));
+}
+
+export function wrapContentWithCodeBlockIfNeeded(content: string): string {
+    if (!content.trim()) return content;
+    if (contentContainsHeading(content)) {
+        return "```markdown\n" + content + "\n```";
+    }
+    return content;
+}
+
 function findRecordStart(lines: string[], record: DatabaseRecord): number {
     const heading = getRecordHeading(record);
+    let inCodeBlock = false;
     for (let i = 0; i < lines.length; i++) {
-        if (lines[i].trim() === heading) {
+        if (isCodeBlockDelimiter(lines[i])) {
+            inCodeBlock = !inCodeBlock;
+        }
+        if (!inCodeBlock && lines[i].trim() === heading) {
             return i;
         }
     }
@@ -40,12 +60,23 @@ function findRecordStart(lines: string[], record: DatabaseRecord): number {
 
 function findRecordEnd(lines: string[], startLine: number, record: DatabaseRecord): number {
     const currentLevel = record.level + 1;
+    let inCodeBlock = false;
+    for (let i = 0; i < startLine; i++) {
+        if (isCodeBlockDelimiter(lines[i])) {
+            inCodeBlock = !inCodeBlock;
+        }
+    }
     for (let i = startLine + 1; i < lines.length; i++) {
-        const match = lines[i].match(/^(#{1,6})\s/);
-        if (match) {
-            const level = match[1].length;
-            if (level <= currentLevel) {
-                return i;
+        if (isCodeBlockDelimiter(lines[i])) {
+            inCodeBlock = !inCodeBlock;
+        }
+        if (!inCodeBlock) {
+            const match = lines[i].match(/^(#{1,6})\s/);
+            if (match) {
+                const level = match[1].length;
+                if (level <= currentLevel) {
+                    return i;
+                }
             }
         }
     }
@@ -380,7 +411,7 @@ export const updateContent = async (app: App, file: TFile, record: DatabaseRecor
         }
 
         if (newContent) {
-            newRecordBlock += "\n\n" + newContent;
+            newRecordBlock += "\n\n" + wrapContentWithCodeBlockIfNeeded(newContent);
         }
 
         // Replace old block
@@ -393,8 +424,35 @@ export const updateContent = async (app: App, file: TFile, record: DatabaseRecor
 
 export const renameRecord = async (app: App, file: TFile, oldName: string, newName: string, level: number = 1) => {
     await app.vault.process(file, (data) => {
+        const lines = data.split(/\r?\n/);
         const prefix = "#".repeat(level + 1);
-        return data.replace(prefix + " " + oldName, prefix + " " + newName);
+
+        const escapedOldName = escapeRegExp(oldName);
+        const regex = new RegExp(`^${escapeRegExp(prefix)} ${escapedOldName}$`, "m");
+
+        let finalName = newName.trim() || "Untitled";
+        if (finalName !== oldName) {
+            const existingTitles = new Set<string>();
+            let inCodeBlock = false;
+            for (const line of lines) {
+                if (isCodeBlockDelimiter(line)) {
+                    inCodeBlock = !inCodeBlock;
+                }
+                if (!inCodeBlock) {
+                    const headingMatch = line.match(/^#{2,}\s+(.+)$/);
+                    if (headingMatch) {
+                        existingTitles.add(headingMatch[1].trim());
+                    }
+                }
+            }
+            let counter = 1;
+            while (existingTitles.has(finalName)) {
+                finalName = `${newName.trim() || "Untitled"} ${counter}`;
+                counter++;
+            }
+        }
+
+        return data.replace(regex, `${prefix} ${finalName}`);
     });
 };
 
@@ -428,10 +486,16 @@ export const addRecord = async (app: App, file: TFile, title: string, initialPro
         // Find all existing titles
         const existingTitles = new Set<string>();
         const lines = data.split(/\r?\n/);
+        let inCodeBlock = false;
         for (const line of lines) {
-            const headingMatch = line.match(/^#{2,}\s+(.+)$/);
-            if (headingMatch) {
-                existingTitles.add(headingMatch[1].trim());
+            if (isCodeBlockDelimiter(line)) {
+                inCodeBlock = !inCodeBlock;
+            }
+            if (!inCodeBlock) {
+                const headingMatch = line.match(/^#{2,}\s+(.+)$/);
+                if (headingMatch) {
+                    existingTitles.add(headingMatch[1].trim());
+                }
             }
         }
 
@@ -509,10 +573,16 @@ export const addChildRecord = async (
         const lines = data.split(/\r?\n/);
 
         const existingTitles = new Set<string>();
+        let inCodeBlock = false;
         for (const line of lines) {
-            const match = line.match(/^#{2,}\s+(.+)$/);
-            if (match) {
-                existingTitles.add(match[1].trim());
+            if (isCodeBlockDelimiter(line)) {
+                inCodeBlock = !inCodeBlock;
+            }
+            if (!inCodeBlock) {
+                const match = line.match(/^#{2,}\s+(.+)$/);
+                if (match) {
+                    existingTitles.add(match[1].trim());
+                }
             }
         }
 
@@ -558,8 +628,12 @@ export const addChildRecord = async (
         const newRecord = `\n${headingPrefix} ${newTitle}\n${propsBlock}\n`;
 
         let insertLine = parentRecord.lineEnd;
-
+        let inCodeBlock2 = false;
         for (let i = parentRecord.lineStart + 1; i < lines.length; i++) {
+            if (isCodeBlockDelimiter(lines[i])) {
+                inCodeBlock2 = !inCodeBlock2;
+            }
+            if (inCodeBlock2) continue;
             const trimmed = lines[i].trimStart();
             const headingMatch = trimmed.match(/^(#{2,})\s/);
             if (headingMatch) {
@@ -1125,8 +1199,12 @@ export const reorderRecords = async (app: App, file: TFile, fromIndex: number, t
         const lines = data.split(/\r?\n/);
         const recordStarts: number[] = [];
 
+        let inCodeBlock = false;
         for (let i = 0; i < lines.length; i++) {
-            if (isHeadingLine(lines[i])) {
+            if (isCodeBlockDelimiter(lines[i])) {
+                inCodeBlock = !inCodeBlock;
+            }
+            if (!inCodeBlock && isHeadingLine(lines[i])) {
                 recordStarts.push(i);
             }
         }

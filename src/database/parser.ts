@@ -9,6 +9,18 @@ function getHeadingLevel(line: string): number | null {
     return null;
 }
 
+function unwrapContentCodeBlock(content: string | undefined): string {
+    if (!content) return "";
+    const trimmed = content.trim();
+    if (trimmed.startsWith("```markdown\n") && trimmed.endsWith("\n```")) {
+        return trimmed.substring("```markdown\n".length, trimmed.length - "\n```".length);
+    }
+    if (trimmed.startsWith("```\n") && trimmed.endsWith("\n```")) {
+        return trimmed.substring("```\n".length, trimmed.length - "\n```".length);
+    }
+    return content;
+}
+
 export const parseFile = (content: string): DatabaseData => {
     const lines = content.split(/\r?\n/);
     const flatRecords: DatabaseRecord[] = [];
@@ -133,6 +145,10 @@ export const parseFile = (content: string): DatabaseData => {
     if (currentRecord) {
         currentRecord.lineEnd = lines.length - 1;
         flatRecords.push(currentRecord);
+    }
+
+    for (const record of flatRecords) {
+        record.content = unwrapContentCodeBlock(record.content);
     }
 
     const records = buildHierarchy(flatRecords);

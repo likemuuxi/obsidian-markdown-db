@@ -1,6 +1,6 @@
 import { App, Modal, TFile, Component, MarkdownRenderer, setIcon } from "obsidian";
 import { DatabaseRecord, TypedValue, formatTypedValue, PropertyType } from "../database/schema";
-import { updateRecordRaw } from "../database/writer";
+import { updateRecordRaw, wrapContentWithCodeBlockIfNeeded } from "../database/writer";
 import { parseFile, flattenRecords } from "../database/parser";
 import type { PropertyConfig } from "../settings";
 
@@ -272,7 +272,7 @@ export class RecordModal extends Modal {
 
         const trimmedContent = this.contentValue.replace(/\s+$/, "");
         if (trimmedContent) {
-            lines.push("", trimmedContent);
+            lines.push("", wrapContentWithCodeBlockIfNeeded(trimmedContent));
         }
 
         return lines.join("\n");
