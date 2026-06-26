@@ -248,7 +248,7 @@ export default class MarkdownDBPlugin extends Plugin {
         // });
 
         // Sidebar icon: open Dashboard in a new tab
-        this.addRibbonIcon("layout-dashboard", "Open Database Dashboard", () => {
+        this.addRibbonIcon("table-properties", "Open Database Dashboard", () => {
             this.openDashboardTab();
         });
 

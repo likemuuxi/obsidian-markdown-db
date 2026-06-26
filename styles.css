@@ -217,10 +217,10 @@
 
 /* Modal Styling for Content Editing */
 .modal.markdown-db-record-modal-shell {
-    width: 760px !important;
-    max-width: 88vw !important;
-    height: 760px !important;
-    max-height: 88vh !important;
+    width: 1080px !important;
+    max-width: 108vw !important;
+    height: 840px !important;
+    max-height: 84vh !important;
     padding: 0 !important;
     display: flex;
     flex-direction: column;
@@ -242,10 +242,108 @@
 /* Modal Internal Layout */
 .markdown-db-record-modal-container {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     height: 100%;
     overflow: hidden;
-    padding: 18px;
+    padding: 0;
+    gap: 0;
+}
+
+/* Record list sidebar */
+.markdown-db-record-sidebar {
+    flex: 0 0 250px;
+    display: flex;
+    flex-direction: column;
+    background-color: var(--background-secondary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 15px;
+    padding: 10px;
+    margin: 10px;
+    flex-shrink: 0;
+    overflow: hidden;
+}
+
+.markdown-db-record-sidebar h4 {
+    margin: 0 0 20px;
+    padding: 0 12px;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-normal);
+    flex-shrink: 0;
+}
+
+.markdown-db-record-list {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.markdown-db-record-list-item {
+    display: flex;
+    align-items: center;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.1s ease-in-out;
+    font-size: 14px;
+    color: var(--text-muted);
+    user-select: none;
+}
+
+.markdown-db-record-list-item-icon {
+    margin-right: 8px;
+    opacity: 0.6;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.markdown-db-record-list-item-icon svg {
+    width: 16px;
+    height: 16px;
+}
+
+.markdown-db-record-list-item:hover {
+    background-color: var(--background-modifier-hover);
+    color: var(--text-normal);
+}
+
+.markdown-db-record-list-item.is-active {
+    background-color: var(--background-modifier-active-hover);
+    color: var(--text-normal);
+    font-weight: 500;
+}
+
+.markdown-db-record-list-item-title {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Right editor panel */
+.markdown-db-record-main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 20px;
+    margin: 10px;
+    gap: 18px;
+    background-color: var(--background-primary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 15px;
+}
+
+.markdown-db-record-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
     gap: 18px;
 }
 
@@ -464,10 +562,9 @@
 
 /* Content Editor */
 .markdown-db-record-content {
-    flex: 1;
+    flex-shrink: 0;
     display: flex;
     flex-direction: column;
-    min-height: 0;
     gap: 10px;
 }
 
@@ -501,9 +598,6 @@
 }
 
 .markdown-db-record-preview {
-    flex: 1;
-    min-height: 0;
-    overflow-y: auto;
     border: 1px solid var(--background-modifier-border);
     border-radius: 6px;
     padding: 12px;

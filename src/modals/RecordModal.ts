@@ -49,6 +49,7 @@ export class RecordModal extends Modal {
     propertiesValue: EditableProperty[] = [];
     previewContainer: HTMLElement | null = null;
     contentSection: HTMLElement | null = null;
+    recordListEl: HTMLElement | null = null;
     isEditingContent: boolean = false;
     suggestionMap: Record<string, string[]> = {};
     private readonly keydownHandler: (event: KeyboardEvent) => void;
@@ -183,6 +184,7 @@ export class RecordModal extends Modal {
         this.isEditingContent = false;
         this.previewContainer = null;
         this.contentSection = null;
+        this.recordListEl = null;
     }
 
     private async saveCurrentRecord() {
@@ -573,6 +575,40 @@ export class RecordModal extends Modal {
         );
     }
 
+    private renderRecordList() {
+        if (!this.recordListEl) return;
+        this.recordListEl.empty();
+
+        this.navigationItems.forEach((item, index) => {
+            const recordItem = this.recordListEl!.createDiv({
+                cls: "markdown-db-record-list-item"
+            });
+            if (index === this.currentIndex) {
+                recordItem.addClass("is-active");
+            }
+
+            // Icon
+            const iconEl = recordItem.createDiv({ cls: "markdown-db-record-list-item-icon" });
+            setIcon(iconEl, "receipt-text");
+
+            const titleEl = recordItem.createDiv({
+                cls: "markdown-db-record-list-item-title",
+                text: item.title || "Untitled"
+            });
+
+            // Tooltip with full content on hover
+            const tooltipParts: string[] = [item.title || "Untitled"];
+            if (item.content) {
+                tooltipParts.push("", item.content);
+            }
+            titleEl.setAttr("title", tooltipParts.join("\n"));
+
+            recordItem.onclick = async () => {
+                await this.navigateToRecord(index);
+            };
+        });
+    }
+
     private async renderContentSection() {
         if (!this.contentSection) return;
 
@@ -617,7 +653,16 @@ export class RecordModal extends Modal {
         contentEl.classList.add("markdown-db-record-modal");
 
         const container = contentEl.createDiv({ cls: "markdown-db-record-modal-container" });
-        const header = container.createDiv({ cls: "markdown-db-record-header" });
+
+        // Left sidebar: record list for quick switching
+        const sidebar = container.createDiv({ cls: "markdown-db-record-sidebar" });
+        sidebar.createEl("h4", { text: "Records" });
+        this.recordListEl = sidebar.createDiv({ cls: "markdown-db-record-list" });
+        this.renderRecordList();
+
+        // Right panel: current record editor
+        const main = container.createDiv({ cls: "markdown-db-record-main" });
+        const header = main.createDiv({ cls: "markdown-db-record-header" });
 
         const prevButton = header.createEl("button", {
             cls: "markdown-db-record-nav-button"
@@ -651,7 +696,9 @@ export class RecordModal extends Modal {
             await this.navigateToRecord(this.currentIndex + 1);
         };
 
-        const propsSection = container.createDiv({ cls: "markdown-db-record-properties" });
+        const body = main.createDiv({ cls: "markdown-db-record-body" });
+
+        const propsSection = body.createDiv({ cls: "markdown-db-record-properties" });
         propsSection.createEl("h4", { text: "Properties" });
 
         if (this.propertiesValue.length === 0) {
@@ -674,7 +721,7 @@ export class RecordModal extends Modal {
             });
         }
 
-        this.contentSection = container.createDiv({ cls: "markdown-db-record-content" });
+        this.contentSection = body.createDiv({ cls: "markdown-db-record-content" });
         await this.renderContentSection();
     }
 

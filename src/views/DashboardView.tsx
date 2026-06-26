@@ -22,11 +22,11 @@ export class DashboardView extends ItemView {
     }
 
     getDisplayText() {
-        return "Database Dashboard";
+        return "Dashboard";
     }
 
     getIcon() {
-        return "layout-dashboard";
+        return "table-properties";
     }
 
     async onOpen() {
@@ -52,7 +52,10 @@ export class DashboardView extends ItemView {
                     // In a tab view, "close" just hides the dashboard section
                     // by selecting another leaf; nothing to do here.
                 }}
-                portalContainer={this.contentEl}
+                // Use document.body so position:fixed popovers anchor to the viewport.
+                // The workspace leaf ancestors have CSS transforms (tab animations),
+                // which would otherwise make fixed positioning offset incorrectly.
+                portalContainer={document.body}
                 component={this.component}
             />
         );
