@@ -25,8 +25,16 @@ Favor edits that preserve the plugin's parsing assumptions instead of inventing 
   ```
 - Store database config or view config in the same property syntax, but outside records and under the relevant H1.
 - Keep view headers in the form `# Database Name(View Name)` and place them before records.
-- Avoid placing record-defining H2 headings inside fenced code blocks. The parser ignores content inside code fences.
-- If a record's freeform content (body text below the property block) needs to use Markdown formatting (headings, lists, bold, links, etc.), wrap it in a ` ```markdown ``` ` fenced code block. This prevents the parser from mistaking body headings for child record headings.
+- Content inside fenced code blocks (```) is ignored by the parser. Headings inside code fences are never treated as records or record boundaries.
+- Record titles must be non-empty. If a title is cleared, the plugin automatically falls back to `"Untitled"` with deduplication (e.g. `Untitled 1`, `Untitled 2`).
+
+## Auto-wrapping of heading content
+
+The writer automatically wraps record body content in a ` ```markdown ``` ` fenced code block when the content contains Markdown headings (`# ...`). This prevents the parser from interpreting body headings as child record headings.
+
+When the parser reads a record, it automatically unwraps ` ```markdown ... ``` ` and ` ``` ... ``` ` fences, so the UI always displays the raw content without fences.
+
+You do not need to manually add code fences around heading content — the plugin handles this transparently on save.
 
 ## File shape
 
@@ -150,7 +158,11 @@ Append a new H2 section near the end of the file:
 %%
 ```
 
-Ensure the title is unique among existing record H2 headings.
+Ensure the title is unique among existing record H2 headings. If the title is empty, the plugin uses `"Untitled"` with auto-incrementing suffix.
+
+### Rename a record
+
+When renaming, the writer matches the heading line exactly (anchored to line start and end) to avoid false matches. If the new name is empty, it falls back to `"Untitled"` and deduplicates against existing titles.
 
 ### Update a property
 
@@ -195,31 +207,38 @@ The child heading must be exactly one level deeper than the parent. Do not skip 
 
 ### Write formatted body content
 
-If a record's body text needs Markdown formatting, wrap it in a fenced code block to avoid the parser treating body headings as child records:
+If a record's body text needs Markdown formatting (especially headings), the writer automatically wraps it in a fenced code block on save. You do not need to do this manually. The parser unwraps it on read.
 
-```md
-## Project Alpha
-%%
-[status::select(todo)]
-%%
+## Parser and writer internals
 
-```markdown
-## Architecture Overview
-The system uses a **microservices** pattern.
-- Service A handles auth
-- Service B handles data
-```
-```
+### Code block awareness
+
+Both the parser and writer track `inCodeBlock` state by detecting lines starting with ```. All heading detection, record boundary detection, and title scanning skip content inside fenced code blocks. This means:
+
+- Headings inside code fences are never parsed as records.
+- `findRecordStart` and `findRecordEnd` skip code blocks when locating record boundaries.
+- `addRecord`, `addChildRecord`, and `reorderRecords` skip code blocks when scanning existing titles.
+- `renameRecord` does not need to skip code blocks because it matches the exact heading line with anchors.
+
+### View auto-patching
+
+All DB files (frontmatter `markdown-db: true`) are automatically opened in the `markdown-db-view` regardless of how they are accessed: file explorer, quick switcher (Ctrl+O), search results, backlinks, etc. The monkey-patched `WorkspaceLeaf.openFile` intercepts all open operations. Only explicit `source`/`preview` mode requests bypass the DB view.
+
+## UI interaction conventions
+
+- **Content column**: Enter saves and exits editing. Shift+Enter inserts a newline.
+- **Database title input**: Changes are committed on Enter or blur, not on every keystroke. Escape reverts to the original value.
+- **Record title**: Saving an empty record title falls back to `"Untitled"` with automatic deduplication.
 
 ## Do not do this
 
 - Do not invent alternate delimiters for properties.
 - Do not place record properties outside `%% ... %%` and expect the plugin to parse them.
 - Do not use a different view header pattern such as `# View: Board`.
-- Do not rely on H2 headings inside code fences; they are ignored by the parser.
+- Do not write raw Markdown headings in record body text without wrapping them in a fenced code block, or they will be parsed as child records. (The plugin auto-wraps on save, but when editing files directly, wrap manually.)
 - Do not skip heading levels when nesting records (e.g. `##` → `####`). Always increment by exactly one level.
-- Do not write raw Markdown headings in record body text without wrapping them in a fenced code block, or they will be parsed as child records.
 - Do not convert typed config values into record-style wrappers like `text(split)` for config unless the file already does that intentionally.
+- Do not leave record titles empty. Always use a non-empty title or rely on the plugin's "Untitled" fallback.
 
 ## Response style when using this skill
 

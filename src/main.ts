@@ -9,6 +9,7 @@ import { extractProperties } from "./database/utils";
 import { addCssClassToFiles, HIDDEN_CSS_CLASS } from "./database/writer";
 
 import { DashboardModal } from "./modals/DashboardModal";
+import { DashboardView, VIEW_TYPE_DASHBOARD } from "./views/DashboardView";
 import { DBSwitcherModal } from "./modals/DBSwitcherModal";
 import { ImportModal } from "./modals/ImportModal";
 import { GithubSyncService } from "./services/github";
@@ -42,6 +43,12 @@ export default class MarkdownDBPlugin extends Plugin {
         this.registerView(
             VIEW_TYPE_MARKDOWN_DB,
             (leaf) => new MarkdownDBView(leaf, this)
+        );
+
+        // Register Dashboard View (opens in a new tab)
+        this.registerView(
+            VIEW_TYPE_DASHBOARD,
+            (leaf) => new DashboardView(leaf, this)
         );
 
         // Add Setting Tab
@@ -240,11 +247,9 @@ export default class MarkdownDBPlugin extends Plugin {
         //     }
         // });
 
-        this.addRibbonIcon("table", "Toggle Markdown DB", () => {
-            const file = this.app.workspace.getActiveFile();
-            if (file) {
-                this.toggleView(file);
-            }
+        // Sidebar icon: open Dashboard in a new tab
+        this.addRibbonIcon("layout-dashboard", "Open Database Dashboard", () => {
+            this.openDashboardTab();
         });
 
         // Scan files on startup (debounced to let cache warm up)
@@ -427,6 +432,19 @@ export default class MarkdownDBPlugin extends Plugin {
             setTimeout(() => {
                 this.isToggling = false;
             }, 200);
+        }
+    }
+
+    async openDashboardTab() {
+        // Reuse an existing dashboard leaf if one is already open, otherwise open a new tab
+        const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE_DASHBOARD);
+        if (existing.length > 0) {
+            this.app.workspace.revealLeaf(existing[0]);
+        } else {
+            const leaf = this.app.workspace.getLeaf("tab");
+            await leaf.setViewState({
+                type: VIEW_TYPE_DASHBOARD
+            });
         }
     }
 

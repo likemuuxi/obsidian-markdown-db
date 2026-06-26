@@ -1543,6 +1543,30 @@
     transition: background 0.1s;
 }
 
+/* Dashboard Tab View Styles */
+.workspace-leaf-content[data-type="markdown-db-dashboard-view"] .view-content {
+    padding: 0 !important;
+    overflow: hidden !important;
+}
+
+.markdown-db-dashboard-view-host {
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+    background-color: var(--background-primary);
+}
+
+.markdown-db-dashboard-view-host .markdown-db-dashboard-container {
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+}
+
+.markdown-db-dashboard-view-host .markdown-db-dashboard {
+    border-radius: 0;
+}
+
+
 .markdown-db-new-btn-arrow:hover {
     background: rgba(0, 0, 0, 0.1);
 }
