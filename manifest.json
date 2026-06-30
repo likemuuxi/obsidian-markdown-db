@@ -1,7 +1,7 @@
 {
     "id": "markdown-db",
     "name": "Markdown DB",
-    "version": "1.1.1",
+    "version": "1.1.2",
     "minAppVersion": "0.15.0",
     "description": "Turn your Markdown files into a database.",
     "author": "Muuxi",

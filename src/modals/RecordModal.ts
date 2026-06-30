@@ -50,6 +50,7 @@ export class RecordModal extends Modal {
     previewContainer: HTMLElement | null = null;
     contentSection: HTMLElement | null = null;
     recordListEl: HTMLElement | null = null;
+    searchQuery: string = "";
     isEditingContent: boolean = false;
     suggestionMap: Record<string, string[]> = {};
     private readonly keydownHandler: (event: KeyboardEvent) => void;
@@ -189,9 +190,19 @@ export class RecordModal extends Modal {
 
     private async saveCurrentRecord() {
         const nextBlock = this.buildRecordBlock().replace(/\s+$/, "");
+        const trimmedTitle = this.titleValue.trim() || "Untitled";
+
         if (nextBlock !== this.originalBlock) {
+            // writeRecord uses record.id (current/old title) to locate the heading.
+            // We must keep the old id during the write, then sync to the new title
+            // so subsequent saves (navigate/close) can locate the renamed record.
             await updateRecordRaw(this.app, this.file, this.record, nextBlock);
             this.originalBlock = nextBlock;
+
+            if (this.record.title !== trimmedTitle) {
+                this.record.title = trimmedTitle;
+                this.record.id = trimmedTitle;
+            }
         }
 
         this.navigationItems[this.currentIndex] = {
@@ -579,7 +590,14 @@ export class RecordModal extends Modal {
         if (!this.recordListEl) return;
         this.recordListEl.empty();
 
+        const query = this.searchQuery.trim().toLowerCase();
+
         this.navigationItems.forEach((item, index) => {
+            const title = item.title || "Untitled";
+            if (query && !title.toLowerCase().includes(query)) {
+                return;
+            }
+
             const recordItem = this.recordListEl!.createDiv({
                 cls: "markdown-db-record-list-item"
             });
@@ -593,11 +611,11 @@ export class RecordModal extends Modal {
 
             const titleEl = recordItem.createDiv({
                 cls: "markdown-db-record-list-item-title",
-                text: item.title || "Untitled"
+                text: title
             });
 
             // Tooltip with full content on hover
-            const tooltipParts: string[] = [item.title || "Untitled"];
+            const tooltipParts: string[] = [title];
             if (item.content) {
                 tooltipParts.push("", item.content);
             }
@@ -607,6 +625,13 @@ export class RecordModal extends Modal {
                 await this.navigateToRecord(index);
             };
         });
+
+        if (query && this.recordListEl.childElementCount === 0) {
+            this.recordListEl.createDiv({
+                cls: "markdown-db-record-list-empty",
+                text: "No matching records"
+            });
+        }
     }
 
     private async renderContentSection() {
@@ -657,6 +682,16 @@ export class RecordModal extends Modal {
         // Left sidebar: record list for quick switching
         const sidebar = container.createDiv({ cls: "markdown-db-record-sidebar" });
         sidebar.createEl("h4", { text: "Records" });
+        const searchInput = sidebar.createEl("input", {
+            type: "text",
+            cls: "markdown-db-record-search-input",
+            placeholder: "Search records..."
+        });
+        searchInput.value = this.searchQuery;
+        searchInput.oninput = (e) => {
+            this.searchQuery = (e.target as HTMLInputElement).value;
+            this.renderRecordList();
+        };
         this.recordListEl = sidebar.createDiv({ cls: "markdown-db-record-list" });
         this.renderRecordList();
 

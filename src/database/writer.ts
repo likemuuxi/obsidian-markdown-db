@@ -1325,7 +1325,10 @@ export const updateRecordRaw = async (app: App, file: TFile, record: DatabaseRec
         let startLine = findRecordStart(lines, record);
         if (startLine === -1) return data;
 
-        let endLine = findRecordEnd(lines, startLine, record);
+        // Use the record's own line range (exclusive of child records) instead of
+        // findRecordEnd, which would include child records (level > currentLevel)
+        // and cause them to be wiped out when replacing the parent's block.
+        let endLine = record.lineEnd >= 0 ? record.lineEnd + 1 : findRecordEnd(lines, startLine, record);
 
         // Replace lines
         lines.splice(startLine, endLine - startLine, newRecordBlock);

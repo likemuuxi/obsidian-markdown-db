@@ -993,9 +993,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
                                         }
                                         // Always use modal as requested, ignoring db-open-mode
                                         const modal = new RecordModal(app, selectedFile, record, plugin.settings.properties, records, index);
-                                        const originalOnClose = modal.onClose;
+                                        const originalOnClose = modal.onClose.bind(modal);
                                         modal.onClose = async () => {
-                                            if (originalOnClose) await originalOnClose();
+                                            await originalOnClose();
                                             await reloadCurrentFile();
                                         };
                                         modal.open();
