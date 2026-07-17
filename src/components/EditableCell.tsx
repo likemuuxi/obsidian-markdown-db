@@ -57,6 +57,7 @@ export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, on
     const isCheckboxMode = isPropertyColumn && type === "boolean";
     const isDateMode = isPropertyColumn && type === "date";
     const isNumberMode = isPropertyColumn && type === "number";
+    const isLinkMode = type === "link";
 
     // Property specific state
     const [inputValue, setInputValue] = useState("");
@@ -229,7 +230,7 @@ export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, on
     useEffect(() => {
         if (viewRef.current) {
             // Optimization: Render simple types directly in JSX to avoid MarkdownRenderer overhead and issues in Embed views
-            if (isDateMode || isNumberMode || isCheckboxMode) {
+            if (isDateMode || isNumberMode || isCheckboxMode || isLinkMode) {
                 return;
             }
 
@@ -262,7 +263,7 @@ export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, on
 
             runRender();
         }
-    }, [value, app, sourcePath, component, isContentColumn, isPropertyColumn, isDateMode, isNumberMode, isCheckboxMode]);
+    }, [value, app, sourcePath, component, isContentColumn, isPropertyColumn, isDateMode, isNumberMode, isCheckboxMode, isLinkMode]);
 
     useEffect(() => {
         if (!isPropertyColumn && isEditing && contentRef.current) {
@@ -985,7 +986,21 @@ export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, on
                     visibility: isEditing ? "hidden" : "visible"
                 }}
             >
-                {(isDateMode || isNumberMode || isCheckboxMode) ? value : null}
+                {(isDateMode || isNumberMode || isCheckboxMode) ? value : isLinkMode ? (value ? (
+                    <a
+                        href={value}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="external-link"
+                        style={{ color: "var(--text-accent)", textDecoration: "none", cursor: "pointer", display: "inline-block", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", verticalAlign: "bottom" }}
+                        onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            window.open(value, "_blank");
+                        }}
+                        title={value}
+                    >{value}</a>
+                ) : null) : null}
             </div>
 
             {/* Edit Layer - Portal positioned over the view layer */}
