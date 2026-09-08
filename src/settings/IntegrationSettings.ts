@@ -4,6 +4,7 @@ import type { NotionSyncConfig } from "../settings";
 import { NotionAPI } from "../utils/notion-api";
 import { SecretSelectionModal } from "../modals/SecretSelectionModal";
 import { FileSuggest } from "../suggest/suggest";
+import { t } from "../i18n";
 
 export class IntegrationSettingsView {
     plugin: MyPlugin;
@@ -41,18 +42,18 @@ export class IntegrationSettingsView {
     }
 
     renderIntegrationList(containerEl: HTMLElement) {
-        containerEl.createEl('h2', { text: 'Integrations' });
+        containerEl.createEl('h2', { text: t("settings.integration.title") });
 
         const integrations = [
             {
                 id: 'github',
-                name: 'Github Auto-Sync',
-                desc: 'Automatically sync Github stars and pull requests to your database.'
+                name: t("settings.integration.githubName"),
+                desc: t("settings.integration.githubDesc")
             },
             {
                 id: 'notion',
-                name: 'Notion Database Sync',
-                desc: 'Sync pages from a Notion Database to your Obsidian Database.'
+                name: t("settings.integration.notionName"),
+                desc: t("settings.integration.notionDesc")
             }
         ];
 
@@ -120,10 +121,10 @@ export class IntegrationSettingsView {
     }
 
     renderGithubSettings(containerEl: HTMLElement) {
-        this.renderHeader(containerEl, 'Github Auto-Sync');
+        this.renderHeader(containerEl, t("settings.integration.githubName"));
 
         new Setting(containerEl)
-            .setName('Github Username')
+            .setName(t("settings.integration.githubUsername"))
             .addText(text => text
                 .setValue(this.plugin.settings.githubUsername)
                 .onChange(async (value) => {
@@ -133,12 +134,12 @@ export class IntegrationSettingsView {
 
         let githubTokenText: any;
         new Setting(containerEl)
-            .setName('Github Token')
-            .setDesc('Optional, but recommended for private repos and higher rate limits.')
+            .setName(t("settings.integration.githubToken"))
+            .setDesc(t("settings.integration.githubTokenDesc"))
             .addText(text => {
                 githubTokenText = text;
                 text.inputEl.type = "password";
-                text.setPlaceholder('ghp_...');
+                text.setPlaceholder(t("settings.integration.ghpPlaceholder"));
                 // Load token asynchronously
                 if ((this.plugin.app as any).secretStorage) {
                     const token = (this.plugin.app as any).secretStorage.getSecret('db-github-token');
@@ -152,7 +153,7 @@ export class IntegrationSettingsView {
                 });
             })
             .addButton(btn => btn
-                .setButtonText("Select")
+                .setButtonText(t("common.select"))
                 .onClick(() => {
                     const currentVal = githubTokenText.getValue();
                     new SecretSelectionModal(this.plugin.app, currentVal, async (selectedVal) => {
@@ -165,12 +166,12 @@ export class IntegrationSettingsView {
             );
 
         new Setting(containerEl)
-            .setName('Target Database (Stars)')
-            .setDesc('Database file path to sync Stars into (e.g. "Databases/Stars.md").')
+            .setName(t("settings.integration.targetDbStars"))
+            .setDesc(t("settings.integration.targetDbStarsDesc"))
             .addText(text => {
                 new FileSuggest(this.plugin.app, text.inputEl);
                 text
-                    .setPlaceholder('Example: Databases/Stars.md')
+                    .setPlaceholder(t("settings.integration.targetDbStarsPlaceholder"))
                     .setValue(this.plugin.settings.githubSyncStarsDb)
                     .onChange(async (value) => {
                         this.plugin.settings.githubSyncStarsDb = value;
@@ -179,12 +180,12 @@ export class IntegrationSettingsView {
             });
 
         new Setting(containerEl)
-            .setName('Target Database (PRs)')
-            .setDesc('Database file path to sync PRs into (e.g. "Databases/PRs.md").')
+            .setName(t("settings.integration.targetDbPrs"))
+            .setDesc(t("settings.integration.targetDbPrsDesc"))
             .addText(text => {
                 new FileSuggest(this.plugin.app, text.inputEl);
                 text
-                    .setPlaceholder('Example: Databases/PRs.md')
+                    .setPlaceholder(t("settings.integration.targetDbPrsPlaceholder"))
                     .setValue(this.plugin.settings.githubSyncPrsDb)
                     .onChange(async (value) => {
                         this.plugin.settings.githubSyncPrsDb = value;
@@ -193,8 +194,8 @@ export class IntegrationSettingsView {
             });
 
         new Setting(containerEl)
-            .setName('Enable Auto-Sync')
-            .setDesc('Automatically fetch Github stars on Obsidian startup.')
+            .setName(t("settings.integration.enableAutoSync"))
+            .setDesc(t("settings.integration.enableAutoSyncDesc"))
             .addToggle(toggle => toggle
                 .setValue(this.plugin.settings.autoSyncGithub)
                 .onChange(async (value) => {
@@ -204,16 +205,16 @@ export class IntegrationSettingsView {
     }
 
     renderNotionSettings(containerEl: HTMLElement) {
-        this.renderHeader(containerEl, 'Notion Database Sync');
+        this.renderHeader(containerEl, t("settings.integration.notionName"));
 
         let notionTokenText: any;
         new Setting(containerEl)
-            .setName('Notion Token')
-            .setDesc('Default token for all databases. Can be overridden in individual database configs.')
+            .setName(t("settings.integration.notionToken"))
+            .setDesc(t("settings.integration.notionTokenDesc"))
             .addText(text => {
                 notionTokenText = text;
                 text.inputEl.type = "password";
-                text.setPlaceholder('secret_...');
+                text.setPlaceholder(t("settings.integration.secretPlaceholder"));
                 // Load token asynchronously
                 if ((this.plugin.app as any).secretStorage) {
                     const token = (this.plugin.app as any).secretStorage.getSecret('db-notion-api-key');
@@ -227,7 +228,7 @@ export class IntegrationSettingsView {
                 });
             })
             .addButton(btn => btn
-                .setButtonText("Select")
+                .setButtonText(t("common.select"))
                 .onClick(() => {
                     const currentVal = notionTokenText.getValue();
                     new SecretSelectionModal(this.plugin.app, currentVal, async (selectedVal) => {
@@ -240,10 +241,10 @@ export class IntegrationSettingsView {
             );
 
         new Setting(containerEl)
-            .setName('Notion Databases')
-            .setDesc('Configure Notion databases to sync.')
+            .setName(t("settings.integration.notionDatabases"))
+            .setDesc(t("settings.integration.notionDatabasesDesc"))
             .addButton(btn => btn
-                .setButtonText('Add Database')
+                .setButtonText(t("settings.integration.addDatabase"))
                 .setCta()
                 .onClick(() => {
                     this.editingNotionConfigId = 'new';
@@ -255,7 +256,7 @@ export class IntegrationSettingsView {
 
         if (this.plugin.settings.notionSyncConfigs.length === 0) {
             listContainer.createDiv({
-                text: 'No Notion databases configured.',
+                text: t("settings.integration.noNotionConfigs"),
                 cls: 'setting-item-description',
                 attr: { style: 'padding: 10px; font-style: italic;' }
             });
@@ -273,11 +274,11 @@ export class IntegrationSettingsView {
 
                 const infoDiv = item.createDiv();
                 const title = infoDiv.createDiv({ cls: 'markdown-db-integration-title' });
-                title.setText(config.name || 'Untitled Config');
+                title.setText(config.name || t("settings.integration.untitledConfig"));
                 title.style.fontWeight = 'bold';
 
                 const detail = infoDiv.createDiv({ cls: 'markdown-db-integration-desc' });
-                detail.setText(`ID: ${config.databaseId.slice(0, 8)}... | Target: ${config.targetDbPath}`);
+                detail.setText(t("settings.integration.configDetail", { id: `${config.databaseId.slice(0, 8)}...`, target: config.targetDbPath }));
                 detail.style.color = 'var(--text-muted)';
                 detail.style.fontSize = '0.85em';
 
@@ -297,7 +298,7 @@ export class IntegrationSettingsView {
                 setIcon(deleteBtn, 'trash');
                 deleteBtn.style.color = 'var(--text-error)';
                 deleteBtn.onclick = async () => {
-                    if (confirm(`Are you sure you want to delete configuration "${config.name}"?`)) {
+                    if (confirm(t("settings.integration.deleteConfigConfirm", { name: config.name }))) {
                         this.plugin.settings.notionSyncConfigs = this.plugin.settings.notionSyncConfigs.filter(c => c.id !== config.id);
                         await this.plugin.saveSettings();
                         this.display();
@@ -316,7 +317,7 @@ export class IntegrationSettingsView {
         } else if (isNew) {
             config = {
                 id: crypto.randomUUID(),
-                name: 'Notion Database',
+                name: t("settings.integration.newConfigName"),
                 databaseId: '',
                 targetDbPath: '',
                 properties: [],
@@ -344,7 +345,7 @@ export class IntegrationSettingsView {
             this.isDirty = false;
         }
 
-        this.renderHeader(containerEl, isNew ? 'Add Notion Database' : 'Edit Notion Database', () => {
+        this.renderHeader(containerEl, isNew ? t("settings.integration.addNotionDbTitle") : t("settings.integration.editNotionDbTitle"), () => {
             this.editingNotionConfigId = null;
             this.currentEditingConfig = null;
             this.display();
@@ -354,8 +355,8 @@ export class IntegrationSettingsView {
 
         // --- Fields ---
         new Setting(containerEl)
-            .setName('Config Name')
-            .setDesc('A friendly name for this configuration.')
+            .setName(t("settings.integration.configName"))
+            .setDesc(t("settings.integration.configNameDesc"))
             .addText(text => text
                 .setValue(config.name)
                 .onChange(value => {
@@ -365,8 +366,8 @@ export class IntegrationSettingsView {
                 }));
 
         new Setting(containerEl)
-            .setName('Notion Database ID')
-            .setDesc('The ID of the Notion database to sync from.')
+            .setName(t("settings.integration.notionDbId"))
+            .setDesc(t("settings.integration.notionDbIdDesc"))
             .addText(text => text
                 .setValue(config.databaseId)
                 .onChange(value => {
@@ -376,11 +377,11 @@ export class IntegrationSettingsView {
                 }));
 
         new Setting(containerEl)
-            .setName('Sync Direction')
-            .setDesc('Choose whether to push changes to Notion or pull changes from Notion when clicking sync.')
+            .setName(t("settings.integration.syncDirection"))
+            .setDesc(t("settings.integration.syncDirectionDesc"))
             .addDropdown(dropdown => dropdown
-                .addOption('push', 'Push to Notion')
-                .addOption('pull', 'Pull from Notion')
+                .addOption('push', t("settings.integration.pushToNotion"))
+                .addOption('pull', t("settings.integration.pullFromNotion"))
                 .setValue(config.syncDirection || 'push')
                 .onChange(value => {
                     config.syncDirection = value as 'push' | 'pull';
@@ -393,8 +394,8 @@ export class IntegrationSettingsView {
 
         if (config.syncDirection === 'pull') {
             new Setting(containerEl)
-                .setName('Sync on Startup')
-                .setDesc('Automatically sync with Notion when Obsidian starts.')
+                .setName(t("settings.integration.syncOnStartup"))
+                .setDesc(t("settings.integration.syncOnStartupDesc"))
                 .addToggle(toggle => toggle
                     .setValue(config.autoSyncOnStartup || false)
                     .onChange(value => {
@@ -411,32 +412,32 @@ export class IntegrationSettingsView {
         testBtnContainer.style.justifyContent = 'flex-end';
         testBtnContainer.style.gap = '10px';
 
-        const testBtn = testBtnContainer.createEl('button', { text: 'Test' });
-        testBtn.setAttribute('aria-label', 'Test the connection');
+        const testBtn = testBtnContainer.createEl('button', { text: t("common.test") });
+        testBtn.setAttribute('aria-label', t("settings.integration.testAria"));
         testBtn.onclick = async () => {
             let token = "";
             if ((this.plugin.app as any).secretStorage) {
                 token = await (this.plugin.app as any).secretStorage.getSecret('db-notion-api-key') || "";
             }
             if (!token || !config.databaseId) {
-                new Notice('Please fill in Token (global or local) and Database ID first.');
+                new Notice(t("settings.integration.testFillFirst"));
                 return;
             }
 
             testBtn.disabled = true;
-            testBtn.setText('Testing...');
+            testBtn.setText(t("common.testing"));
 
             try {
                 const notion = new NotionAPI(token);
                 // Query without filters to check access
                 await notion.queryDatabase(config.databaseId);
-                new Notice('Connection successful! Database is accessible.');
+                new Notice(t("settings.integration.connectionSuccess"));
             } catch (error: any) {
                 console.error(error);
-                new Notice(`Connection failed: ${error.message || 'Unknown error'}`);
+                new Notice(t("settings.integration.connectionFailed", { error: error.message || t("settings.integration.unknownError") }));
             } finally {
                 testBtn.disabled = false;
-                testBtn.setText('Test');
+                testBtn.setText(t("common.test"));
             }
         };
 
@@ -450,7 +451,7 @@ export class IntegrationSettingsView {
             propHeader.style.marginBottom = '10px';
 
             const leftHeader = propHeader.createDiv();
-            leftHeader.createEl('h3', { text: 'Notion Properties', attr: { style: 'margin: 0 0 5px 0;' } });
+            leftHeader.createEl('h3', { text: t("settings.integration.notionPropertiesTitle"), attr: { style: 'margin: 0 0 5px 0;' } });
 
             const addBtn = propHeader.createEl('button', { cls: 'clickable-icon' });
             setIcon(addBtn, 'plus');
@@ -541,7 +542,7 @@ export class IntegrationSettingsView {
                                 globalToken = await (this.plugin.app as any).secretStorage.getSecret('db-notion-api-key') || "";
                             }
                             if (!config.name || !globalToken || !config.databaseId) {
-                                new Notice('Reordered, but not saved. Please fill in Name, Database ID, and ensure Global Token is set.');
+                                new Notice(t("settings.integration.reorderedNotSaved"));
                                 this.isDirty = true;
                                 renderProperties();
                                 updateActionButtons();
@@ -567,7 +568,7 @@ export class IntegrationSettingsView {
                             }
 
                             await this.plugin.saveSettings();
-                            new Notice('Notion configuration saved.');
+                            new Notice(t("settings.integration.notionConfigSaved"));
 
                             this.isDirty = false;
                             this.currentEditingConfig = null;
@@ -576,7 +577,7 @@ export class IntegrationSettingsView {
                         }
                     });
 
-                    const nameInput = row.createEl('input', { type: 'text', placeholder: 'Notion Property Name' });
+                    const nameInput = row.createEl('input', { type: 'text', placeholder: t("settings.integration.notionPropNamePlaceholder") });
                     nameInput.value = prop.name;
                     nameInput.style.flex = '1';
                     nameInput.onchange = (e) => {
@@ -588,13 +589,19 @@ export class IntegrationSettingsView {
                     const typeSelect = row.createEl('select');
                     typeSelect.style.flex = '1';
 
-                    const types = [
-                        'Text', 'Number', 'Select', 'Multi-Select', 'Date',
-                        'Files & Media', 'Checkbox', 'URL'
+                    const notionPropTypes = [
+                        { value: 'Text', key: 'text' },
+                        { value: 'Number', key: 'number' },
+                        { value: 'Select', key: 'select' },
+                        { value: 'Multi-Select', key: 'multiSelect' },
+                        { value: 'Date', key: 'date' },
+                        { value: 'Files & Media', key: 'files' },
+                        { value: 'Checkbox', key: 'checkbox' },
+                        { value: 'URL', key: 'url' }
                     ];
-                    types.forEach(t => {
-                        const option = typeSelect.createEl('option', { text: t, value: t });
-                        if (t === prop.type) option.selected = true;
+                    notionPropTypes.forEach(({ value, key }) => {
+                        const option = typeSelect.createEl('option', { text: t(`settings.integration.notionPropTypes.${key}`), value: value });
+                        if (value === prop.type) option.selected = true;
                     });
                     typeSelect.onchange = (e) => {
                         prop.type = (e.target as HTMLSelectElement).value;
@@ -625,7 +632,7 @@ export class IntegrationSettingsView {
 
         const generateOrUpdateDbFile = async (config: NotionSyncConfig) => {
             if (config.syncDirection !== 'pull' && config.properties.length === 0) {
-                new Notice('Please add at least one property first.');
+                new Notice(t("settings.integration.addAtLeastOneProp"));
                 return;
             }
 
@@ -636,11 +643,11 @@ export class IntegrationSettingsView {
                         token = await (this.plugin.app as any).secretStorage.getSecret('db-notion-api-key') || "";
                     }
                     if (!token || !config.databaseId) {
-                        new Notice('Please fill in Token and Database ID first.');
+                        new Notice(t("settings.integration.fillTokenAndDbId"));
                         return;
                     }
 
-                    new Notice('Fetching schema from Notion...');
+                    new Notice(t("settings.integration.fetchingSchema"));
                     const api = new NotionAPI(token);
                     const db = await api.getDatabase(config.databaseId);
 
@@ -660,10 +667,10 @@ export class IntegrationSettingsView {
                         }
                         config.properties.push({ name: key, type: type });
                     }
-                    new Notice(`Fetched ${config.properties.length} properties.`);
+                    new Notice(t("settings.integration.fetchedProps", { count: config.properties.length }));
                 } catch (e: any) {
                     console.error(e);
-                    new Notice('Failed to fetch schema: ' + (e.message || e));
+                    new Notice(t("settings.integration.fetchSchemaFailed", { error: e.message || e }));
                     return;
                 }
             }
@@ -746,13 +753,13 @@ export class IntegrationSettingsView {
 
                     if (newContent !== currentContent) {
                         await this.plugin.app.vault.modify(existingFile, newContent);
-                        new Notice(`Updated schema in: ${targetPath}`);
+                        new Notice(t("settings.integration.updatedSchemaIn", { path: targetPath }));
                     } else {
-                        new Notice(`No changes needed for: ${targetPath}`);
+                        new Notice(t("settings.integration.noChangesNeeded", { path: targetPath }));
                     }
                 } else {
                     await this.plugin.app.vault.create(targetPath, content);
-                    new Notice(`Created template: ${targetPath}`);
+                    new Notice(t("settings.integration.createdTemplate", { path: targetPath }));
                 }
 
                 // Always update the target path and refresh UI
@@ -780,7 +787,7 @@ export class IntegrationSettingsView {
                 updateActionButtons();
                 // new Notice('Template generated. Please save configuration.'); // Removed as we auto-save now
             } catch (err) {
-                new Notice(`Error: ${err}`);
+                new Notice(t("settings.integration.error", { error: err }));
                 console.error(err);
             }
         };
@@ -802,7 +809,7 @@ export class IntegrationSettingsView {
             this.isDirty = hasChanges;
 
             if (hasChanges) {
-                const saveBtn = actionsDiv.createEl('button', { text: 'Save' });
+                const saveBtn = actionsDiv.createEl('button', { text: t("common.save") });
                 saveBtn.setAttr('type', 'submit');
                 saveBtn.onclick = async () => {
                     let globalToken = "";
@@ -810,7 +817,7 @@ export class IntegrationSettingsView {
                         globalToken = await (this.plugin.app as any).secretStorage.getSecret('db-notion-api-key') || "";
                     }
                     if (!config.name || !globalToken || !config.databaseId) {
-                        new Notice('Please fill in Name, Database ID, and ensure Global Token is set.');
+                        new Notice(t("settings.integration.saveConfigFillFirst"));
                         return;
                     }
 
@@ -824,7 +831,7 @@ export class IntegrationSettingsView {
                     }
 
                     await this.plugin.saveSettings();
-                    new Notice('Notion configuration saved.');
+                    new Notice(t("settings.integration.notionConfigSaved"));
 
                     this.isDirty = false;
                     this.currentEditingConfig = null;
@@ -842,12 +849,12 @@ export class IntegrationSettingsView {
 
                     const existingFile = this.plugin.app.vault.getAbstractFileByPath(targetPath);
                     if (existingFile instanceof TFile) {
-                        if (confirm(`Configuration saved. Update DB File "${targetPath}"? (This will update the schema definition)`)) {
+                        if (confirm(t("settings.integration.updateDbFileConfirm", { path: targetPath }))) {
                             await generateOrUpdateDbFile(config);
                         }
                     } else {
                         // File doesn't exist, maybe ask to create?
-                        if (confirm(`Configuration saved. Generate DB File "${targetPath}"?`)) {
+                        if (confirm(t("settings.integration.generateDbFileConfirm", { path: targetPath }))) {
                             await generateOrUpdateDbFile(config);
                         }
                     }
@@ -862,17 +869,17 @@ export class IntegrationSettingsView {
                     targetRow.style.gap = '8px';
                     targetRow.style.flex = '1';
 
-                    const targetLabel = targetRow.createEl('span', { text: 'Target:' });
+                    const targetLabel = targetRow.createEl('span', { text: t("settings.integration.targetLabel") });
                     targetLabel.style.color = 'var(--text-muted)';
                     targetLabel.style.whiteSpace = 'nowrap';
 
-                    const targetInput = targetRow.createEl('input', { type: 'text', placeholder: 'e.g. Databases/MyDB.md' });
+                    const targetInput = targetRow.createEl('input', { type: 'text', placeholder: t("settings.integration.targetPlaceholder") });
                     targetInput.value = config.targetDbPath;
                     targetInput.style.flex = '1';
                     targetInput.disabled = true;
                     new FileSuggest(this.plugin.app, targetInput);
 
-                    const editBtn = actionsDiv.createEl('button', { text: 'Edit' });
+                    const editBtn = actionsDiv.createEl('button', { text: t("common.edit") });
                     editBtn.onclick = () => {
                         targetInput.disabled = false;
                         targetInput.focus();
@@ -880,7 +887,7 @@ export class IntegrationSettingsView {
                         updateBtn.style.display = 'inline-flex';
                     };
 
-                    const updateBtn = actionsDiv.createEl('button', { text: 'Update' });
+                    const updateBtn = actionsDiv.createEl('button', { text: t("common.update") });
                     updateBtn.style.display = 'none';
                     updateBtn.onclick = async () => {
                         const newPath = targetInput.value.trim();
@@ -891,15 +898,15 @@ export class IntegrationSettingsView {
                                 this.plugin.settings.notionSyncConfigs[idx].targetDbPath = newPath;
                             }
                             await this.plugin.saveSettings();
-                            new Notice(`Target DB file updated to: ${config.targetDbPath}`);
+                            new Notice(t("settings.integration.targetDbUpdated", { path: config.targetDbPath }));
                         }
                         targetInput.disabled = true;
                         editBtn.style.display = 'inline-flex';
                         updateBtn.style.display = 'none';
                     };
                 } else {
-                    const genBtn = actionsDiv.createEl('button', { text: 'Generate' });
-                    genBtn.setAttribute('aria-label', 'Generate the database file');
+                    const genBtn = actionsDiv.createEl('button', { text: t("common.generate") });
+                    genBtn.setAttribute('aria-label', t("settings.integration.generateAria"));
 
                     genBtn.onclick = async () => {
                         await generateOrUpdateDbFile(config);

@@ -13,6 +13,7 @@ import {
 import { RecordModal } from "../modals/RecordModal";
 import { RenameModal } from "../modals/RenameModal";
 import { IMarkdownDBView, MarkdownDBApp } from "./view";
+import { t } from "../i18n";
 
 class ReactEmbedChild extends MarkdownRenderChild {
     root: Root | null = null;
@@ -440,7 +441,7 @@ export class EmbedDBView implements IMarkdownDBView {
             const direction = syncConfig.syncDirection || 'push';
             menu.addItem((item) => {
                 item
-                    .setTitle(direction === 'pull' ? "Pull from Notion" : "Push to Notion")
+                    .setTitle(direction === 'pull' ? t("settings.integration.pullFromNotion") : t("settings.integration.pushToNotion"))
                     .setIcon("refresh-cw")
                     .onClick(async () => {
                         await this.handleSyncItem(record);
@@ -450,7 +451,7 @@ export class EmbedDBView implements IMarkdownDBView {
 
         menu.addItem((item) => {
             item
-                .setTitle("Add child record")
+                .setTitle(t("view.addChildRecord"))
                 .setIcon("list-tree")
                 .onClick(async () => {
                     await this.handleAddChildRecord(record);
@@ -459,7 +460,7 @@ export class EmbedDBView implements IMarkdownDBView {
 
         menu.addItem((item) => {
             item
-                .setTitle(selectedRecords.length > 1 ? `Delete ${selectedRecords.length} records` : "Delete")
+                .setTitle(selectedRecords.length > 1 ? t("dashboard.deleteRecords", { count: selectedRecords.length }) : t("common.delete"))
                 .setIcon("trash")
                 .onClick(async () => {
                     if (this.file) {
@@ -481,7 +482,7 @@ export class EmbedDBView implements IMarkdownDBView {
 
         menu.addItem((item) => {
             item
-                .setTitle("Rename property")
+                .setTitle(t("dashboard.renameProperty"))
                 .setIcon("pencil")
                 .onClick(() => {
                     new RenameModal(this.app, key, async (newName) => {
@@ -501,7 +502,7 @@ export class EmbedDBView implements IMarkdownDBView {
                                  await updateConfig(this.app, this.file!, "db-columns", JSON.stringify(newOrder), viewName);
                              }
                              
-                             new Notice(`Property renamed to "${newName}"`);
+                             new Notice(t("dashboard.propertyRenamed", { name: newName }));
                         }
                     }).open();
                 });
@@ -511,7 +512,7 @@ export class EmbedDBView implements IMarkdownDBView {
         if (!globalProp) {
             menu.addItem((item) => {
                 item
-                    .setTitle("Add to global properties")
+                    .setTitle(t("dashboard.addToGlobalProperties"))
                     .setIcon("globe")
                     .onClick(async () => {
                         let type: PropertyType = "text";
@@ -534,14 +535,14 @@ export class EmbedDBView implements IMarkdownDBView {
                             }
                         ];
                         await this.plugin.saveSettings();
-                        new Notice(`Property "${key}" added to global settings`);
+                        new Notice(t("dashboard.propertyAddedToGlobal", { name: key }));
                     });
             });
         }
 
         menu.addItem((item) => {
             item
-                .setTitle("Hide property")
+                .setTitle(t("dashboard.hideProperty"))
                 .setIcon("eye-off")
                 .onClick(async () => {
                     if (this.file && config) {
@@ -558,7 +559,7 @@ export class EmbedDBView implements IMarkdownDBView {
             if (hiddenColumns.length > 0) {
                  menu.addItem((item) => {
                      item
-                         .setTitle("Unhide property")
+                         .setTitle(t("dashboard.unhideProperty"))
                          .setIcon("eye")
                          .setSection("view");
                      
@@ -583,13 +584,13 @@ export class EmbedDBView implements IMarkdownDBView {
 
         menu.addItem((item) => {
             item
-                .setTitle(`Delete property "${key}"`)
+                .setTitle(t("dashboard.deletePropertyKey", { name: key }))
                 .setIcon("trash")
                 .setWarning(true)
                 .onClick(async () => {
                     if (this.file) {
                         await deletePropertyFromAllRecords(this.app, this.file!, key);
-                        new Notice(`Property "${key}" deleted`);
+                        new Notice(t("dashboard.propertyDeleted", { name: key }));
                     }
                 });
         });

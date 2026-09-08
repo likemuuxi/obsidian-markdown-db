@@ -1,6 +1,7 @@
 import { App, TFile, Notice } from "obsidian";
 import { TypedValue, formatTypedValue, parseTypedValue, DatabaseRecord } from "./schema";
 import { extractProperties } from "./utils";
+import { t } from "../i18n";
 
 function escapeRegExp(string: string) {
     return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -470,7 +471,7 @@ export const deleteRecord = async (app: App, file: TFile, record: DatabaseRecord
         }
 
         if (startLine === -1) {
-            new Notice(`Could not find record to delete: "${record.id}"`);
+            new Notice(t("writer.recordNotFound", { id: record.id }));
             return data;
         }
 
@@ -1211,14 +1212,14 @@ export const reorderRecords = async (app: App, file: TFile, fromIndex: number, t
 
         // Validate indices
         if (recordStarts.length === 0) {
-            new Notice("No records found to reorder");
+            new Notice(t("writer.noRecordsToReorder"));
             return data;
         }
 
         if (fromIndex < 0 || fromIndex >= recordStarts.length ||
             toIndex < 0 || toIndex >= recordStarts.length ||
             fromIndex === toIndex) {
-            new Notice(`Invalid reorder indices: ${fromIndex} -> ${toIndex} (Total: ${recordStarts.length})`);
+            new Notice(t("writer.invalidReorderIndices", { from: fromIndex, to: toIndex, total: recordStarts.length }));
             return data;
         }
 

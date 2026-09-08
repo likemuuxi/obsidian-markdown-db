@@ -1,6 +1,7 @@
 import { setIcon, Menu, Notice } from "obsidian";
 import type MarkdownDBPlugin from "../main";
 import { PropertyType, PROPERTY_TYPE_ICONS, VALID_PROPERTY_TYPES } from "../database/schema";
+import { t } from "../i18n";
 
 export class PropertySettingsView {
     plugin: MarkdownDBPlugin;
@@ -31,20 +32,20 @@ export class PropertySettingsView {
         // but container might need some.
         headerContainer.style.marginBottom = "10px";
 
-        headerContainer.createEl('h2', {text: 'Database Properties', attr: { style: 'margin: 0;' }});
+        headerContainer.createEl('h2', {text: t("settings.properties.title"), attr: { style: 'margin: 0;' }});
 
         const scanBtn = headerContainer.createEl('button');
-        scanBtn.setText("Rescan");
-        scanBtn.setAttr("aria-label", "Scan all database files to rebuild property values");
-        
+        scanBtn.setText(t("settings.properties.rescan"));
+        scanBtn.setAttr("aria-label", t("settings.properties.rescanAria"));
+
         scanBtn.onclick = async () => {
              scanBtn.disabled = true;
-             scanBtn.setText("Scanning...");
-             new Notice("Scanning all database files...");
+             scanBtn.setText(t("settings.properties.scanning"));
+             new Notice(t("settings.properties.scanningNotice"));
              await this.plugin.scanAllDatabaseFiles();
-             new Notice("Database scan complete.");
+             new Notice(t("settings.properties.scanComplete"));
              scanBtn.disabled = false;
-             scanBtn.setText("Rescan Properties");
+             scanBtn.setText(t("settings.properties.rescanProperties"));
              this.display();
         };
 
@@ -59,7 +60,7 @@ export class PropertySettingsView {
         const addPropInputContainer = addPropHeader.createDiv({ cls: 'markdown-db-input-group' });
 
         const propInput = addPropInputContainer.createEl("input", {type: "text"});
-        propInput.placeholder = "Search properties...";
+        propInput.placeholder = t("settings.properties.searchPlaceholder");
         propInput.value = this.searchQuery;
         propInput.style.flex = "1";
 
@@ -93,13 +94,13 @@ export class PropertySettingsView {
         
         const filterIconName = this.filterType === 'all' ? "filter" : PROPERTY_TYPE_ICONS[this.filterType];
         setIcon(filterBtn, filterIconName);
-        filterBtn.title = this.filterType === 'all' ? "Filter by Type" : `Filter: ${this.filterType}`;
+        filterBtn.title = this.filterType === 'all' ? t("settings.properties.filterByType") : t("settings.properties.filterWith", { type: t(`propertyTypes.${this.filterType}`) });
 
         filterBtn.onclick = (e) => {
             const menu = new Menu();
             
             menu.addItem((item) => {
-                item.setTitle("All Types")
+                item.setTitle(t("settings.properties.allTypes"))
                     .setIcon("filter")
                     .setChecked(this.filterType === 'all')
                     .onClick(() => {
@@ -112,7 +113,7 @@ export class PropertySettingsView {
 
             VALID_PROPERTY_TYPES.forEach(type => {
                 menu.addItem((item) => {
-                    item.setTitle(type.charAt(0).toUpperCase() + type.slice(1))
+                    item.setTitle(t(`propertyTypes.${type}`))
                         .setIcon(PROPERTY_TYPE_ICONS[type])
                         .setChecked(this.filterType === type)
                         .onClick(() => {
@@ -169,7 +170,7 @@ export class PropertySettingsView {
 
             const deleteBtn = propItem.createEl("button", { cls: 'markdown-db-settings-item-delete' });
             setIcon(deleteBtn, "trash");
-            deleteBtn.title = "Delete Property";
+            deleteBtn.title = t("settings.properties.deleteProperty");
             
             deleteBtn.onclick = async (e) => {
                 e.stopPropagation();
@@ -201,7 +202,7 @@ export class PropertySettingsView {
             iconContainer.querySelector("svg")?.setAttribute("height", "48");
             
             emptyState.createDiv({
-                text: "Select a property to manage its values.",
+                text: t("settings.properties.selectPropertyToManage"),
             });
         } else {
             const prop = this.selectedProperty;
@@ -215,7 +216,7 @@ export class PropertySettingsView {
                 const currentValues = propConfig.values || [];
 
                 if (currentValues.length === 0) {
-                    valuesList.createDiv({text: "No values saved yet."});
+                    valuesList.createDiv({text: t("settings.properties.noValuesYet")});
                 } else {
                     currentValues.forEach((val, index) => {
                         const valItem = valuesList.createDiv({ cls: 'markdown-db-value-item' });
@@ -228,7 +229,7 @@ export class PropertySettingsView {
                         removeValBtn.onmouseleave = () => removeValBtn.style.opacity = "0.6";
 
                         setIcon(removeValBtn, "x");
-                        removeValBtn.title = "Remove Value";
+                        removeValBtn.title = t("settings.properties.removeValue");
                         
                         removeValBtn.onclick = async () => {
                             // Remove from active values
@@ -252,7 +253,7 @@ export class PropertySettingsView {
                 const ignoredValues = propConfig.ignoredValues || [];
                 if (ignoredValues.length > 0) {
                      rightPane.createDiv({
-                         text: "Ignored Values (Hidden from suggestions)",
+                         text: t("settings.properties.ignoredValuesTitle"),
                          cls: "markdown-db-section-header",
                          attr: { style: "margin-top: 20px; font-weight: bold; font-size: 0.9em; color: var(--text-muted);" }
                      });
@@ -265,7 +266,7 @@ export class PropertySettingsView {
 
                          const restoreBtn = valItem.createEl("button", { cls: 'markdown-db-settings-item-delete' });
                          setIcon(restoreBtn, "undo");
-                         restoreBtn.title = "Restore Value";
+                         restoreBtn.title = t("settings.properties.restoreValue");
                          
                          restoreBtn.onclick = async () => {
                              // Remove from ignored

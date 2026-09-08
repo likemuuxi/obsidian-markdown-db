@@ -1,5 +1,6 @@
 import { App, FuzzySuggestModal, TFile } from "obsidian";
 import type MarkdownDBPlugin from "../main";
+import { t } from "../i18n";
 
 export class TemplateSuggestModal extends FuzzySuggestModal<TFile> {
     plugin: MarkdownDBPlugin;
@@ -9,7 +10,7 @@ export class TemplateSuggestModal extends FuzzySuggestModal<TFile> {
         super(plugin.app);
         this.plugin = plugin;
         this.onSelect = onSelect;
-        this.setPlaceholder("Select a file to use as template");
+        this.setPlaceholder(t("modals.templateSuggest.placeholder"));
     }
 
     getItems(): TFile[] {

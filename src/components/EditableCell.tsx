@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from "react";
 import * as ReactDOM from "react-dom";
 import { App, MarkdownRenderer, Component, htmlToMarkdown, Notice, TFile } from "obsidian";
 import { PropertyType } from "../database/schema";
+import { t } from "../i18n";
 
 interface EditableCellProps {
     value: string;
@@ -828,7 +829,7 @@ export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, on
                                     color: "var(--text-normal)",
                                     height: "24px"
                                 }}
-                                placeholder={tags.length === 0 ? "Add option..." : ""}
+                                placeholder={tags.length === 0 ? t("common.addOption") : ""}
                                 autoFocus
                             />
                             {showSuggestions && suggestionCoords && ReactDOM.createPortal(
@@ -945,9 +946,9 @@ export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, on
                             e.stopPropagation();
                             e.preventDefault();
                             navigator.clipboard.writeText(value);
-                            new Notice("Copied to clipboard");
+                            new Notice(t("common.copiedToClipboard"));
                         }}
-                        title="Copy"
+                        title={t("common.copy")}
                         style={{
                             position: "relative", // Override absolute from CSS
                             right: "auto",

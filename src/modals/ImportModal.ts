@@ -8,6 +8,7 @@ import {
     formatPRToMarkdown,
     mergeMarkdownContent
 } from "../utils/github-api";
+import { t } from "../i18n";
 
 export class ImportModal extends Modal {
     sourceType: "obsidian" | "github-stars" | "github-pull" = "obsidian";
@@ -60,16 +61,16 @@ export class ImportModal extends Modal {
         this.teardown();
         const { contentEl } = this;
         contentEl.empty();
-        contentEl.createEl("h2", { text: "Import to Database" });
+        contentEl.createEl("h2", { text: t("modals.import.title") });
 
         // 1. Source Type Selection
         new Setting(contentEl)
-            .setName("Source Type")
-            .setDesc("Choose where to import data from")
+            .setName(t("modals.import.sourceType"))
+            .setDesc(t("modals.import.sourceTypeDesc"))
             .addDropdown((dropdown) => {
-                dropdown.addOption("obsidian", "Obsidian Folder");
-                dropdown.addOption("github-stars", "Github Stars");
-                dropdown.addOption("github-pull", "Github Pull Requests");
+                dropdown.addOption("obsidian", t("modals.import.sourceFolder"));
+                dropdown.addOption("github-stars", t("modals.import.githubStars"));
+                dropdown.addOption("github-pull", t("modals.import.githubPrs"));
                 dropdown.setValue(this.sourceType);
                 dropdown.onChange((value) => {
                     this.sourceType = value as "obsidian" | "github-stars" | "github-pull";
@@ -91,7 +92,7 @@ export class ImportModal extends Modal {
         new Setting(contentEl)
             .addButton((btn) =>
                 btn
-                    .setButtonText("Import")
+                    .setButtonText(t("modals.import.importBtn"))
                     .setCta()
                     .onClick(() => {
                         this.startImport();
@@ -100,14 +101,14 @@ export class ImportModal extends Modal {
     }
 
     renderObsidianSource(container: HTMLElement) {
-        container.createEl("h3", { text: "Settings" });
+        container.createEl("h3", { text: t("modals.import.settingsSection") });
 
         new Setting(container)
-            .setName("Source Folder")
-            .setDesc("Select a folder to import markdown files from")
+            .setName(t("modals.import.sourceFolderName"))
+            .setDesc(t("modals.import.sourceFolderDesc"))
             .addText((text) => {
                 text
-                    .setPlaceholder("Example: /path/to/folder")
+                    .setPlaceholder(t("modals.import.sourceFolderPlaceholder"))
                     .setValue(this.folderPath)
                     .onChange((value) => {
                         this.folderPath = value;
@@ -118,10 +119,10 @@ export class ImportModal extends Modal {
     }
 
     renderGithubSource(container: HTMLElement) {
-        container.createEl("h3", { text: "Settings" });
+        container.createEl("h3", { text: t("modals.import.settingsSection") });
 
         new Setting(container)
-            .setName("Github Username")
+            .setName(t("settings.integration.githubUsername"))
             .addText((text) =>
                 text
                     .setValue(this.githubUsername)
@@ -131,12 +132,12 @@ export class ImportModal extends Modal {
             );
 
         new Setting(container)
-            .setName("Github Token (Optional)")
-            .setDesc("Required for private repos or to increase rate limits")
+            .setName(t("modals.import.githubTokenName"))
+            .setDesc(t("modals.import.githubTokenDesc"))
             .addText((text) => {
                 text.inputEl.type = "password";
                 text
-                    .setPlaceholder("ghp_...")
+                    .setPlaceholder(t("settings.integration.ghpPlaceholder"))
                     .setValue(this.githubToken)
                     .onChange((value) => {
                         this.githubToken = value;
@@ -146,10 +147,10 @@ export class ImportModal extends Modal {
 
     renderDestination(container: HTMLElement) {
         new Setting(container)
-            .setName("Import Mode")
+            .setName(t("modals.import.importMode"))
             .addDropdown((dropdown) => {
-                dropdown.addOption("new", "Create New Database");
-                dropdown.addOption("append", "Append to Existing Database");
+                dropdown.addOption("new", t("modals.import.createNewDb"));
+                dropdown.addOption("append", t("modals.import.appendToExisting"));
                 dropdown.setValue(this.mode);
                 dropdown.onChange((value) => {
                     this.mode = value as "new" | "append";
@@ -159,7 +160,7 @@ export class ImportModal extends Modal {
 
         if (this.mode === "new") {
             new Setting(container)
-                .setName("New Database Name")
+                .setName(t("modals.import.newDbName"))
                 .addText((text) =>
                     text
                         .setValue(this.dbName)
@@ -169,8 +170,8 @@ export class ImportModal extends Modal {
                 );
         } else {
             new Setting(container)
-                .setName("Existing Database Path")
-                .setDesc("Select an existing database file")
+                .setName(t("modals.import.existingDbPath"))
+                .setDesc(t("modals.import.existingDbPathDesc"))
                 .addDropdown((dropdown) => {
                     const files = this.app.vault.getMarkdownFiles().filter(file => {
                         const cache = this.app.metadataCache.getFileCache(file);
@@ -178,7 +179,7 @@ export class ImportModal extends Modal {
                     });
 
                     if (files.length === 0) {
-                        dropdown.addOption("", "No databases found");
+                        dropdown.addOption("", t("modals.import.noDatabases"));
                     } else {
                         // Sort files by path for better UX
                         files.sort((a, b) => a.path.localeCompare(b.path));
@@ -203,24 +204,24 @@ export class ImportModal extends Modal {
 
     async startImport() {
         if (this.mode === "new" && !this.dbName) {
-            new Notice("Database name is required");
+            new Notice(t("modals.import.dbNameRequired"));
             return;
         }
 
         if (this.mode === "append" && !this.existingDbPath) {
-            new Notice("Existing DB path is required");
+            new Notice(t("modals.import.existingPathRequired"));
             return;
         }
 
         if (this.sourceType === "obsidian") {
             if (!this.folderPath) {
-                new Notice("Source folder is required");
+                new Notice(t("modals.import.sourceFolderRequired"));
                 return;
             }
             await this.importFromObsidian();
         } else {
             if (!this.githubUsername) {
-                new Notice("Github username is required");
+                new Notice(t("modals.import.githubUsernameRequired"));
                 return;
             }
             if (this.sourceType === "github-stars") {
@@ -234,9 +235,9 @@ export class ImportModal extends Modal {
     async saveToDatabase(contentToAppend: string, report: { total: number, skipped?: number, updated?: number }, isFullContent: boolean = false) {
         if (contentToAppend === "") {
             if (report.skipped && report.skipped === report.total && report.total > 0) {
-                new Notice("All items were duplicates. Nothing new to import.");
+                new Notice(t("modals.import.allDuplicates"));
             } else if (report.total === 0) {
-                new Notice("No items found to import.");
+                new Notice(t("modals.import.noItemsFound"));
             }
             return;
         }
@@ -245,18 +246,18 @@ export class ImportModal extends Modal {
             const fileName = `${this.dbName}.md`;
             const header = `---\nmarkdown-db: true\n---\n\n# ${this.dbName}\n\n`;
             await this.app.vault.create(fileName, header + contentToAppend);
-            new Notice(`Database "${fileName}" created successfully!`);
+            new Notice(t("modals.import.dbCreated", { name: fileName }));
         } else {
             const file = this.app.vault.getAbstractFileByPath(this.existingDbPath);
             if (file && file instanceof TFile) {
                 if (isFullContent) {
                     await this.app.vault.modify(file, contentToAppend);
-                    new Notice(`Imported ${report.total} items to "${file.basename}" (Updated: ${report.updated || 0}, New: ${report.total - (report.updated || 0)}).`);
+                    new Notice(t("modals.import.importedItems", { total: report.total, name: file.basename, updated: report.updated || 0, new: report.total - (report.updated || 0) }));
                 } else {
                     await this.app.vault.process(file, (data) => {
                         return data + "\n" + contentToAppend;
                     });
-                    new Notice(`Imported ${report.total - (report.skipped || 0)} items to "${file.basename}" (Skipped ${report.skipped || 0} duplicates).`);
+                    new Notice(t("modals.import.importedSkipped", { total: report.total - (report.skipped || 0), name: file.basename, skipped: report.skipped || 0 }));
                 }
             } else {
                 throw new Error("Existing database file not found: " + this.existingDbPath);
@@ -271,12 +272,12 @@ export class ImportModal extends Modal {
     async importFromObsidian() {
         const folder = this.app.vault.getAbstractFileByPath(this.folderPath);
         if (!folder || !(folder instanceof TFolder)) {
-            new Notice("Invalid folder path");
+            new Notice(t("modals.import.invalidFolderPath"));
             return;
         }
 
         this.close();
-        new Notice(`Starting import from folder: ${this.folderPath}...`);
+        new Notice(t("modals.import.startingFolderImport", { path: this.folderPath }));
 
         try {
             const files = folder.children.filter((f): f is TFile => f instanceof TFile && f.extension === "md");
@@ -363,7 +364,7 @@ export class ImportModal extends Modal {
 
         } catch (error) {
             console.error(error);
-            new Notice("Failed to import: " + error.message);
+            new Notice(t("modals.import.failedToImport", { error: error.message }));
         }
     }
 
@@ -388,11 +389,11 @@ export class ImportModal extends Modal {
 
     async importFromGithub() {
         this.close();
-        new Notice(`Starting import for user: ${this.githubUsername}...`);
+        new Notice(t("modals.import.startingGithubImport", { user: this.githubUsername }));
 
         try {
             const stars = await fetchGithubStars(this.githubUsername, this.githubToken);
-            new Notice(`Fetched ${stars.length} starred repositories. Processing...`);
+            new Notice(t("modals.import.fetchedStars", { count: stars.length }));
 
             // Read existing content if appending
             let existingContent = "";
@@ -418,20 +419,20 @@ export class ImportModal extends Modal {
 
         } catch (e) {
             console.error(e);
-            new Notice("Import failed: " + e.message);
+            new Notice(t("modals.import.importFailed", { error: e.message }));
         }
     }
 
     async importFromGithubPR() {
         this.close();
-        new Notice(`Starting PR import for user: ${this.githubUsername}...`);
+        new Notice(t("modals.import.startingPrImport", { user: this.githubUsername }));
 
         try {
             const allPrs = await fetchGithubPRs(this.githubUsername, this.githubToken);
             // Filter out closed and unmerged PRs (discarded)
             const prs = allPrs.filter(pr => !(pr.state === 'closed' && !pr.pull_request?.merged_at));
 
-            new Notice(`Fetched ${allPrs.length} PRs. Processing ${prs.length} valid items...`);
+            new Notice(t("modals.import.fetchedPrs", { total: allPrs.length, count: prs.length }));
 
             // Read existing content if appending
             let existingContent = "";
@@ -457,7 +458,7 @@ export class ImportModal extends Modal {
 
         } catch (e) {
             console.error(e);
-            new Notice("Import failed: " + e.message);
+            new Notice(t("modals.import.importFailed", { error: e.message }));
         }
     }
 }

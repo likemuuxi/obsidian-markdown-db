@@ -21,6 +21,7 @@ import type MarkdownDBPlugin from "../main";
 import { PropertyConfig } from "../settings";
 import { TemplateSuggestModal } from "../modals/TemplateSuggestModal";
 import { parseYaml } from "obsidian";
+import { t } from "../i18n";
 
 export const VIEW_TYPE_MARKDOWN_DB = "markdown-db-view";
 
@@ -343,7 +344,7 @@ export class MarkdownDBView extends TextFileView implements IMarkdownDBView {
     }
 
     getDisplayText() {
-        return this.file ? this.file.basename : "Database";
+        return this.file ? this.file.basename : t("view.titleFallback");
     }
 
     getViewData() {
@@ -436,10 +437,10 @@ export class MarkdownDBView extends TextFileView implements IMarkdownDBView {
                         }
                     } catch (e) {
                         console.error("[MarkdownDB] Error parsing template", e);
-                        new Notice(`Error parsing template: ${e.message}`);
+                        new Notice(t("view.errorParsingTemplate", { error: e.message }));
                     }
                 } else {
-                    new Notice(`Template file not found: ${templatePath}`);
+                    new Notice(t("view.templateNotFound", { path: templatePath }));
                 }
             }
             await addRecord(this.app, this.file, "Untitled", initialProperties, columnTypes);
@@ -555,7 +556,7 @@ export class MarkdownDBView extends TextFileView implements IMarkdownDBView {
                     await this.app.fileManager.renameFile(this.file, newPath);
                     // new Notice(`Renamed to ${newFilename}`);
                 } catch (e) {
-                    new Notice("Failed to rename file");
+                    new Notice(t("common.failedToRenameFile"));
                     console.error(e);
                 }
             }
@@ -681,7 +682,7 @@ export class MarkdownDBView extends TextFileView implements IMarkdownDBView {
             const direction = syncConfig.syncDirection || 'push';
             menu.addItem((item) => {
                 item
-                    .setTitle(direction === 'pull' ? "Pull from Notion" : "Push to Notion")
+                    .setTitle(direction === 'pull' ? t("settings.integration.pullFromNotion") : t("settings.integration.pushToNotion"))
                     .setIcon("refresh-cw")
                     .onClick(async () => {
                         await this.handleSyncItem(record);
@@ -692,7 +693,7 @@ export class MarkdownDBView extends TextFileView implements IMarkdownDBView {
         
         menu.addItem((item) => {
             item
-                .setTitle("Add child record")
+                .setTitle(t("view.addChildRecord"))
                 .setIcon("list-tree")
                 .onClick(async () => {
                     await this.handleAddChildRecord(record);
@@ -701,7 +702,7 @@ export class MarkdownDBView extends TextFileView implements IMarkdownDBView {
 
         menu.addItem((item) => {
             item
-                .setTitle(selectedRecords.length > 1 ? `Delete ${selectedRecords.length} records` : "Delete")
+                .setTitle(selectedRecords.length > 1 ? t("dashboard.deleteRecords", { count: selectedRecords.length }) : t("common.delete"))
                 .setIcon("trash")
                 .setWarning(true)
                 .onClick(async () => {
@@ -726,7 +727,7 @@ export class MarkdownDBView extends TextFileView implements IMarkdownDBView {
 
         menu.addItem((item) => {
             item
-                .setTitle("Rename property")
+                .setTitle(t("dashboard.renameProperty"))
                 .setIcon("pencil")
                 .onClick(() => {
                     new RenameModal(this.app, key, async (newName) => {
@@ -748,7 +749,7 @@ export class MarkdownDBView extends TextFileView implements IMarkdownDBView {
                                 await updateConfig(this.app, this.file, "db-columns", JSON.stringify(newOrder), viewName);
                             }
 
-                            new Notice(`Property renamed to "${newName}"`);
+                            new Notice(t("dashboard.propertyRenamed", { name: newName }));
                         }
                     }).open();
                 });
@@ -758,7 +759,7 @@ export class MarkdownDBView extends TextFileView implements IMarkdownDBView {
         if (!globalProp) {
             menu.addItem((item) => {
                 item
-                    .setTitle("Add to global properties")
+                    .setTitle(t("dashboard.addToGlobalProperties"))
                     .setIcon("globe")
                     .onClick(async () => {
                         let type: PropertyType = "text";
@@ -781,7 +782,7 @@ export class MarkdownDBView extends TextFileView implements IMarkdownDBView {
                             }
                         ];
                         await this.plugin.saveSettings();
-                        new Notice(`Property "${key}" added to global settings`);
+                        new Notice(t("dashboard.propertyAddedToGlobal", { name: key }));
                         this.refresh();
                     });
             });
@@ -789,7 +790,7 @@ export class MarkdownDBView extends TextFileView implements IMarkdownDBView {
 
         menu.addItem((item) => {
             item
-                .setTitle("Hide property")
+                .setTitle(t("dashboard.hideProperty"))
                 .setIcon("eye-off")
                 .onClick(async () => {
                     if (this.file && config) {
@@ -806,7 +807,7 @@ export class MarkdownDBView extends TextFileView implements IMarkdownDBView {
             if (hiddenColumns.length > 0) {
                 menu.addItem((item) => {
                     item
-                        .setTitle("Unhide property")
+                        .setTitle(t("dashboard.unhideProperty"))
                         .setIcon("eye")
                         .setSection("view");
 
@@ -831,13 +832,13 @@ export class MarkdownDBView extends TextFileView implements IMarkdownDBView {
 
         menu.addItem((item) => {
             item
-                .setTitle(`Delete property "${key}"`)
+                .setTitle(t("dashboard.deletePropertyKey", { name: key }))
                 .setIcon("trash")
                 .setWarning(true)
                 .onClick(async () => {
                     if (this.file) {
                         await deletePropertyFromAllRecords(this.app, this.file, key);
-                        new Notice(`Property "${key}" deleted`);
+                        new Notice(t("dashboard.propertyDeleted", { name: key }));
                     }
                 });
         });

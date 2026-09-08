@@ -3,6 +3,7 @@ import * as React from "react";
 import * as ReactDOM from "react-dom/client";
 import { Dashboard } from "../components/Dashboard";
 import type MarkdownDBPlugin from "../main";
+import { t } from "../i18n";
 
 export const VIEW_TYPE_DASHBOARD = "markdown-db-dashboard-view";
 
@@ -22,7 +23,7 @@ export class DashboardView extends ItemView {
     }
 
     getDisplayText() {
-        return "Dashboard";
+        return t("dashboard.viewTitle");
     }
 
     getIcon() {

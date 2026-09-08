@@ -1,4 +1,5 @@
 import { App, Modal, Setting } from "obsidian";
+import { t } from "../i18n";
 
 export class CreateFolderModal extends Modal {
     folderName: string;
@@ -12,11 +13,11 @@ export class CreateFolderModal extends Modal {
 
     onOpen() {
         const { contentEl } = this;
-        contentEl.createEl("h2", { text: "Create New Folder" });
+        contentEl.createEl("h2", { text: t("modals.createFolder.title") });
 
         const setting = new Setting(contentEl)
-            .setName("Name")
-            .setDesc("Enter the name for your new folder")
+            .setName(t("common.name"))
+            .setDesc(t("modals.createFolder.nameDesc"))
             .addText((text) => {
                 text
                     .onChange((value) => {
@@ -33,7 +34,7 @@ export class CreateFolderModal extends Modal {
         new Setting(contentEl)
             .addButton((btn) =>
                 btn
-                    .setButtonText("Create")
+                    .setButtonText(t("common.create"))
                     .setCta()
                     .onClick(() => {
                         this.submit();

@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { getIcon } from "obsidian";
 import { PropertyType, PROPERTY_TYPE_ICONS } from "../database/schema";
 import { PropertyConfig } from "../settings";
+import { t } from "../i18n";
 
 interface PropertyMenuProps {
     onClose: () => void;
@@ -114,7 +115,7 @@ export const PropertyMenu: React.FC<PropertyMenuProps> = ({ onClose, onSelect, p
     const renderTypeSelection = () => (
         <>
             <div style={{ padding: "8px 12px", fontSize: "12px", color: "var(--text-muted)", fontWeight: "600", borderBottom: "1px solid var(--background-modifier-border)" }}>
-                Select Property Type
+                {t("propertyMenu.selectPropertyType")}
             </div>
             <div style={{ flex: 1, overflowY: "auto", padding: "4px 0" }}>
                 {availableTypes.map((type, index) => (
@@ -148,7 +149,7 @@ export const PropertyMenu: React.FC<PropertyMenuProps> = ({ onClose, onSelect, p
                             }}
                             dangerouslySetInnerHTML={{ __html: getIcon(PROPERTY_TYPE_ICONS[type])?.outerHTML || "" }}
                         />
-                        <span style={{ textTransform: "capitalize" }}>{type}</span>
+                        <span style={{ textTransform: "capitalize" }}>{t(`propertyTypes.${type}`)}</span>
                     </div>
                 ))}
             </div>
@@ -172,7 +173,7 @@ export const PropertyMenu: React.FC<PropertyMenuProps> = ({ onClose, onSelect, p
                         padding: "4px",
                         borderRadius: "4px",
                     }}
-                    title="Back to types"
+                    title={t("propertyMenu.backToTypes")}
                     onMouseEnter={(e) => (e.currentTarget.style.background = "var(--background-modifier-hover)")}
                     onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                 >
@@ -183,7 +184,7 @@ export const PropertyMenu: React.FC<PropertyMenuProps> = ({ onClose, onSelect, p
                 </div>
                 <input
                     type="text"
-                    placeholder={`Property name (${selectedType})...`}
+                    placeholder={t("propertyMenu.propertyNamePlaceholder", { type: selectedType })}
                     value={name}
                     onChange={e => setName(e.target.value)}
                     onKeyDown={handleKeyDown}
@@ -193,7 +194,7 @@ export const PropertyMenu: React.FC<PropertyMenuProps> = ({ onClose, onSelect, p
             </div>
             
             <div style={{ padding: "8px 12px", fontSize: "12px", color: "var(--text-muted)", fontWeight: "600", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span>Select property</span>
+                <span>{t("propertyMenu.selectPropertyTitle")}</span>
                 <span style={{ 
                     display: "inline-flex", 
                     alignItems: "center", 
@@ -231,7 +232,7 @@ export const PropertyMenu: React.FC<PropertyMenuProps> = ({ onClose, onSelect, p
                         <span>{prop}</span>
                         {!globalProperties.some(gp => gp.name === prop) && (
                             <div
-                                title="Save to global properties"
+                                title={t("propertyMenu.saveToGlobal")}
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     onSaveToGlobal(prop, selectedType);
@@ -276,14 +277,14 @@ export const PropertyMenu: React.FC<PropertyMenuProps> = ({ onClose, onSelect, p
                         onClick={() => onSelect(name.trim(), selectedType)}
                     >
                         <div style={{ flex: 1, display: "flex", alignItems: "center" }}>
-                            <span style={{ marginRight: "6px" }}>+ Create "{name.trim()}"</span>
+                            <span style={{ marginRight: "6px" }}>{t("propertyMenu.createProp", { name: name.trim() })}</span>
                         </div>
                     </div>
                 )}
 
                 {!showCreate && filteredProps.length === 0 && (
                     <div style={{ padding: "12px", color: "var(--text-muted)", textAlign: "center", fontStyle: "italic" }}>
-                        No properties found
+                        {t("propertyMenu.noPropertiesFound")}
                     </div>
                 )}
             </div>

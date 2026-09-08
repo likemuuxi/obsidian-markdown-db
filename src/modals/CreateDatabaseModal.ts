@@ -1,4 +1,5 @@
 import { App, Modal, Setting } from "obsidian";
+import { t } from "../i18n";
 
 export class CreateDatabaseModal extends Modal {
     filename: string;
@@ -15,11 +16,11 @@ export class CreateDatabaseModal extends Modal {
 
     onOpen() {
         const { contentEl } = this;
-        contentEl.createEl("h2", { text: "Create New Database" });
+        contentEl.createEl("h2", { text: t("modals.createDatabase.title") });
 
         const setting = new Setting(contentEl)
-            .setName("Name")
-            .setDesc("Enter the name for your new database")
+            .setName(t("common.name"))
+            .setDesc(t("modals.createDatabase.nameDesc"))
             .addText((text) => {
                 text
                     .setValue(this.filename)
@@ -37,7 +38,7 @@ export class CreateDatabaseModal extends Modal {
         new Setting(contentEl)
             .addButton((btn) =>
                 btn
-                    .setButtonText("Create")
+                    .setButtonText(t("common.create"))
                     .setCta()
                     .onClick(() => {
                         this.submit();

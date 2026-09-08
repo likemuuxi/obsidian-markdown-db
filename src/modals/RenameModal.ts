@@ -1,4 +1,5 @@
 import { App, Modal, Setting } from "obsidian";
+import { t } from "../i18n";
 
 export class RenameModal extends Modal {
     newName: string;
@@ -12,10 +13,10 @@ export class RenameModal extends Modal {
 
     onOpen() {
         const { contentEl } = this;
-        contentEl.createEl("h2", { text: "Rename Database" });
+        contentEl.createEl("h2", { text: t("modals.renameDatabase.title") });
 
         const setting = new Setting(contentEl)
-            .setName("Name")
+            .setName(t("common.name"))
             .addText((text) => {
                 text
                     .setValue(this.newName)
@@ -34,7 +35,7 @@ export class RenameModal extends Modal {
         new Setting(contentEl)
             .addButton((btn) =>
                 btn
-                    .setButtonText("Rename")
+                    .setButtonText(t("common.rename"))
                     .setCta()
                     .onClick(() => {
                         this.submit();

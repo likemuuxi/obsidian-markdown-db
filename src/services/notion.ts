@@ -4,6 +4,7 @@ import { NotionAPI } from "../utils/notion-api";
 import { DatabaseRecord } from "../database/schema";
 import { updateProperty } from "../database/writer";
 import { markdownToNotionBlocks, notionBlocksToMarkdown } from "../utils/markdown-notion-converter";
+import { t } from "../i18n";
 
 function formatSyncTime(): string {
     const d = new Date();
@@ -76,14 +77,14 @@ export class NotionSyncService {
                 // Check if auto-sync is enabled for this config
                 // strict check: only allow if pull (though settings UI enforces this, good to be safe)
                 if (config.autoSyncOnStartup && config.syncDirection !== 'push') {
-                    new Notice(`Starting Notion Sync for ${config.name}...`);
+                    new Notice(t("notion.startingSync", { name: config.name }));
                     await this.syncDatabase(config);
                 }
             }
             // new Notice("Notion Sync Completed.");
         } catch (e) {
             console.error("Sync All Failed", e);
-            new Notice("Notion Sync Failed.");
+            new Notice(t("notion.syncFailed"));
         } finally {
             this.setSyncStatus(false);
         }
@@ -106,7 +107,7 @@ export class NotionSyncService {
         }
 
         const isIncremental = !forceFull && !!config.lastSyncTime;
-        const msg = isIncremental ? `Syncing Notion Database (Incremental): ${config.name}...` : `Syncing Notion Database (Full): ${config.name}...`;
+        const msg = isIncremental ? t("notion.syncingIncremental", { name: config.name }) : t("notion.syncingFull", { name: config.name });
         new Notice(msg);
 
         // Capture time before request to ensure we don't miss updates happening during sync
@@ -129,13 +130,13 @@ export class NotionSyncService {
 
             if (results.length > 0) {
                 await this.processResults(results, config, file);
-                new Notice(`Synced ${config.name}: ${results.length} items processed.`);
+                new Notice(t("notion.syncedItems", { name: config.name, count: results.length }));
             } else {
                 if (isIncremental) {
                     // specific message for incremental with no changes
                     // console.log(`No changes for ${config.name}`);
                 } else {
-                    new Notice(`Synced ${config.name}: No items found.`);
+                    new Notice(t("notion.syncedNoItems", { name: config.name }));
                 }
             }
 
@@ -147,14 +148,14 @@ export class NotionSyncService {
 
         } catch (error) {
             console.error(`Failed to sync Notion DB ${config.name}:`, error);
-            new Notice(`Sync failed for ${config.name}: ${error.message}`);
+            new Notice(t("notion.syncFailedFor", { name: config.name, error: error.message }));
         }
     }
 
     async syncPage(pageUrl: string, config: NotionSyncConfig, file: TFile, record?: DatabaseRecord) {
         const pageId = this.extractPageIdFromUrl(pageUrl);
         if (!pageId) {
-            new Notice("Could not extract Notion Page ID from URL.");
+            new Notice(t("notion.couldNotExtractPageId"));
             return;
         }
 
@@ -163,7 +164,7 @@ export class NotionSyncService {
             token = await (this.app as any).secretStorage.getSecret("db-notion-api-key") || "";
         }
         if (!token) {
-            new Notice("Missing Notion Token.");
+            new Notice(t("notion.missingToken"));
             return;
         }
 
@@ -181,7 +182,7 @@ export class NotionSyncService {
                 if (record) {
                     await updateProperty(this.app, file, record, 'lastSynced', formatSyncTime(), 'text');
                 }
-                new Notice("Synced to Notion (Push).");
+                new Notice(t("notion.syncedPush"));
             } else {
                 // Pull Notion changes to local
                 const page = await api.retrievePage(pageId);
@@ -189,12 +190,12 @@ export class NotionSyncService {
                 if (record) {
                     await updateProperty(this.app, file, record, 'lastSynced', formatSyncTime(), 'text');
                 }
-                new Notice("Synced 1 item from Notion (Pull).");
+                new Notice(t("notion.syncedOnePull"));
             }
 
         } catch (error) {
             console.error("Failed to sync page:", error);
-            new Notice(`Sync failed: ${error.message}`);
+            new Notice(t("notion.syncFailedMsg", { error: error.message }));
         }
     }
 
@@ -204,7 +205,7 @@ export class NotionSyncService {
             token = await (this.app as any).secretStorage.getSecret("db-notion-api-key") || "";
         }
         if (!token) {
-            new Notice("Missing Notion Token.");
+            new Notice(t("notion.missingToken"));
             return;
         }
 
@@ -246,13 +247,13 @@ export class NotionSyncService {
                     // 2. Push Content
                     await this.syncContentToNotion(record, page.id, api);
                     await updateProperty(this.app, file, record, 'lastSynced', formatSyncTime(), 'text');
-                    new Notice("Synced to Notion (Push).");
+                    new Notice(t("notion.syncedPush"));
 
                 } else {
                     // Pull
                     await this.updatePageInFile(page, config, file, record, true); // true = pull content
                     await updateProperty(this.app, file, record, 'lastSynced', formatSyncTime(), 'text');
-                    new Notice("Synced from Notion (Pull).");
+                    new Notice(t("notion.syncedPull"));
                 }
 
             } else {
@@ -269,12 +270,12 @@ export class NotionSyncService {
                 if (direction === 'push') {
                     await this.createPageInNotion(record, config, file);
                 } else {
-                    new Notice("Item not found in Notion. Cannot pull.");
+                    new Notice(t("notion.itemNotFound"));
                 }
             }
         } catch (error) {
             console.error("Failed to sync by title:", error);
-            new Notice(`Sync failed: ${error.message}`);
+            new Notice(t("notion.syncFailedMsg", { error: error.message }));
         }
     }
 
@@ -284,7 +285,7 @@ export class NotionSyncService {
             token = await (this.app as any).secretStorage.getSecret("db-notion-api-key") || "";
         }
         if (!token) {
-            new Notice("Missing Notion Token.");
+            new Notice(t("notion.missingToken"));
             return;
         }
 
@@ -314,10 +315,10 @@ export class NotionSyncService {
 
             await updateProperty(this.app, file, record, 'lastSynced', formatSyncTime(), 'text');
 
-            new Notice("Created new page in Notion and linked.");
+            new Notice(t("notion.createdPage"));
         } catch (error) {
             console.error("Failed to create page in Notion:", error);
-            new Notice(`Failed to create page in Notion: ${error.message}`);
+            new Notice(t("notion.failedToCreatePage", { error: error.message }));
         }
     }
 
@@ -345,7 +346,7 @@ export class NotionSyncService {
             if (linkedFile && linkedFile instanceof TFile) {
                 const content = await this.app.vault.read(linkedFile);
                 blocks = markdownToNotionBlocks(content);
-                new Notice(`Synced content from ${linkedFile.basename} to Notion.`);
+                new Notice(t("notion.syncedContentTo", { name: linkedFile.basename }));
             }
         } else if (contentVal) {
             // Treat as direct text content
@@ -354,7 +355,7 @@ export class NotionSyncService {
                 // Convert markdown text to Notion blocks
                 blocks = markdownToNotionBlocks(textContent);
 
-                new Notice(`Synced direct text content to Notion.`);
+                new Notice(t("notion.syncedDirectText"));
             }
         }
 
@@ -452,7 +453,7 @@ export class NotionSyncService {
             else if (ext === "pdf") contentType = "application/pdf";
 
             // Step 1: Initiate
-            new Notice(`Uploading image: ${file.name}...`);
+            new Notice(t("notion.uploadingImage", { name: file.name }));
             const initResponse = await api.initiateFileUpload(file.name, contentType);
 
             console.log("Initiate upload response:", initResponse);
@@ -471,7 +472,7 @@ export class NotionSyncService {
             // Step 2: Upload content via POST multipart/form-data
             await api.uploadFileContent(uploadUrl, arrayBuffer, contentType, file.name);
 
-            new Notice(`Uploaded ${file.name}.`);
+            new Notice(t("notion.uploadedImage", { name: file.name }));
             return { id: fileUploadId };
         } catch (e) {
             console.error("Failed to upload image:", e);
@@ -580,7 +581,7 @@ export class NotionSyncService {
                     if (blocks && blocks.results) {
                         const markdown = notionBlocksToMarkdown(blocks.results);
                         await this.app.vault.modify(linkedFile, markdown);
-                        new Notice(`Synced content from Notion to ${linkedFile.basename}.`);
+                        new Notice(t("notion.syncedContentFrom", { name: linkedFile.basename }));
                     }
                 } catch (e) {
                     console.error(`Failed to sync content for ${linkedFile.basename}`, e);

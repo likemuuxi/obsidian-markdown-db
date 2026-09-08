@@ -9,6 +9,7 @@ import {
     formatPRToMarkdown,
     mergeMarkdownContent
 } from "../utils/github-api";
+import { t } from "../i18n";
 
 export class GithubSyncService {
     app: App;
@@ -27,7 +28,7 @@ export class GithubSyncService {
         }
 
         if (!githubUsername) {
-            new Notice("Github Auto-Sync skipped: Username not set.");
+            new Notice(t("github.skippedNoUsername"));
             return;
         }
 
@@ -39,18 +40,18 @@ export class GithubSyncService {
 
         const file = this.app.vault.getAbstractFileByPath(githubSyncStarsDb);
         if (!file || !(file instanceof TFile)) {
-             new Notice("Github Auto-Sync (Stars) skipped: Target DB file not found.");
+             new Notice(t("github.skippedStarsNoDb"));
              return;
         }
 
-        new Notice(`Starting Github Auto-Sync (Stars) for ${githubUsername}...`);
+        new Notice(t("github.startingStars", { user: githubUsername }));
 
         try {
             const stars = await fetchGithubStars(githubUsername, githubToken);
             await this.processStars(stars, file);
         } catch (e) {
             console.error("Github Auto-Sync (Stars) failed:", e);
-            new Notice("Github Auto-Sync (Stars) failed: " + e.message);
+            new Notice(t("github.starsFailed", { error: e.message }));
         }
     }
 
@@ -70,16 +71,16 @@ export class GithubSyncService {
         const file = this.app.vault.getAbstractFileByPath(githubSyncPrsDb);
         if (!file || !(file instanceof TFile)) return;
 
-        new Notice(`Starting Github Auto-Sync (PRs) for ${githubUsername}...`);
+        new Notice(t("github.startingPrs", { user: githubUsername }));
 
         try {
             const allPrs = await fetchGithubPRs(githubUsername, githubToken);
             const prs = allPrs.filter(pr => !(pr.state === 'closed' && !pr.pull_request?.merged_at));
-            
+
             await this.processPRs(prs, file);
         } catch (e) {
             console.error("Github Auto-Sync (PRs) failed:", e);
-            new Notice("Github Auto-Sync (PRs) failed: " + e.message);
+            new Notice(t("github.prsFailed", { error: e.message }));
         }
     }
 
@@ -97,7 +98,7 @@ export class GithubSyncService {
             await this.app.vault.process(file, (data) => {
                 return data + "\n" + newContentOnly;
             });
-            new Notice(`Github Auto-Sync: Added ${newCount} new stars.`);
+            new Notice(t("github.addedStars", { count: newCount }));
         } else {
             console.log("Github Auto-Sync: No new stars found.");
         }
@@ -117,7 +118,7 @@ export class GithubSyncService {
             await this.app.vault.process(file, (data) => {
                 return data + "\n" + newContentOnly;
             });
-            new Notice(`Github Auto-Sync: Added ${newCount} new PRs.`);
+            new Notice(t("github.addedPrs", { count: newCount }));
         } else {
             console.log("Github Auto-Sync: No new PRs found.");
         }

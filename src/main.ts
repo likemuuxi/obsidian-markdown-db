@@ -7,6 +7,7 @@ import { MarkdownDBSettings, DEFAULT_SETTINGS, MarkdownDBSettingTab, PropertyCon
 import { parseFile, flattenRecords } from "./database/parser";
 import { extractProperties } from "./database/utils";
 import { addCssClassToFiles, HIDDEN_CSS_CLASS } from "./database/writer";
+import { t } from "./i18n";
 
 import { DashboardModal } from "./modals/DashboardModal";
 import { DashboardView, VIEW_TYPE_DASHBOARD } from "./views/DashboardView";
@@ -102,7 +103,7 @@ export default class MarkdownDBPlugin extends Plugin {
         // Register Dashboard Command
         this.addCommand({
             id: "open-dashboard",
-            name: "Open Database Dashboard",
+            name: t("commands.openDashboard"),
             callback: () => {
                 new DashboardModal(this.app, this).open();
             }
@@ -110,7 +111,7 @@ export default class MarkdownDBPlugin extends Plugin {
 
         this.addCommand({
             id: "quick-switch-db",
-            name: "Quick Switch Database",
+            name: t("commands.quickSwitchDb"),
             callback: () => {
                 new DBSwitcherModal(this.app, this).open();
             }
@@ -118,7 +119,7 @@ export default class MarkdownDBPlugin extends Plugin {
 
         this.addCommand({
             id: "importer-db",
-            name: "Import to Database",
+            name: t("commands.importDb"),
             callback: () => {
                 new ImportModal(this.app, this).open();
             }
@@ -128,7 +129,7 @@ export default class MarkdownDBPlugin extends Plugin {
             this.app.workspace.on("file-menu", (menu, file) => {
                 menu.addItem((item) => {
                     item
-                        .setTitle("New DB File")
+                        .setTitle(t("commands.newDbFile"))
                         .setIcon("table")
                         .onClick(async () => {
                             let folderPath = "";
@@ -141,12 +142,12 @@ export default class MarkdownDBPlugin extends Plugin {
                             // Normalize path (remove trailing slash if any, though usually not present)
                             if (folderPath === "/") folderPath = "";
 
-                            let filename = "Untitled DB.md";
+                            let filename = `${t("commands.untitledDb")}.md`;
                             let filePath = folderPath ? `${folderPath}/${filename}` : filename;
 
                             let i = 1;
                             while (await this.app.vault.adapter.exists(filePath)) {
-                                filename = `Untitled DB ${i}.md`;
+                                filename = `${t("commands.untitledDbN", { n: i })}.md`;
                                 filePath = folderPath ? `${folderPath}/${filename}` : filename;
                                 i++;
                             }
@@ -169,13 +170,13 @@ export default class MarkdownDBPlugin extends Plugin {
         );
 
         this.registerHoverLinkSource(VIEW_TYPE_MARKDOWN_DB, {
-            display: 'Markdown DB',
+            display: t("commands.markdownDb"),
             defaultMod: true
         });
 
         this.addCommand({
             id: "toggle-markdown-db-view",
-            name: "Toggle Database Table View",
+            name: t("commands.toggleView"),
             checkCallback: (checking: boolean) => {
                 const file = this.app.workspace.getActiveFile();
                 if (file) {
@@ -190,7 +191,7 @@ export default class MarkdownDBPlugin extends Plugin {
 
         this.addCommand({
             id: "scan-markdown-db-values",
-            name: "Scan Database Files for Property Values",
+            name: t("commands.scanValues"),
             callback: () => {
                 this.scanAllDatabaseFiles();
             }
@@ -198,11 +199,11 @@ export default class MarkdownDBPlugin extends Plugin {
 
         this.addCommand({
             id: "format-markdown-db-file",
-            name: "Format Database Files",
+            name: t("commands.formatFiles"),
             callback: async () => {
                 const files = this.app.vault.getMarkdownFiles();
                 let convertedCount = 0;
-                new Notice("Starting to format DB files...");
+                new Notice(t("commands.formatStart"));
                 for (const file of files) {
                     const cache = this.app.metadataCache.getFileCache(file);
                     if (cache?.frontmatter?.["markdown-db"]) {
@@ -235,7 +236,7 @@ export default class MarkdownDBPlugin extends Plugin {
                         }
                     }
                 }
-                new Notice(`Formatted properties and spacing in ${convertedCount} files.`);
+                new Notice(t("commands.formatDone", { count: convertedCount }));
             }
         });
 
@@ -248,7 +249,7 @@ export default class MarkdownDBPlugin extends Plugin {
         // });
 
         // Sidebar icon: open Dashboard in a new tab
-        this.addRibbonIcon("table-properties", "Open Database Dashboard", () => {
+        this.addRibbonIcon("table-properties", t("commands.openDashboard"), () => {
             this.openDashboardTab();
         });
 
@@ -543,7 +544,7 @@ export default class MarkdownDBPlugin extends Plugin {
                             if (isDB) {
                                 const badge = document.createElement("div");
                                 badge.className = `${OBSIDIAN_TAG_CLASS} ${BADGE_CLASS}`;
-                                badge.innerText = "DB";
+                                badge.innerText = t("commands.dbBadge");
                                 selfEl.appendChild(badge);
                             }
                         }

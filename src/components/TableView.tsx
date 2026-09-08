@@ -5,6 +5,7 @@ import { DatabaseData, DatabaseRecord, PropertyType, PROPERTY_TYPE_ICONS, SortRu
 import { PropertyConfig } from "../settings";
 import { EditableCell } from "./EditableCell";
 import { PropertyMenu } from "./PropertyMenu";
+import { t } from "../i18n";
 
 interface TableViewProps {
     app: App;
@@ -664,7 +665,7 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                                                 selectAllVisibleRows();
                                             }
                                         }}
-                                        title={selectedRowKeys.size === paginatedRecords.length && paginatedRecords.length > 0 ? "Clear selection" : "Select all visible rows"}
+                                        title={selectedRowKeys.size === paginatedRecords.length && paginatedRecords.length > 0 ? t("tableView.clearSelection") : t("tableView.selectAll")}
                                         style={{
                                             width: "26px",
                                             height: "26px",
@@ -723,7 +724,7 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                                     onDrop={(e) => isProperty && !readonly && handleDrop(e, col)}
                                     onDragEnd={handleDragEnd}
                                     onClick={() => handleSortClick(col)}
-                                    title={`Click to sort by ${col}`}
+                                    title={t("tableView.clickToSort", { col })}
                                     style={{
                                         textAlign: "left",
                                         height: "42px",
@@ -804,7 +805,7 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                                 color: "var(--text-muted)",
                                 boxSizing: "border-box",
                                 verticalAlign: "middle"
-                            }} onClick={(e) => !readonly && handleAddClick(e)} title="Add Property Column">
+                            }} onClick={(e) => !readonly && handleAddClick(e)} title={t("tableView.addPropertyColumn")}>
                             +
                         </th>
                     </tr>
@@ -871,7 +872,7 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                                                     width: "14px",
                                                     height: "14px"
                                                 }}
-                                                title={isSelected ? "Deselect row" : "Select row"}
+                                                title={isSelected ? t("tableView.deselectRow") : t("tableView.selectRow")}
                                             >
                                                 <input
                                                     type="hidden"
@@ -911,11 +912,11 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                                                         lineHeight: 0,
                                                         touchAction: "none"
                                                     }}
-                                                    title="Drag to reorder. Drop on center of a row to make it a child."
+                                                    title={t("tableView.dragReorderHint")}
                                                 >
                                                     <span
                                                         style={{ display: "inline-flex", alignItems: "center", color: "var(--text-muted)" }}
-                                                        title="Drag to reorder. Drop on center of a row to make it a child."
+                                                        title={t("tableView.dragReorderHint")}
                                                         dangerouslySetInnerHTML={{ __html: dragHandleIcon }}
                                                     />
                                                 </div>
@@ -1120,7 +1121,7 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                                                 }}
                                             />
                                             <span style={{ color: "var(--text-muted)" }}>
-                                                / {totalPages || 1}
+                                                {t("tableView.pageTotal", { count: totalPages || 1 })}
                                             </span>
                                         </div>
                                         <button

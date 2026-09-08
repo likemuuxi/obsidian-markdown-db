@@ -5,6 +5,7 @@ import { PropertyType, PROPERTY_TYPE_ICONS, VALID_PROPERTY_TYPES } from "./datab
 import { addCssClassToFiles, removeCssClassFromFiles, HIDDEN_CSS_CLASS } from "./database/writer";
 import { PropertySettingsView } from "./settings/PropertySettings";
 import { IntegrationSettingsView } from "./settings/IntegrationSettings";
+import { t } from "./i18n";
 
 export interface PropertyConfig {
     name: string;
@@ -79,7 +80,7 @@ export class MarkdownDBSettingTab extends PluginSettingTab {
 
         const generalTab = tabHeader.createDiv({
             cls: `markdown-db-settings-tab ${this.activeTab === 'general' ? 'is-active' : ''}`,
-            text: 'General'
+            text: t("settings.tabGeneral")
         });
         generalTab.onclick = () => {
             this.activeTab = 'general';
@@ -88,7 +89,7 @@ export class MarkdownDBSettingTab extends PluginSettingTab {
 
         const propTab = tabHeader.createDiv({
             cls: `markdown-db-settings-tab ${this.activeTab === 'properties' ? 'is-active' : ''}`,
-            text: 'Properties'
+            text: t("settings.tabProperties")
         });
         propTab.onclick = () => {
             this.activeTab = 'properties';
@@ -97,7 +98,7 @@ export class MarkdownDBSettingTab extends PluginSettingTab {
 
         const integrationTab = tabHeader.createDiv({
             cls: `markdown-db-settings-tab ${this.activeTab === 'integration' ? 'is-active' : ''}`,
-            text: 'Integration'
+            text: t("settings.tabIntegration")
         });
         integrationTab.onclick = () => {
             this.activeTab = 'integration';
@@ -116,12 +117,12 @@ export class MarkdownDBSettingTab extends PluginSettingTab {
 
     renderGeneralSettings(containerEl: HTMLElement) {
         new Setting(containerEl)
-            .setName('Default DB Folder')
-            .setDesc('Folder path to create new DB files in (e.g. "Databases"). Leave empty for root.')
+            .setName(t("settings.general.defaultDbFolderName"))
+            .setDesc(t("settings.general.defaultDbFolderDesc"))
             .addText(text => {
                 new FolderSuggest(this.app, text.inputEl);
                 text
-                    .setPlaceholder('Example: Databases')
+                    .setPlaceholder(t("settings.general.defaultDbFolderPlaceholder"))
                     .setValue(this.plugin.settings.defaultDbFolder)
                     .onChange(async (value) => {
                         this.plugin.settings.defaultDbFolder = value;
@@ -130,8 +131,8 @@ export class MarkdownDBSettingTab extends PluginSettingTab {
             });
 
         new Setting(containerEl)
-            .setName('Hide DB Properties')
-            .setDesc('Hide lines wrapped in %% %% in the editor for DB files.')
+            .setName(t("settings.general.hidePropertiesName"))
+            .setDesc(t("settings.general.hidePropertiesDesc"))
             .addToggle(toggle => toggle
                 .setValue(this.plugin.settings.hideProperties)
                 .onChange(async (value) => {

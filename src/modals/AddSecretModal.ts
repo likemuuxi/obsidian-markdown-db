@@ -1,4 +1,5 @@
 import { App, Modal, Setting, Notice } from "obsidian";
+import { t } from "../i18n";
 
 export class AddSecretModal extends Modal {
     onSave: (key: string, value: string) => void;
@@ -13,38 +14,38 @@ export class AddSecretModal extends Modal {
     onOpen() {
         const { contentEl } = this;
         contentEl.empty();
-        contentEl.createEl("h2", { text: "添加新密钥" });
+        contentEl.createEl("h2", { text: t("modals.addSecret.title") });
 
         new Setting(contentEl)
-            .setName("密钥名称 (Key)")
+            .setName(t("modals.addSecret.keyName"))
             .addText(text => text
-                .setPlaceholder("e.g. my-github-token")
+                .setPlaceholder(t("modals.addSecret.keyPlaceholder"))
                 .onChange(val => this.keyInput = val)
             );
 
         new Setting(contentEl)
-            .setName("密钥内容 (Value)")
+            .setName(t("modals.addSecret.valueName"))
             .addText(text => {
                 text.inputEl.type = "password";
-                text.setPlaceholder("输入密钥内容...")
+                text.setPlaceholder(t("modals.addSecret.valuePlaceholder"))
                 text.onChange(val => this.valueInput = val)
             });
 
         new Setting(contentEl)
             .addButton(btn => btn
-                .setButtonText("取消")
+                .setButtonText(t("common.cancel"))
                 .onClick(() => this.close())
             )
             .addButton(btn => btn
-                .setButtonText("保存")
+                .setButtonText(t("common.save"))
                 .setCta()
                 .onClick(() => {
                     if (!this.keyInput || !this.valueInput) {
-                        new Notice("密钥名称和内容不能为空！");
+                        new Notice(t("modals.addSecret.emptyError"));
                         return;
                     }
                     if (!/^[a-z0-9-]+$/.test(this.keyInput)) {
-                        new Notice("密钥 ID 无效。请仅使用小写字母、数字和破折号。");
+                        new Notice(t("modals.addSecret.invalidId"));
                         return;
                     }
                     this.onSave(this.keyInput, this.valueInput);

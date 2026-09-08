@@ -13,6 +13,7 @@ import { PropertyConfig } from "../settings";
 import type MyPlugin from "../main";
 import { VIEW_TYPE_MARKDOWN_DB } from "../views/view";
 import { RenameModal } from "../modals/RenameModal";
+import { t } from "../i18n";
 import { CreateDatabaseModal } from "../modals/CreateDatabaseModal";
 import { TemplateSuggestModal } from "../modals/TemplateSuggestModal";
 import {
@@ -196,7 +197,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
                 setDbData(data);
             } catch (e) {
                 console.error("Failed to load file", e);
-                new Notice("Failed to load database file");
+                new Notice(t("dashboard.failedToLoadDb"));
             } finally {
                 setLoading(false);
             }
@@ -439,7 +440,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
                 try {
                     await app.fileManager.renameFile(selectedFile, newPath);
                 } catch (e) {
-                    new Notice("Failed to rename file");
+                    new Notice(t("common.failedToRenameFile"));
                     console.error(e);
                 }
             }
@@ -471,7 +472,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
                 const direction = syncConfig.syncDirection || 'push';
                 menu.addItem((item) => {
                     item
-                        .setTitle(direction === 'pull' ? "Pull from Notion" : "Push to Notion")
+                        .setTitle(direction === 'pull' ? t("settings.integration.pullFromNotion") : t("settings.integration.pushToNotion"))
                         .setIcon("refresh-cw")
                         .onClick(async () => {
                             plugin.notionSyncService.setSyncStatus(true);
@@ -492,7 +493,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
 
         menu.addItem((item) => {
             item
-                .setTitle(selectedRecords.length > 1 ? `Delete ${selectedRecords.length} records` : "Delete")
+                .setTitle(selectedRecords.length > 1 ? t("dashboard.deleteRecords", { count: selectedRecords.length }) : t("common.delete"))
                 .setIcon("trash")
                 .setWarning(true)
                 .onClick(async () => {
@@ -505,7 +506,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
                         }
 
                         await reloadCurrentFile();
-                        new Notice(recordsToDelete.length > 1 ? `${recordsToDelete.length} records deleted` : "Record deleted");
+                        new Notice(recordsToDelete.length > 1 ? t("dashboard.recordsDeleted", { count: recordsToDelete.length }) : t("dashboard.recordDeleted"));
                     }
                 });
         });
@@ -550,7 +551,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
 
         menu.addItem((item) => {
             item
-                .setTitle("Rename property")
+                .setTitle(t("dashboard.renameProperty"))
                 .setIcon("pencil")
                 .onClick(() => {
                     new RenameModal(app, key, async (newName) => {
@@ -573,7 +574,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
                             }
 
                             await reloadCurrentFile();
-                            new Notice(`Property renamed to "${newName}"`);
+                            new Notice(t("dashboard.propertyRenamed", { name: newName }));
                         }
                     }).open();
                 });
@@ -583,7 +584,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
         if (!globalProp) {
             menu.addItem((item) => {
                 item
-                    .setTitle("Add to global properties")
+                    .setTitle(t("dashboard.addToGlobalProperties"))
                     .setIcon("globe")
                     .onClick(async () => {
                         let type: PropertyType = "text";
@@ -592,14 +593,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
                         }
 
                         await onSaveToGlobal(key, type);
-                        new Notice(`Property "${key}" added to global settings`);
+                        new Notice(t("dashboard.propertyAddedToGlobal", { name: key }));
                     });
             });
         }
 
         menu.addItem((item) => {
             item
-                .setTitle("Hide property")
+                .setTitle(t("dashboard.hideProperty"))
                 .setIcon("eye-off")
                 .onClick(async () => {
                     if (selectedFile && dbData) {
@@ -617,7 +618,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
             if (hiddenColumns.length > 0) {
                 menu.addItem((item) => {
                     item
-                        .setTitle("Unhide property")
+                        .setTitle(t("dashboard.unhideProperty"))
                         .setIcon("eye")
                         .setSection("view");
 
@@ -643,14 +644,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
 
         menu.addItem((item) => {
             item
-                .setTitle("Delete property")
+                .setTitle(t("dashboard.deleteProperty"))
                 .setIcon("trash")
                 .setWarning(true)
                 .onClick(async () => {
                     if (selectedFile) {
                         await deletePropertyFromAllRecords(app, selectedFile, key);
                         await reloadCurrentFile();
-                        new Notice(`Property "${key}" deleted`);
+                        new Notice(t("dashboard.propertyDeleted", { name: key }));
                     }
                 });
         });
@@ -664,7 +665,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
 
         menu.addItem((item) =>
             item
-                .setTitle("Rename")
+                .setTitle(t("common.rename"))
                 .setIcon("pencil")
                 .onClick(() => {
                     new RenameModal(app, file.basename, async (newName) => {
@@ -675,9 +676,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
                                 await app.fileManager.renameFile(file, newPath);
                                 // Force update as TFile object is mutated in place by Obsidian
                                 setFiles([...files]);
-                                new Notice(`Renamed to ${newName}`);
+                                new Notice(t("common.renamedTo", { name: newName }));
                             } catch (e) {
-                                new Notice("Failed to rename file");
+                                new Notice(t("common.failedToRenameFile"));
                                 console.error(e);
                             }
                         }
@@ -687,7 +688,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
 
         menu.addItem((item) =>
             item
-                .setTitle("Jump to file")
+                .setTitle(t("dashboard.jumpToFile"))
                 .setIcon("external-link")
                 .onClick(async () => {
                     onClose();
@@ -704,7 +705,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
 
         menu.addItem((item) =>
             item
-                .setTitle("Delete")
+                .setTitle(t("common.delete"))
                 .setIcon("trash")
                 .setWarning(true)
                 .onClick(async () => {
@@ -714,9 +715,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
                         if (selectedFile?.path === file.path) {
                             setSelectedFile(null);
                         }
-                        new Notice("File moved to trash");
+                        new Notice(t("common.fileMovedToTrash"));
                     } catch (e) {
-                        new Notice("Failed to delete file");
+                        new Notice(t("common.failedToDeleteFile"));
                         console.error(e);
                     }
                 })
@@ -728,7 +729,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
 
 
     const handleCreateDbFile = async (folderPath?: string) => {
-        new CreateDatabaseModal(app, "Untitled Database", async (filename) => {
+        new CreateDatabaseModal(app, t("toolbar.dbTitlePlaceholder"), async (filename) => {
             if (!filename) return;
 
             // Ensure extension
@@ -743,7 +744,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
                 try {
                     await app.vault.createFolder(basePath);
                 } catch (e) {
-                    new Notice(`Failed to create folder: ${basePath}`);
+                    new Notice(t("dashboard.failedToCreateFolderPath", { path: basePath }));
                     return;
                 }
             }
@@ -753,7 +754,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
 
             // Handle duplicates or error if exists
             if (await app.vault.adapter.exists(filePath)) {
-                new Notice("File with this name already exists!");
+                new Notice(t("dashboard.fileExists"));
                 return;
             }
 
@@ -763,9 +764,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
                 const newFile = await app.vault.create(filePath, initialContent);
                 setFiles(prev => [...prev, newFile]);
                 setSelectedFile(newFile);
-                new Notice("New database created");
+                new Notice(t("dashboard.dbCreated"));
             } catch (e) {
-                new Notice("Failed to create file");
+                new Notice(t("dashboard.failedToCreateFile"));
                 console.error(e);
             }
         }, folderPath).open();
@@ -779,16 +780,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
 
             try {
                 if (await app.vault.adapter.exists(newPath)) {
-                    new Notice("Folder already exists");
+                    new Notice(t("dashboard.folderExists"));
                     return;
                 }
                 await app.vault.createFolder(newPath);
-                new Notice("Folder created");
+                new Notice(t("dashboard.folderCreated"));
 
                 // Trigger refresh immediately
                 refreshFiles();
             } catch (e) {
-                new Notice("Failed to create folder");
+                new Notice(t("dashboard.failedToCreateFolder"));
                 console.error(e);
             }
         }).open();
@@ -799,7 +800,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
 
         menu.addItem((item) =>
             item
-                .setTitle("New Database")
+                .setTitle(t("common.newDatabase"))
                 .setIcon("plus")
                 .onClick(() => {
                     handleCreateDbFile(folderPath);
@@ -808,7 +809,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
 
         menu.addItem((item) =>
             item
-                .setTitle("New Folder")
+                .setTitle(t("common.newFolder"))
                 .setIcon("folder-plus")
                 .onClick(() => {
                     handleCreateFolder(folderPath);
@@ -819,7 +820,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
 
         menu.addItem((item) => {
             item
-                .setTitle("Rename")
+                .setTitle(t("common.rename"))
                 .setIcon("pencil")
                 .onClick(() => {
                     // Get folder name from path
@@ -830,10 +831,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
                             const newPath = parentPath ? `${parentPath}/${newName}` : newName;
                             try {
                                 await app.vault.adapter.rename(folderPath, newPath);
-                                new Notice(`Renamed to ${newName}`);
+                                new Notice(t("common.renamedTo", { name: newName }));
                                 // Rely on reactive updates if implemented, otherwise manual refresh might be needed
                             } catch (e) {
-                                new Notice("Failed to rename folder");
+                                new Notice(t("common.failedToRenameFolder"));
                                 console.error(e);
                             }
                         }
@@ -843,15 +844,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
 
         menu.addItem((item) =>
             item
-                .setTitle("Delete")
+                .setTitle(t("common.delete"))
                 .setIcon("trash")
                 .setWarning(true)
                 .onClick(async () => {
                     try {
                         await app.vault.adapter.trashLocal(folderPath); // Or trash(folder)
-                        new Notice("Folder moved to trash");
+                        new Notice(t("common.folderMovedToTrash"));
                     } catch (e) {
-                        new Notice("Failed to delete folder");
+                        new Notice(t("common.failedToDeleteFolder"));
                         console.error(e);
                     }
                 })
@@ -874,7 +875,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
                 }}
             >
                 <div className="markdown-db-sidebar-header">
-                    <h3>Database</h3>
+                    <h3>{t("dashboard.sidebarTitle")}</h3>
                     {/* <button className="markdown-db-icon-btn"><Icon name="plus" /></button> */}
                 </div>
                 <div className="markdown-db-file-list">
@@ -918,7 +919,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
                                 // Actually, `app.fileManager.renameFile` modifies the TFile in place? 
                                 // Obsidian API says: "Renames or moves a file".
                                 // If we just wait a bit, maybe `getMarkdownFiles` returns updated paths?
-                                new Notice(`Moved to ${newPath}`);
+                                new Notice(t("dashboard.moveTo", { path: newPath }));
 
                                 // Force refresh
                                 const allFiles = app.vault.getMarkdownFiles();
@@ -928,7 +929,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
                                 // Let's try just forcing a re-render by creating a new array ref.
                                 setFiles([...files]);
                             } catch (e) {
-                                new Notice("Failed to move file");
+                                new Notice(t("dashboard.failedToMoveFile"));
                                 console.error(e);
                             }
                         }}
@@ -1019,7 +1020,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ app, plugin, onClose, port
                     </>
                 ) : (
                     <div className="markdown-db-empty-state">
-                        Select a database to view
+                        {t("dashboard.selectDatabaseToView")}
                     </div>
                 )}
             </div>

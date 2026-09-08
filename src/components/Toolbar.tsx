@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from "react";
 import * as ReactDOM from "react-dom";
 import { setIcon, Menu } from "obsidian";
 import { DatabaseConfig, SortRule, FilterRule } from "../database/schema";
+import { t } from "../i18n";
 
 const Icon = ({ name, className }: { name: string; className?: string }) => {
     const ref = useRef<HTMLSpanElement>(null);
@@ -101,12 +102,12 @@ const ViewConfigPopup = ({
                 zIndex: 9999
             }}
         >
-            <div className="markdown-db-menu-header">{isEditing ? "Edit View" : "Add New View"}</div>
+            <div className="markdown-db-menu-header">{isEditing ? t("toolbar.editView") : t("toolbar.addNewView")}</div>
             <div className="markdown-db-menu-item" style={{ flexDirection: "column", alignItems: "stretch" }}>
                 <input
                     type="text"
                     className="markdown-db-menu-input"
-                    placeholder="View Name"
+                    placeholder={t("toolbar.viewNamePlaceholder")}
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     autoFocus
@@ -119,21 +120,21 @@ const ViewConfigPopup = ({
                 />
 
                 <div className="markdown-db-menu-row" style={{ marginTop: 8 }}>
-                    <span style={{ fontSize: "13px", color: "var(--text-muted)", flex: 1 }}>Open Mode</span>
+                    <span style={{ fontSize: "13px", color: "var(--text-muted)", flex: 1 }}>{t("toolbar.openMode")}</span>
                     <select
                         className="markdown-db-menu-select"
                         value={openMode}
                         onChange={(e) => setOpenMode(e.target.value as "split" | "tab" | "modal")}
                         style={{ width: "120px", flex: "none" }}
                     >
-                        <option value="modal">Modal</option>
-                        <option value="split">Split Pane</option>
-                        <option value="tab">Current Tab</option>
+                        <option value="modal">{t("toolbar.openModeModal")}</option>
+                        <option value="split">{t("toolbar.openModeSplit")}</option>
+                        <option value="tab">{t("toolbar.openModeTab")}</option>
                     </select>
                 </div>
 
                 <div className="markdown-db-menu-row" style={{ justifyContent: "space-between", cursor: "pointer" }} onClick={() => setShowContent(!showContent)}>
-                    <span style={{ fontSize: "13px", color: "var(--text-muted)" }}>Show Content</span>
+                    <span style={{ fontSize: "13px", color: "var(--text-muted)" }}>{t("toolbar.showContent")}</span>
                     <div className={`checkbox-container ${showContent ? "is-enabled" : ""}`}>
                         <input type="checkbox" tabIndex={0} />
                     </div>
@@ -141,7 +142,7 @@ const ViewConfigPopup = ({
 
                 {showContent && (
                     <div className="markdown-db-menu-row" style={{ justifyContent: "space-between", cursor: "pointer" }} onClick={() => setContentHeight(contentHeight === "adaptive" ? "compact" : "adaptive")}>
-                        <span style={{ fontSize: "13px", color: "var(--text-muted)" }}>Adaptive Height</span>
+                        <span style={{ fontSize: "13px", color: "var(--text-muted)" }}>{t("toolbar.adaptiveHeight")}</span>
                         <div className={`checkbox-container ${contentHeight === "adaptive" ? "is-enabled" : ""}`}>
                             <input type="checkbox" tabIndex={0} />
                         </div>
@@ -187,7 +188,7 @@ const ViewConfigPopup = ({
                                             style={{ width: "60px", minWidth: 0 }}
                                             value={filter.value}
                                             onChange={(e) => handleUpdateFilter(index, "value", e.target.value)}
-                                            placeholder="Val"
+                                            placeholder={t("toolbar.valPlaceholder")}
                                         />
                                     )}
                                     <div
@@ -199,7 +200,7 @@ const ViewConfigPopup = ({
                                 </div>
                             ))}
                             <button className="markdown-db-menu-add-btn" onClick={handleAddFilter} style={{ fontSize: "11px", padding: "2px 6px" }}>
-                                + Add Filter
+                                {t("toolbar.addFilter")}
                             </button>
                         </div>
                     )}
@@ -231,8 +232,8 @@ const ViewConfigPopup = ({
                                         value={sort.direction}
                                         onChange={(e) => handleUpdateSort(index, "direction", e.target.value)}
                                     >
-                                        <option value="asc">Ascending</option>
-                                        <option value="desc">Descending</option>
+                                        <option value="asc">{t("toolbar.ascending")}</option>
+                                        <option value="desc">{t("toolbar.descending")}</option>
                                     </select>
                                     <div
                                         style={{ cursor: "pointer", padding: "2px" }}
@@ -243,7 +244,7 @@ const ViewConfigPopup = ({
                                 </div>
                             ))}
                             <button className="markdown-db-menu-add-btn" onClick={handleAddSort} style={{ fontSize: "11px", padding: "2px 6px" }}>
-                                + Add Sort
+                                {t("toolbar.addSort")}
                             </button>
                         </div>
                     )}
@@ -260,7 +261,7 @@ const ViewConfigPopup = ({
                             }
                         }}
                     >
-                        {isEditing ? "Save" : "Add View"}
+                        {isEditing ? t("common.save") : t("toolbar.addViewBtn")}
                     </button>
                     {isEditing && onDelete && (
                         <button
@@ -271,7 +272,7 @@ const ViewConfigPopup = ({
                                 onClose();
                             }}
                         >
-                            Delete
+                            {t("common.delete")}
                         </button>
                     )}
                 </div>
@@ -602,7 +603,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                         console.log("Toolbar: BufferedInput changed to:", val);
                         onUpdateTitle(val);
                     }}
-                    placeholder="Untitled Database"
+                    placeholder={t("toolbar.dbTitlePlaceholder")}
                 />
             </div>
             <div className="markdown-db-toolbar">
@@ -613,7 +614,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                             onClick={() => onSwitchView && onSwitchView(null)}
                         >
                             <Icon name="table" className="markdown-db-view-icon" />
-                            <span style={{ marginLeft: 6 }}>All</span>
+                            <span style={{ marginLeft: 6 }}>{t("toolbar.allView")}</span>
                         </div>
                         {views && views.map((view, index) => {
                             let style: React.CSSProperties = {};
@@ -650,7 +651,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                             <div
                                 ref={addViewRef}
                                 className={`markdown-db-view-add ${showAddView ? "active" : ""}`}
-                                title="Add view"
+                                title={t("toolbar.addViewTitle")}
                                 onClick={handleAddViewClick}
                             >
                                 <Icon name="plus" className="markdown-db-view-icon" />
@@ -722,7 +723,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                             <button
                                 className="markdown-db-toolbar-text-btn"
                                 onClick={() => setShowSearch(true)}
-                                title="Search"
+                                title={t("toolbar.searchTitle")}
                             >
                                 <Icon name="search" />
                             </button>
@@ -733,7 +734,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                                 <input
                                     ref={searchRef}
                                     type="text"
-                                    placeholder="Search..."
+                                    placeholder={t("toolbar.searchPlaceholder")}
                                     onChange={(e) => onSearch(e.target.value)}
                                     className="markdown-db-search-input"
                                 />
@@ -780,7 +781,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                                 }}
                             >
                                 <div className="markdown-db-menu-header">
-                                    {config.filters && config.filters.length > 0 ? "Filters" : "No filters applied"}
+                                    {config.filters && config.filters.length > 0 ? t("toolbar.filtersTitle") : t("toolbar.noFilters")}
                                 </div>
 
                                 {(config.filters || []).map((filter, index) => (
@@ -825,7 +826,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                                                         newFilters[index].value = val;
                                                         handleUpdateFilter(newFilters);
                                                     }}
-                                                    placeholder="Value..."
+                                                    placeholder={t("toolbar.valuePlaceholder")}
                                                 />
                                             )}
                                             <button
@@ -834,7 +835,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                                                     const newFilters = (config.filters || []).filter((_, i) => i !== index);
                                                     handleUpdateFilter(newFilters);
                                                 }}
-                                                title="Remove filter"
+                                                title={t("toolbar.removeFilter")}
                                             >
                                                 <Icon name="x" />
                                             </button>
@@ -854,7 +855,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                                         handleUpdateFilter(newFilters);
                                     }}
                                 >
-                                    + Add filter
+                                    {t("toolbar.addFilterMenu")}
                                 </button>
                             </div>,
                             portalContainer || document.body
@@ -929,8 +930,8 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                                                 }}
                                                 style={{ width: "100px", flex: "none" }}
                                             >
-                                                <option value="asc">Ascending</option>
-                                                <option value="desc">Descending</option>
+                                                <option value="asc">{t("toolbar.ascending")}</option>
+                                                <option value="desc">{t("toolbar.descending")}</option>
                                             </select>
                                             <button
                                                 className="markdown-db-menu-btn-icon"
@@ -938,7 +939,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                                                     const newSort = (config.sort || []).filter((_, i) => i !== index);
                                                     handleUpdateSort(newSort);
                                                 }}
-                                                title="Remove sort"
+                                                title={t("toolbar.removeSort")}
                                             >
                                                 <Icon name="x" />
                                             </button>
@@ -957,7 +958,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                                         handleUpdateSort(newSort);
                                     }}
                                 >
-                                    + Add sort
+                                    {t("toolbar.addSortMenu")}
                                 </button>
                             </div>,
                             portalContainer || document.body
@@ -969,7 +970,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                         <button
                             className="markdown-db-toolbar-text-btn"
                             onClick={handleConfigClick}
-                            title="Database Settings"
+                            title={t("toolbar.dbSettingsTitle")}
                         >
                             <Icon name="sliders-horizontal" />
                         </button>
@@ -985,18 +986,18 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                                 }}
                             >
                                 <div className="markdown-db-config-item">
-                                    <span className="markdown-db-config-label">Layout</span>
+                                    <span className="markdown-db-config-label">{t("toolbar.layoutLabel")}</span>
                                     <select
                                         value={config.layout || "table"}
                                         onChange={(e) => {
                                             onUpdateConfig("db-layout", e.target.value);
                                         }}
                                     >
-                                        <option value="table">Table</option>
+                                        <option value="table">{t("toolbar.layoutTable")}</option>
                                     </select>
                                 </div>
                                 <div className="markdown-db-config-item">
-                                    <span className="markdown-db-config-label">Open Mode</span>
+                                    <span className="markdown-db-config-label">{t("toolbar.openMode")}</span>
                                     <select
                                         value={config.openMode || "modal"}
                                         onChange={(e) => {
@@ -1004,13 +1005,13 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                                             setShowConfig(false);
                                         }}
                                     >
-                                        <option value="modal">Modal</option>
-                                        <option value="split">Split Pane</option>
-                                        <option value="tab">Current Tab</option>
+                                        <option value="modal">{t("toolbar.openModeModal")}</option>
+                                        <option value="split">{t("toolbar.openModeSplit")}</option>
+                                        <option value="tab">{t("toolbar.openModeTab")}</option>
                                     </select>
                                 </div>
                                 <div className="markdown-db-config-item" style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                                    <span className="markdown-db-config-label" style={{ marginBottom: 0 }}>Page Size</span>
+                                    <span className="markdown-db-config-label" style={{ marginBottom: 0 }}>{t("toolbar.pageSizeLabel")}</span>
                                     <input
                                         type="number"
                                         min="1"
@@ -1025,7 +1026,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                                     />
                                 </div>
                                 <div className="markdown-db-config-item" style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                                    <span className="markdown-db-config-label" style={{ marginBottom: 0 }}>Show Content</span>
+                                    <span className="markdown-db-config-label" style={{ marginBottom: 0 }}>{t("toolbar.showContent")}</span>
                                     <div
                                         className={`checkbox-container ${config.showContent !== false ? "is-enabled" : ""}`}
                                         onClick={() => {
@@ -1038,7 +1039,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                                 </div>
                                 {config.showContent !== false && (
                                     <div className="markdown-db-config-item" style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                                        <span className="markdown-db-config-label" style={{ marginBottom: 0 }}>Adaptive Height</span>
+                                        <span className="markdown-db-config-label" style={{ marginBottom: 0 }}>{t("toolbar.adaptiveHeight")}</span>
                                         <div
                                             className={`checkbox-container ${config.contentHeight === "adaptive" ? "is-enabled" : ""}`}
                                             onClick={() => {
@@ -1060,9 +1061,9 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                         <button
                             className="markdown-db-new-btn-main"
                             onClick={() => onAddRecord()}
-                            title="Create new record"
+                            title={t("toolbar.createNewRecord")}
                         >
-                            Create
+                            {t("common.create")}
                         </button>
                         <button
                             className="markdown-db-new-btn-arrow"
@@ -1071,7 +1072,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
 
                                 menu.addItem((item) => {
                                     item
-                                        .setTitle("Default (No Template)")
+                                        .setTitle(t("toolbar.noTemplate"))
                                         .setIcon("file-plus")
                                         .onClick(() => {
                                             onAddRecord();
@@ -1095,7 +1096,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                                     menu.addSeparator();
 
                                     menu.addItem((item) => {
-                                        item.setTitle("Remove Template...")
+                                        item.setTitle(t("toolbar.removeTemplate"))
                                             .setIcon("trash")
                                             .onClick((evt) => {
                                                 const removeMenu = new Menu();
@@ -1115,7 +1116,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
 
                                 menu.addItem((item) => {
                                     item
-                                        .setTitle("Add Template...")
+                                        .setTitle(t("toolbar.addTemplate"))
                                         .setIcon("plus")
                                         .onClick(() => {
                                             onAddTemplate?.();
@@ -1124,7 +1125,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
 
                                 menu.showAtPosition({ x: e.clientX, y: e.clientY });
                             }}
-                            title="Select template"
+                            title={t("toolbar.selectTemplate")}
                         >
                             <svg viewBox="0 0 100 100" className="dropdown-icon" width="10" height="10">
                                 <path d="M50 70 L10 30 L90 30 Z" fill="currentColor" />

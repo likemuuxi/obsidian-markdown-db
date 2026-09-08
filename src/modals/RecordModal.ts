@@ -3,6 +3,7 @@ import { DatabaseRecord, TypedValue, formatTypedValue, PropertyType } from "../d
 import { updateRecordRaw, wrapContentWithCodeBlockIfNeeded } from "../database/writer";
 import { parseFile, flattenRecords } from "../database/parser";
 import type { PropertyConfig } from "../settings";
+import { t } from "../i18n";
 
 interface EditableProperty {
     key: string;
@@ -190,7 +191,7 @@ export class RecordModal extends Modal {
 
     private async saveCurrentRecord() {
         const nextBlock = this.buildRecordBlock().replace(/\s+$/, "");
-        const trimmedTitle = this.titleValue.trim() || "Untitled";
+        const trimmedTitle = this.titleValue.trim() || t("common.untitled");
 
         if (nextBlock !== this.originalBlock) {
             // writeRecord uses record.id (current/old title) to locate the heading.
@@ -206,7 +207,7 @@ export class RecordModal extends Modal {
         }
 
         this.navigationItems[this.currentIndex] = {
-            title: this.titleValue.trim() || "Untitled",
+            title: this.titleValue.trim() || t("common.untitled"),
             content: this.contentValue,
             propertiesSignature: this.buildCurrentPropertiesSignature(),
             lineStart: this.record.lineStart
@@ -259,7 +260,7 @@ export class RecordModal extends Modal {
 
     private buildRecordBlock(): string {
         const headingPrefix = "#".repeat(this.record.level + 1);
-        const lines: string[] = [`${headingPrefix} ${this.titleValue.trim() || "Untitled"}`];
+        const lines: string[] = [`${headingPrefix} ${this.titleValue.trim() || t("common.untitled")}`];
 
         const propertyLines = this.propertiesValue
             .map((property) => {
@@ -356,7 +357,7 @@ export class RecordModal extends Modal {
         const input = editor.createEl("input", {
             type: "text",
             cls: "markdown-db-record-tag-editor-input",
-            placeholder: property.type === "select" ? "Choose or type a value" : "Add option..."
+            placeholder: property.type === "select" ? t("modals.record.chooseOrTypeValue") : t("common.addOption")
         });
         const suggestionsEl = field.createDiv({ cls: "markdown-db-record-tag-suggestions" });
         suggestionsEl.style.display = "none";
@@ -551,7 +552,7 @@ export class RecordModal extends Modal {
             type: property.type === "number" ? "number" : property.type === "link" ? "url" : "text",
             cls: "markdown-db-record-property-input",
             value: property.value,
-            placeholder: property.type === "multi" ? "value1, value2" : "Value"
+            placeholder: property.type === "multi" ? t("modals.record.multiPlaceholder") : t("modals.record.valuePlaceholder")
         });
 
         if (property.type === "select" || property.type === "multi") {
@@ -571,7 +572,7 @@ export class RecordModal extends Modal {
         this.previewContainer.empty();
 
         if (!this.contentValue.trim()) {
-            this.previewContainer.setText("Empty content. Click to edit...");
+            this.previewContainer.setText(t("modals.record.emptyContent"));
             this.previewContainer.style.color = "var(--text-faint)";
             return;
         }
@@ -593,7 +594,7 @@ export class RecordModal extends Modal {
         const query = this.searchQuery.trim().toLowerCase();
 
         this.navigationItems.forEach((item, index) => {
-            const title = item.title || "Untitled";
+            const title = item.title || t("common.untitled");
             if (query && !title.toLowerCase().includes(query)) {
                 return;
             }
@@ -629,7 +630,7 @@ export class RecordModal extends Modal {
         if (query && this.recordListEl.childElementCount === 0) {
             this.recordListEl.createDiv({
                 cls: "markdown-db-record-list-empty",
-                text: "No matching records"
+                text: t("modals.record.noMatchingRecords")
             });
         }
     }
@@ -638,13 +639,13 @@ export class RecordModal extends Modal {
         if (!this.contentSection) return;
 
         this.contentSection.empty();
-        this.contentSection.createEl("h4", { text: "Content" });
+        this.contentSection.createEl("h4", { text: t("modals.record.contentSection") });
 
         if (this.isEditingContent) {
             const contentTextarea = this.contentSection.createEl("textarea", {
                 cls: "markdown-db-record-content-textarea",
                 text: this.contentValue,
-                placeholder: "Type content..."
+                placeholder: t("modals.record.typeContent")
             });
 
             contentTextarea.focus();
@@ -681,11 +682,11 @@ export class RecordModal extends Modal {
 
         // Left sidebar: record list for quick switching
         const sidebar = container.createDiv({ cls: "markdown-db-record-sidebar" });
-        sidebar.createEl("h4", { text: "Records" });
+        sidebar.createEl("h4", { text: t("modals.record.recordsSection") });
         const searchInput = sidebar.createEl("input", {
             type: "text",
             cls: "markdown-db-record-search-input",
-            placeholder: "Search records..."
+            placeholder: t("modals.record.searchRecords")
         });
         searchInput.value = this.searchQuery;
         searchInput.oninput = (e) => {
@@ -704,7 +705,7 @@ export class RecordModal extends Modal {
         });
         prevButton.type = "button";
         prevButton.disabled = this.currentIndex === 0;
-        prevButton.setAttr("aria-label", "Previous record");
+        prevButton.setAttr("aria-label", t("modals.record.prevRecord"));
         setIcon(prevButton, "chevron-left");
         prevButton.onclick = async () => {
             await this.navigateToRecord(this.currentIndex - 1);
@@ -714,7 +715,7 @@ export class RecordModal extends Modal {
             type: "text",
             cls: "markdown-db-record-title-input",
             value: this.titleValue,
-            placeholder: "Untitled"
+            placeholder: t("common.untitled")
         });
         titleInput.oninput = (e) => {
             this.titleValue = (e.target as HTMLInputElement).value;
@@ -725,7 +726,7 @@ export class RecordModal extends Modal {
         });
         nextButton.type = "button";
         nextButton.disabled = this.currentIndex >= this.navigationItems.length - 1;
-        nextButton.setAttr("aria-label", "Next record");
+        nextButton.setAttr("aria-label", t("modals.record.nextRecord"));
         setIcon(nextButton, "chevron-right");
         nextButton.onclick = async () => {
             await this.navigateToRecord(this.currentIndex + 1);
@@ -734,12 +735,12 @@ export class RecordModal extends Modal {
         const body = main.createDiv({ cls: "markdown-db-record-body" });
 
         const propsSection = body.createDiv({ cls: "markdown-db-record-properties" });
-        propsSection.createEl("h4", { text: "Properties" });
+        propsSection.createEl("h4", { text: t("modals.record.propertiesSection") });
 
         if (this.propertiesValue.length === 0) {
             propsSection.createDiv({
                 cls: "setting-item-description",
-                text: "No properties in this record."
+                text: t("modals.record.noProperties")
             });
         } else {
             this.propertiesValue.forEach((property, index) => {
