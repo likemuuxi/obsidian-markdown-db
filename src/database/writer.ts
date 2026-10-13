@@ -171,7 +171,7 @@ export const updateProperty = async (
             commentBlockContent = blockMatch.content;
         }
 
-        const shouldDelete = newValue === "" || newValue === null || newValue === undefined;
+        const shouldDelete = newValue === null || newValue === undefined || String(newValue).trim() === "";
         let newPropertyStr: string | null = null;
 
         if (!shouldDelete) {

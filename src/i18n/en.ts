@@ -332,7 +332,6 @@ export const en = {
         selectDatabaseToView: "Select a database to view",
         moveTo: "Moved to {path}",
         failedToMoveFile: "Failed to move file",
-        viewTitle: "Dashboard",
     },
     tableView: {
         clearSelection: "Clear selection",

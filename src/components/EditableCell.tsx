@@ -507,7 +507,10 @@ export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, on
 
     const handleStandardBlur = () => {
         if (contentRef.current) {
-            const text = contentRef.current.innerText;
+            // Clearing a contentEditable div can leave a stray newline ("\n"),
+            // treat whitespace-only input as empty so the value gets deleted.
+            const raw = contentRef.current.innerText;
+            const text = raw.trim() === "" ? "" : raw;
             const currentEditValue = editValue !== undefined ? editValue : value;
             if (text !== currentEditValue) {
                 onSave(text);

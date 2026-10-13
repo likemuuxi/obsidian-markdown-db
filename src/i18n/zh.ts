@@ -331,7 +331,6 @@ export const zh: Translations = {
         selectDatabaseToView: "选择要查看的数据库",
         moveTo: "已移动到 {path}",
         failedToMoveFile: "移动文件失败",
-        viewTitle: "仪表盘",
     },
     tableView: {
         clearSelection: "取消全选",
