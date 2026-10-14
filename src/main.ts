@@ -14,6 +14,7 @@ import { DBSwitcherModal } from "./modals/DBSwitcherModal";
 import { ImportModal } from "./modals/ImportModal";
 import { GithubSyncService } from "./services/github";
 import { NotionSyncService } from "./services/notion";
+import { cleanDbFormat } from "./commands/cleanDbFormat";
 
 export default class MarkdownDBPlugin extends Plugin {
     settings: MarkdownDBSettings;
@@ -230,6 +231,20 @@ export default class MarkdownDBPlugin extends Plugin {
                     }
                 }
                 new Notice(t("commands.formatDone", { count: convertedCount }));
+            }
+        });
+
+        this.addCommand({
+            id: "clean-markdown-db-format",
+            name: t("commands.cleanDbFormat"),
+            callback: async () => {
+                const file = this.app.workspace.getActiveFile();
+                if (!file || file.extension !== "md") {
+                    new Notice(t("commands.cleanDbNoFile"));
+                    return;
+                }
+                const changed = await cleanDbFormat(this.app, file);
+                new Notice(changed ? t("commands.cleanDbDone") : t("commands.cleanDbNothing"));
             }
         });
 

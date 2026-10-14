@@ -44,6 +44,10 @@ export const en = {
         untitledDbN: "Untitled DB {n}",
         formatStart: "Starting to format DB files...",
         formatDone: "Formatted properties and spacing in {count} files.",
+        cleanDbFormat: "Clean Markdown DB formatting",
+        cleanDbNoFile: "No active Markdown file",
+        cleanDbNothing: "No Markdown DB formatting found",
+        cleanDbDone: "Cleaned Markdown DB formatting",
     },
     propertyTypes: {
         text: "Text",

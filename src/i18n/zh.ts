@@ -43,6 +43,10 @@ export const zh: Translations = {
         untitledDbN: "未命名数据库 {n}",
         formatStart: "开始格式化数据库文件...",
         formatDone: "已格式化 {count} 个文件的属性与间距。",
+        cleanDbFormat: "清理 Markdown DB 格式",
+        cleanDbNoFile: "没有打开的 Markdown 文件",
+        cleanDbNothing: "未发现 Markdown DB 特有格式",
+        cleanDbDone: "已清理 Markdown DB 格式",
     },
     propertyTypes: {
         text: "文本",
