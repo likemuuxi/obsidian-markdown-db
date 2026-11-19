@@ -714,7 +714,7 @@ export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, on
                 {/* View Layer - Always rendered to maintain size, hidden when editing */}
                 <div
                     className={`markdown-db-cell-property rendered ${className || ""}`}
-                    title={tags.join(", ")}
+                    aria-label={tags.join(", ")}
                     onClick={readonly ? undefined : (e) => {
                         const rect = e.currentTarget.getBoundingClientRect();
                         setEditCoords({ top: rect.top, left: rect.left, width: rect.width });
@@ -962,7 +962,7 @@ export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, on
                             navigator.clipboard.writeText(value);
                             new Notice(t("common.copiedToClipboard"));
                         }}
-                        title={t("common.copy")}
+                        aria-label={t("common.copy")}
                         style={{
                             position: "relative", // Override absolute from CSS
                             right: "auto",
@@ -985,7 +985,7 @@ export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, on
             <div
                 ref={viewRef}
                 className={`markdown-db-cell-content rendered ${className || ""} ${contentHeight === "adaptive" ? "adaptive-height" : ""}`}
-                title={value}
+                aria-label={value}
                 onClick={readonly ? (e) => {
                     if ((e.target as HTMLElement).tagName === "A" || (e.target as HTMLElement).closest("a")) {
                         if (onLinkClick) {
@@ -1013,7 +1013,7 @@ export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, on
                             e.stopPropagation();
                             window.open(linkHref, "_blank");
                         }}
-                        title={linkHref}
+                        aria-label={linkHref}
                     >{linkHref}</a>
                 ) : null) : null}
             </div>

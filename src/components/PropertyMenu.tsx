@@ -173,7 +173,7 @@ export const PropertyMenu: React.FC<PropertyMenuProps> = ({ onClose, onSelect, p
                         padding: "4px",
                         borderRadius: "4px",
                     }}
-                    title={t("propertyMenu.backToTypes")}
+                    aria-label={t("propertyMenu.backToTypes")}
                     onMouseEnter={(e) => (e.currentTarget.style.background = "var(--background-modifier-hover)")}
                     onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                 >
@@ -232,7 +232,7 @@ export const PropertyMenu: React.FC<PropertyMenuProps> = ({ onClose, onSelect, p
                         <span>{prop}</span>
                         {!globalProperties.some(gp => gp.name === prop) && (
                             <div
-                                title={t("propertyMenu.saveToGlobal")}
+                                aria-label={t("propertyMenu.saveToGlobal")}
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     onSaveToGlobal(prop, selectedType);

@@ -665,7 +665,7 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                                                 selectAllVisibleRows();
                                             }
                                         }}
-                                        title={selectedRowKeys.size === paginatedRecords.length && paginatedRecords.length > 0 ? t("tableView.clearSelection") : t("tableView.selectAll")}
+                                        aria-label={selectedRowKeys.size === paginatedRecords.length && paginatedRecords.length > 0 ? t("tableView.clearSelection") : t("tableView.selectAll")}
                                         style={{
                                             width: "26px",
                                             height: "26px",
@@ -724,7 +724,7 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                                     onDrop={(e) => isProperty && !readonly && handleDrop(e, col)}
                                     onDragEnd={handleDragEnd}
                                     onClick={() => handleSortClick(col)}
-                                    title={t("tableView.clickToSort", { col })}
+                                    aria-label={t("tableView.clickToSort", { col })}
                                     style={{
                                         textAlign: "left",
                                         height: "42px",
@@ -805,7 +805,7 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                                 color: "var(--text-muted)",
                                 boxSizing: "border-box",
                                 verticalAlign: "middle"
-                            }} onClick={(e) => !readonly && handleAddClick(e)} title={t("tableView.addPropertyColumn")}>
+                            }} onClick={(e) => !readonly && handleAddClick(e)} aria-label={t("tableView.addPropertyColumn")}>
                             +
                         </th>
                     </tr>
@@ -872,7 +872,7 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                                                     width: "14px",
                                                     height: "14px"
                                                 }}
-                                                title={isSelected ? t("tableView.deselectRow") : t("tableView.selectRow")}
+                                                aria-label={isSelected ? t("tableView.deselectRow") : t("tableView.selectRow")}
                                             >
                                                 <input
                                                     type="hidden"
@@ -912,11 +912,11 @@ export const TableView: React.FC<TableViewProps> = ({ app, data, fileName, sourc
                                                         lineHeight: 0,
                                                         touchAction: "none"
                                                     }}
-                                                    title={t("tableView.dragReorderHint")}
+                                                    aria-label={t("tableView.dragReorderHint")}
                                                 >
                                                     <span
                                                         style={{ display: "inline-flex", alignItems: "center", color: "var(--text-muted)" }}
-                                                        title={t("tableView.dragReorderHint")}
+                                                        aria-label={t("tableView.dragReorderHint")}
                                                         dangerouslySetInnerHTML={{ __html: dragHandleIcon }}
                                                     />
                                                 </div>

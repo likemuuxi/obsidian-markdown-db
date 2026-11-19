@@ -651,7 +651,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                             <div
                                 ref={addViewRef}
                                 className={`markdown-db-view-add ${showAddView ? "active" : ""}`}
-                                title={t("toolbar.addViewTitle")}
+                                aria-label={t("toolbar.addViewTitle")}
                                 onClick={handleAddViewClick}
                             >
                                 <Icon name="plus" className="markdown-db-view-icon" />
@@ -723,7 +723,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                             <button
                                 className="markdown-db-toolbar-text-btn"
                                 onClick={() => setShowSearch(true)}
-                                title={t("toolbar.searchTitle")}
+                                aria-label={t("toolbar.searchTitle")}
                             >
                                 <Icon name="search" />
                             </button>
@@ -835,7 +835,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                                                     const newFilters = (config.filters || []).filter((_, i) => i !== index);
                                                     handleUpdateFilter(newFilters);
                                                 }}
-                                                title={t("toolbar.removeFilter")}
+                                                aria-label={t("toolbar.removeFilter")}
                                             >
                                                 <Icon name="x" />
                                             </button>
@@ -939,7 +939,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                                                     const newSort = (config.sort || []).filter((_, i) => i !== index);
                                                     handleUpdateSort(newSort);
                                                 }}
-                                                title={t("toolbar.removeSort")}
+                                                aria-label={t("toolbar.removeSort")}
                                             >
                                                 <Icon name="x" />
                                             </button>
@@ -970,7 +970,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                         <button
                             className="markdown-db-toolbar-text-btn"
                             onClick={handleConfigClick}
-                            title={t("toolbar.dbSettingsTitle")}
+                            aria-label={t("toolbar.dbSettingsTitle")}
                         >
                             <Icon name="sliders-horizontal" />
                         </button>
@@ -1061,7 +1061,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                         <button
                             className="markdown-db-new-btn-main"
                             onClick={() => onAddRecord()}
-                            title={t("toolbar.createNewRecord")}
+                            aria-label={t("toolbar.createNewRecord")}
                         >
                             {t("common.create")}
                         </button>
@@ -1125,7 +1125,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
 
                                 menu.showAtPosition({ x: e.clientX, y: e.clientY });
                             }}
-                            title={t("toolbar.selectTemplate")}
+                            aria-label={t("toolbar.selectTemplate")}
                         >
                             <svg viewBox="0 0 100 100" className="dropdown-icon" width="10" height="10">
                                 <path d="M50 70 L10 30 L90 30 Z" fill="currentColor" />

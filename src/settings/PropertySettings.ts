@@ -1,4 +1,4 @@
-import { setIcon, Menu, Notice } from "obsidian";
+import { setIcon, setTooltip, Menu, Notice } from "obsidian";
 import type MarkdownDBPlugin from "../main";
 import { PropertyType, PROPERTY_TYPE_ICONS, VALID_PROPERTY_TYPES } from "../database/schema";
 import { t } from "../i18n";
@@ -94,7 +94,7 @@ export class PropertySettingsView {
         
         const filterIconName = this.filterType === 'all' ? "filter" : PROPERTY_TYPE_ICONS[this.filterType];
         setIcon(filterBtn, filterIconName);
-        filterBtn.title = this.filterType === 'all' ? t("settings.properties.filterByType") : t("settings.properties.filterWith", { type: t(`propertyTypes.${this.filterType}`) });
+        setTooltip(filterBtn, this.filterType === 'all' ? t("settings.properties.filterByType") : t("settings.properties.filterWith", { type: t(`propertyTypes.${this.filterType}`) }));
 
         filterBtn.onclick = (e) => {
             const menu = new Menu();
@@ -170,7 +170,7 @@ export class PropertySettingsView {
 
             const deleteBtn = propItem.createEl("button", { cls: 'markdown-db-settings-item-delete' });
             setIcon(deleteBtn, "trash");
-            deleteBtn.title = t("settings.properties.deleteProperty");
+            setTooltip(deleteBtn, t("settings.properties.deleteProperty"));
             
             deleteBtn.onclick = async (e) => {
                 e.stopPropagation();
@@ -229,7 +229,7 @@ export class PropertySettingsView {
                         removeValBtn.onmouseleave = () => removeValBtn.style.opacity = "0.6";
 
                         setIcon(removeValBtn, "x");
-                        removeValBtn.title = t("settings.properties.removeValue");
+                        setTooltip(removeValBtn, t("settings.properties.removeValue"));
                         
                         removeValBtn.onclick = async () => {
                             // Remove from active values
@@ -266,7 +266,7 @@ export class PropertySettingsView {
 
                          const restoreBtn = valItem.createEl("button", { cls: 'markdown-db-settings-item-delete' });
                          setIcon(restoreBtn, "undo");
-                         restoreBtn.title = t("settings.properties.restoreValue");
+                         setTooltip(restoreBtn, t("settings.properties.restoreValue"));
                          
                          restoreBtn.onclick = async () => {
                              // Remove from ignored
