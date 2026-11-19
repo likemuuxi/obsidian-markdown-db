@@ -13,6 +13,14 @@ export function isFolderNotesPluginEnabled(app: App): boolean {
     return (app as any).plugins?.enabledPlugins?.has(FOLDER_NOTES_PLUGIN_ID) ?? false;
 }
 
+/** Whether a file is a folder database (folder-note naming + markdown-db marker). */
+export function isFolderDatabase(app: App, file: TFile): boolean {
+    if (!file.parent || file.parent.isRoot()) return false;
+    if (file.basename !== file.parent.name) return false;
+    const fm = app.metadataCache.getFileCache(file)?.frontmatter;
+    return fm?.["markdown-db"] === true || fm?.["markdown-db"] === "true";
+}
+
 /** Infer a DB property type from a frontmatter value. */
 function inferType(value: any): string {
     if (Array.isArray(value)) return "multi";
@@ -149,5 +157,72 @@ export async function createFolderDatabase(app: App, folder: TFolder): Promise<v
     } catch (e) {
         console.error("Markdown DB: failed to create folder database", e);
         new Notice(t("commands.folderDbFailed", { error: e instanceof Error ? e.message : String(e) }));
+    }
+}
+
+/**
+ * Re-sync a folder database with its folder's current state: regenerate the
+ * record blocks (H2-H6) from the folder while keeping the frontmatter, the
+ * H1 title and any view header/config blocks (`# Title(View)` + `%%` blocks
+ * outside records). Records are a mirror of the folder, so manual edits to
+ * record blocks are overwritten.
+ */
+export async function syncFolderDatabase(app: App, dbFile: TFile): Promise<void> {
+    const folder = dbFile.parent;
+    if (!folder) return;
+
+    const content = await app.vault.read(dbFile);
+    const lines = content.split(/\r?\n/);
+
+    const recordLines: string[] = [];
+    const counter = { count: 0 };
+    writeChildren(app, folder, 2, recordLines, counter);
+
+    const kept: string[] = [];
+    let insertAt = -1; // where the first record block used to live
+    let inFrontmatter = false;
+    let inRecord = false;
+    let inCodeBlock = false;
+
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const trimmed = line.trimStart();
+
+        if (i === 0 && trimmed === "---") {
+            inFrontmatter = true;
+            kept.push(line);
+            continue;
+        }
+        if (inFrontmatter) {
+            kept.push(line);
+            if (trimmed === "---") inFrontmatter = false;
+            continue;
+        }
+        if (trimmed.startsWith("```")) {
+            inCodeBlock = !inCodeBlock;
+        }
+        if (!inCodeBlock) {
+            const heading = trimmed.match(/^(#{1,6})\s/);
+            if (heading) {
+                if (heading[1].length === 1) {
+                    inRecord = false; // title / view header: keep
+                } else {
+                    if (insertAt === -1) insertAt = kept.length;
+                    inRecord = true; // record block: drop
+                    continue;
+                }
+            }
+        }
+        if (inRecord) continue; // record body: drop
+        kept.push(line);
+    }
+
+    if (insertAt === -1) insertAt = kept.length;
+
+    const newContent = [...kept.slice(0, insertAt), ...recordLines, ...kept.slice(insertAt)].join("\n");
+    // Compare ignoring trailing whitespace so unchanged folders don't trigger writes
+    const normalize = (s: string) => s.replace(/\s+$/, "");
+    if (normalize(newContent) !== normalize(content)) {
+        await app.vault.modify(dbFile, newContent);
     }
 }

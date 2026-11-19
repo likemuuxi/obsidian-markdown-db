@@ -15,12 +15,14 @@ import { ImportModal } from "./modals/ImportModal";
 import { GithubSyncService } from "./services/github";
 import { NotionSyncService } from "./services/notion";
 import { cleanDbFormat } from "./commands/cleanDbFormat";
-import { createFolderDatabase, isFolderNotesPluginEnabled } from "./commands/createFolderDatabase";
+import { createFolderDatabase, isFolderNotesPluginEnabled, isFolderDatabase, syncFolderDatabase } from "./commands/createFolderDatabase";
 
 export default class MarkdownDBPlugin extends Plugin {
     settings: MarkdownDBSettings;
     isToggling = false;
     notionSyncService: NotionSyncService;
+    private folderDbSyncPending = new Set<string>();
+    private folderDbSyncTimer: number | null = null;
 
     async onload() {
         await this.loadSettings();
@@ -337,6 +339,72 @@ export default class MarkdownDBPlugin extends Plugin {
         this.registerMarkdownPostProcessor((element, context) => {
             EmbedDBView.markdownPostProcessor(this, element, context);
         })
+
+        // Auto-sync folder databases when their folder's contents change
+        this.setupFolderDbAutoSync();
+    }
+
+    /**
+     * Keep folder databases (`<Folder>/<Folder>.md`) in sync with their folder:
+     * on any vault change, walk the changed path's ancestor chain and queue
+     * each folder database found (debounced, batched into one write per DB).
+     */
+    private setupFolderDbAutoSync() {
+        const queueFromPath = (changedPath: string) => {
+            if (!changedPath) return;
+            const segments = changedPath.split("/");
+            // Ignore hidden files/folders (e.g. .obsidian)
+            if (segments.some((s) => s.startsWith("."))) return;
+            segments.pop(); // start at the parent folder of the changed file
+            let folder = segments.length > 0
+                ? this.app.vault.getAbstractFileByPath(segments.join("/"))
+                : this.app.vault.getRoot();
+
+            while (folder instanceof TFolder) {
+                if (!folder.isRoot()) {
+                    const dbPath = `${folder.path}/${folder.name}.md`;
+                    // Never queue the changed file itself (avoids sync loops)
+                    if (dbPath !== changedPath) {
+                        const dbFile = this.app.vault.getAbstractFileByPath(dbPath);
+                        if (dbFile instanceof TFile && isFolderDatabase(this.app, dbFile)) {
+                            this.folderDbSyncPending.add(dbPath);
+                        }
+                    }
+                }
+                folder = folder.parent;
+            }
+
+            if (this.folderDbSyncPending.size > 0 && this.folderDbSyncTimer === null) {
+                this.folderDbSyncTimer = window.setTimeout(async () => {
+                    this.folderDbSyncTimer = null;
+                    const paths = [...this.folderDbSyncPending];
+                    this.folderDbSyncPending.clear();
+                    for (const p of paths) {
+                        const dbFile = this.app.vault.getAbstractFileByPath(p);
+                        if (dbFile instanceof TFile && isFolderDatabase(this.app, dbFile)) {
+                            try {
+                                await syncFolderDatabase(this.app, dbFile);
+                            } catch (e) {
+                                console.error("Markdown DB: folder database sync failed", e);
+                                new Notice(t("commands.folderDbSyncFailed", { path: p }));
+                            }
+                        }
+                    }
+                }, 1500);
+            }
+        };
+
+        // "create" fires for every existing file during startup, so only
+        // register it once the layout is ready
+        this.app.workspace.onLayoutReady(() => {
+            this.registerEvent(this.app.vault.on("create", (file) => queueFromPath(file.path)));
+        });
+        this.registerEvent(this.app.vault.on("delete", (file) => queueFromPath(file.path)));
+        this.registerEvent(this.app.vault.on("modify", (file) => queueFromPath(file.path)));
+        this.registerEvent(this.app.vault.on("rename", (file, oldPath) => {
+            queueFromPath(oldPath);
+            queueFromPath(file.path);
+        }));
     }
 
 
@@ -588,6 +656,10 @@ export default class MarkdownDBPlugin extends Plugin {
     }
 
     async onunload() {
-
+        if (this.folderDbSyncTimer !== null) {
+            window.clearTimeout(this.folderDbSyncTimer);
+            this.folderDbSyncTimer = null;
+        }
+        this.folderDbSyncPending.clear();
     }
 }

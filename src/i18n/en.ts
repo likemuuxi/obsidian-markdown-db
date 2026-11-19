@@ -53,6 +53,7 @@ export const en = {
         folderDbExists: 'Folder note already exists: "{path}"',
         folderDbCreated: 'Folder database created: "{path}" ({count} records)',
         folderDbFailed: "Failed to create folder database: {error}",
+        folderDbSyncFailed: "Failed to sync folder database: {path}",
     },
     propertyTypes: {
         text: "Text",

@@ -52,6 +52,7 @@ export const zh: Translations = {
         folderDbExists: "文件夹笔记已存在：{path}",
         folderDbCreated: "已创建文件夹数据库：{path}（{count} 条记录）",
         folderDbFailed: "创建文件夹数据库失败：{error}",
+        folderDbSyncFailed: "同步文件夹数据库失败：{path}",
     },
     propertyTypes: {
         text: "文本",
