@@ -1,4 +1,4 @@
-import { TextFileView, WorkspaceLeaf, TFile, WorkspaceSplit, MarkdownView, Menu, Notice, App } from "obsidian";
+import { TextFileView, WorkspaceLeaf, TFile, TFolder, WorkspaceSplit, MarkdownView, Menu, Notice, App } from "obsidian";
 import * as React from "react";
 import { useState, useMemo } from "react";
 import { createRoot, Root } from "react-dom/client";
@@ -672,10 +672,68 @@ export class MarkdownDBView extends TextFileView implements IMarkdownDBView {
         }
     }
 
+    /**
+     * Resolve the vault file a record points to. Folder-database records mirror
+     * files/folders by title hierarchy, so rebuild the relative path from the
+     * record's ancestors (folder names) plus its own title.
+     */
+    resolveRecordTargetFile = (record: DatabaseRecord): TFile | null => {
+        if (!this.file || !this.file.parent) return null;
+
+        const data = parseFile(this.fileContent);
+        const byId = new Map<string, DatabaseRecord>();
+        const collect = (records: DatabaseRecord[]) => {
+            for (const r of records) {
+                byId.set(r.id, r);
+                collect(r.children);
+            }
+        };
+        collect(data.records);
+
+        const segments: string[] = [];
+        let current: DatabaseRecord | undefined = record;
+        while (current) {
+            segments.unshift(current.title);
+            current = current.parentId ? byId.get(current.parentId) : undefined;
+        }
+        if (segments.length === 0) return null;
+
+        const base = this.file.parent.isRoot() ? "" : this.file.parent.path;
+        const relPath = `${base}/${segments.join("/")}`.replace(/^\/+/, "");
+
+        const vault = this.app.vault;
+        // Non-markdown file: its record title includes the extension
+        const direct = vault.getAbstractFileByPath(relPath);
+        if (direct instanceof TFile) return direct;
+        // Markdown file: its record title is the basename
+        const asMd = vault.getAbstractFileByPath(`${relPath}.md`);
+        if (asMd instanceof TFile) return asMd;
+        // Folder: jump to its folder note (folder-notes convention) when one exists
+        if (direct instanceof TFolder) {
+            const note = vault.getAbstractFileByPath(
+                `${relPath}/${segments[segments.length - 1]}.md`
+            );
+            if (note instanceof TFile) return note;
+        }
+        return null;
+    }
+
     handleRowContextMenu = (record: DatabaseRecord, selectedRecords: DatabaseRecord[], event: React.MouseEvent) => {
         event.preventDefault();
 
         const menu = new Menu();
+
+        const targetFile = this.resolveRecordTargetFile(record);
+        if (targetFile) {
+            menu.addItem((item) => {
+                item
+                    .setTitle(t("view.jumpToFile"))
+                    .setIcon("file-symlink")
+                    .onClick(async () => {
+                        await this.app.workspace.getLeaf(false).openFile(targetFile);
+                    });
+            });
+        }
 
         const syncConfig = this.file ? this.plugin.notionSyncService?.getSyncConfigForFile(this.file) : undefined;
         if (syncConfig && !this.plugin.notionSyncService?.isSyncing) {

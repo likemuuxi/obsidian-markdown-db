@@ -58,8 +58,8 @@ function frontmatterToProps(frontmatter: Record<string, any> | undefined): strin
     return parts;
 }
 
-/** Append a record block (heading + property comment block + content) to the output lines. */
-function writeRecord(lines: string[], level: number, title: string, propParts: string[], content?: string) {
+/** Append a record block (heading + property comment block) to the output lines. */
+function writeRecord(lines: string[], level: number, title: string, propParts: string[]) {
     const prefix = "#".repeat(Math.min(level, 6));
     lines.push(`${prefix} ${title}`);
     if (propParts.length > 0) {
@@ -67,18 +67,7 @@ function writeRecord(lines: string[], level: number, title: string, propParts: s
         lines.push(...propParts);
         lines.push("%%");
     }
-    if (content) {
-        lines.push("");
-        lines.push(content);
-    }
     lines.push("");
-}
-
-/** Build a wikilink to a file (rendered clickable in the DB Content column). */
-function fileLink(path: string, displayName: string): string {
-    // Markdown targets resolve without the .md extension
-    const target = path.replace(/\.md$/, "");
-    return `[[${target}|${displayName}]]`;
 }
 
 /** Append a record for a folder (using its folder note's frontmatter, if any), then its children. */
@@ -88,10 +77,7 @@ function writeFolderRecord(app: App, folder: TFolder, level: number, lines: stri
     const props = noteFile instanceof TFile
         ? frontmatterToProps(app.metadataCache.getFileCache(noteFile)?.frontmatter)
         : [];
-    // Link the folder record to its folder note when one exists
-    const link = noteFile instanceof TFile ? fileLink(notePath, folder.name) : undefined;
-
-    writeRecord(lines, level, folder.name, props, link);
+    writeRecord(lines, level, folder.name, props);
     counter.count++;
     writeChildren(app, folder, level + 1, lines, counter);
 }
@@ -119,9 +105,9 @@ function writeChildren(app: App, folder: TFolder, level: number, lines: string[]
 
         if (file.extension === "md") {
             const props = frontmatterToProps(app.metadataCache.getFileCache(file)?.frontmatter);
-            writeRecord(lines, level, file.basename, props, fileLink(file.path, file.basename));
+            writeRecord(lines, level, file.basename, props);
         } else {
-            writeRecord(lines, level, file.name, [], fileLink(file.path, file.name));
+            writeRecord(lines, level, file.name, []);
         }
         counter.count++;
     }

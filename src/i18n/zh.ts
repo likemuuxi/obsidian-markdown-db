@@ -365,6 +365,7 @@ export const zh: Translations = {
         errorParsingTemplate: "解析模板出错：{error}",
         templateNotFound: "未找到模板文件：{path}",
         addChildRecord: "添加子记录",
+        jumpToFile: "跳转到文件",
     },
     writer: {
         recordNotFound: "未找到要删除的记录：“{id}”",

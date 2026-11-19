@@ -366,6 +366,7 @@ export const en = {
         errorParsingTemplate: "Error parsing template: {error}",
         templateNotFound: "Template file not found: {path}",
         addChildRecord: "Add child record",
+        jumpToFile: "Jump to file",
     },
     writer: {
         recordNotFound: 'Could not find record to delete: "{id}"',
