@@ -985,7 +985,8 @@ export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, on
             <div
                 ref={viewRef}
                 className={`markdown-db-cell-content rendered ${className || ""} ${contentHeight === "adaptive" ? "adaptive-height" : ""}`}
-                aria-label={value}
+                // Wikilink/link cells get a tooltip from the inner <a>; skip the outer one to avoid duplicates
+                aria-label={isLinkMode || (value || "").startsWith("[[") ? undefined : value}
                 onClick={readonly ? (e) => {
                     if ((e.target as HTMLElement).tagName === "A" || (e.target as HTMLElement).closest("a")) {
                         if (onLinkClick) {
