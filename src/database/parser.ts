@@ -214,7 +214,9 @@ function processProperties(blockContent: string, currentRecord: DatabaseRecord |
         const key = prop.key;
         const rawValue = prop.value;
 
-        const typeMatch = rawValue.match(/^([a-zA-Z]+)\s*\((.*)\)$/);
+        // [\s\S] allows the value to span multiple lines (e.g. hand-edited `link(url\n)`),
+        // consistent with VALID_TYPE_RE in cleanDbFormat.ts
+        const typeMatch = rawValue.match(/^([a-zA-Z]+)\s*\(([\s\S]*)\)$/);
         let typedValue: TypedValue;
 
         if (typeMatch) {

@@ -1,7 +1,10 @@
 import { App, TFile, Notice } from "obsidian";
-import { TypedValue, formatTypedValue, parseTypedValue, DatabaseRecord } from "./schema";
+import { TypedValue, formatTypedValue, parseTypedValue, DatabaseRecord, normalizeLinkValue } from "./schema";
 import { extractProperties } from "./utils";
 import { t } from "../i18n";
+
+// Markdown-style pasted link, e.g. `[label](https://example.com)`
+const MARKDOWN_LINK_RE = /^\[[^\]]*\]\(\s*\S+\s*\)$/;
 
 function escapeRegExp(string: string) {
     return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -182,6 +185,11 @@ export const updateProperty = async (
             if (!explicitType && record.properties[key] && record.properties[key].length > 0) {
                 existingValue = record.properties[key][0];
                 type = existingValue.type;
+            }
+
+            // Auto-normalize non-standard pasted links (markdown link / backticks) to a plain URL
+            if (type === "link" && typeof newValue === "string") {
+                newValue = normalizeLinkValue(newValue);
             }
 
             // Create new TypedValue
@@ -538,7 +546,7 @@ export const addRecord = async (app: App, file: TFile, title: string, initialPro
                         } else if (Array.isArray(value)) {
                             type = "multi";
                             valStr = value.join(",");
-                        } else if (typeof value === "string" && (valStr.startsWith("http") || valStr.startsWith("www."))) {
+                        } else if (typeof value === "string" && (valStr.startsWith("http") || valStr.startsWith("www.") || MARKDOWN_LINK_RE.test(valStr))) {
                             type = "link";
                         }
                     } else if (type === "multi" && Array.isArray(value)) {
@@ -549,6 +557,10 @@ export const addRecord = async (app: App, file: TFile, title: string, initialPro
                 if (value instanceof Date) {
                     type = "date";
                     valStr = value.toISOString().split('T')[0];
+                }
+
+                if (type === "link" && valStr) {
+                    valStr = normalizeLinkValue(valStr);
                 }
 
                 propsList.push(`[${key}::${type}(${valStr})]`);
@@ -598,26 +610,34 @@ export const addChildRecord = async (
         if (initialProperties && Object.keys(initialProperties).length > 0) {
             const propsList: string[] = [];
             for (const [key, value] of Object.entries(initialProperties)) {
-                let type = "text";
+                let type = columnTypes?.[key] || "text";
                 let valStr = "";
 
                 if (value !== null && value !== undefined && value !== "") {
                     valStr = String(value);
-                    if (typeof value === "boolean") {
-                        type = "boolean";
-                    } else if (typeof value === "number") {
-                        type = "number";
-                    } else if (Array.isArray(value)) {
-                        type = "multi";
+                    if (type === "text") {
+                        if (typeof value === "boolean") {
+                            type = "boolean";
+                        } else if (typeof value === "number") {
+                            type = "number";
+                        } else if (Array.isArray(value)) {
+                            type = "multi";
+                            valStr = value.join(",");
+                        } else if (typeof value === "string" && (valStr.startsWith("http") || valStr.startsWith("www.") || MARKDOWN_LINK_RE.test(valStr))) {
+                            type = "link";
+                        }
+                    } else if (type === "multi" && Array.isArray(value)) {
                         valStr = value.join(",");
-                    } else if (typeof value === "string" && (valStr.startsWith("http") || valStr.startsWith("www."))) {
-                        type = "link";
                     }
                 }
 
                 if (value instanceof Date) {
                     type = "date";
                     valStr = value.toISOString().split('T')[0];
+                }
+
+                if (type === "link" && valStr) {
+                    valStr = normalizeLinkValue(valStr);
                 }
 
                 propsList.push(`[${key}::${type}(${valStr})]`);

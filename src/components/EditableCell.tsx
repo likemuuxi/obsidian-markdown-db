@@ -2,7 +2,7 @@ import * as React from "react";
 import { useState, useEffect, useRef } from "react";
 import * as ReactDOM from "react-dom";
 import { App, MarkdownRenderer, Component, htmlToMarkdown, Notice, TFile } from "obsidian";
-import { PropertyType } from "../database/schema";
+import { PropertyType, normalizeLinkValue } from "../database/schema";
 import { t } from "../i18n";
 
 interface EditableCellProps {
@@ -59,6 +59,9 @@ export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, on
     const isDateMode = isPropertyColumn && type === "date";
     const isNumberMode = isPropertyColumn && type === "number";
     const isLinkMode = type === "link";
+
+    // Link columns only display the plain URL; markdown links / backticks are normalized away
+    const linkHref = React.useMemo(() => isLinkMode ? normalizeLinkValue(value || "") : "", [value, isLinkMode]);
 
     // Property specific state
     const [inputValue, setInputValue] = useState("");
@@ -990,9 +993,9 @@ export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, on
                     visibility: isEditing ? "hidden" : "visible"
                 }}
             >
-                {(isDateMode || isNumberMode || isCheckboxMode) ? value : isLinkMode ? (value ? (
+                {(isDateMode || isNumberMode || isCheckboxMode) ? value : isLinkMode ? (linkHref ? (
                     <a
-                        href={value}
+                        href={linkHref}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="external-link"
@@ -1000,10 +1003,10 @@ export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, on
                         onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
-                            window.open(value, "_blank");
+                            window.open(linkHref, "_blank");
                         }}
-                        title={value}
-                    >{value}</a>
+                        title={linkHref}
+                    >{linkHref}</a>
                 ) : null) : null}
             </div>
 

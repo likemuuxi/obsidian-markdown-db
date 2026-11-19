@@ -80,6 +80,18 @@ export interface DatabaseData {
 }
 
 /**
+ * Normalize a link value to a plain URL:
+ * - strip surrounding whitespace and backticks
+ * - extract the URL from `[label](url)` markdown syntax
+ */
+export const normalizeLinkValue = (valueStr: string): string => {
+    let v = valueStr.trim().replace(/^`+|`+$/g, "").trim();
+    const md = v.match(/^\[([^\]]*)\]\(\s*(\S+?)\s*\)$/);
+    if (md) v = md[2];
+    return v;
+};
+
+/**
  * 辅助函数：将字符串值转换为 TypedValue
  */
 export const parseTypedValue = (typeStr: string, valueStr: string): TypedValue => {
@@ -97,6 +109,9 @@ export const parseTypedValue = (typeStr: string, valueStr: string): TypedValue =
         case "date":
             // 保持字符串或解析为 Date 对象，视需求而定。暂时保持字符串以便于回写。
             value = valueStr;
+            break;
+        case "link":
+            value = normalizeLinkValue(valueStr);
             break;
         case "multi":
             // 多选通常以逗号分隔，或者在存储时就是 split 好的
