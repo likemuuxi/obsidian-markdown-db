@@ -48,6 +48,11 @@ export const en = {
         cleanDbNoFile: "No active Markdown file",
         cleanDbNothing: "No Markdown DB formatting found",
         cleanDbDone: "Cleaned Markdown DB formatting",
+        newFolderDb: "New folder database",
+        folderDbRoot: "Cannot create a folder database for the vault root",
+        folderDbExists: 'Folder note already exists: "{path}"',
+        folderDbCreated: 'Folder database created: "{path}" ({count} records)',
+        folderDbFailed: "Failed to create folder database: {error}",
     },
     propertyTypes: {
         text: "Text",

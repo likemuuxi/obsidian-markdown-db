@@ -47,6 +47,11 @@ export const zh: Translations = {
         cleanDbNoFile: "没有打开的 Markdown 文件",
         cleanDbNothing: "未发现 Markdown DB 特有格式",
         cleanDbDone: "已清理 Markdown DB 格式",
+        newFolderDb: "新建文件夹数据库",
+        folderDbRoot: "不能为仓库根目录创建文件夹数据库",
+        folderDbExists: "文件夹笔记已存在：{path}",
+        folderDbCreated: "已创建文件夹数据库：{path}（{count} 条记录）",
+        folderDbFailed: "创建文件夹数据库失败：{error}",
     },
     propertyTypes: {
         text: "文本",

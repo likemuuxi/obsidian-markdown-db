@@ -57,6 +57,9 @@ export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, on
     const isTagMode = isPropertyColumn && (type === "multi" || type === "select");
     const isCheckboxMode = isPropertyColumn && type === "boolean";
     const isDateMode = isPropertyColumn && type === "date";
+    // <input type="date"> only accepts YYYY-MM-DD; a value with a time part
+    // (e.g. "2026-11-06 16:13") needs datetime-local, otherwise the input renders empty
+    const isDateTime = isDateMode && /\d{1,2}:\d{2}/.test(value || "");
     const isNumberMode = isPropertyColumn && type === "number";
     const isLinkMode = type === "link";
 
@@ -667,7 +670,12 @@ export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, on
     };
 
     const handleInputBlur = (e: React.FocusEvent<HTMLInputElement>) => {
-        const newValue = e.target.value;
+        let newValue = e.target.value;
+        // datetime-local returns "YYYY-MM-DDTHH:mm"; restore the space-separated
+        // format so the stored value stays "2026-11-06 16:13"
+        if (isDateMode && newValue) {
+            newValue = newValue.replace("T", " ");
+        }
         if (newValue !== value) {
             onSave(newValue);
         }
@@ -1015,8 +1023,8 @@ export const EditableCell: React.FC<EditableCellProps> = ({ value, editValue, on
                 isDateMode ? (
                     <input
                         ref={inputRef}
-                        type="date"
-                        defaultValue={value}
+                        type={isDateTime ? "datetime-local" : "date"}
+                        defaultValue={isDateTime ? (value || "").replace(" ", "T") : value}
                         onBlur={handleInputBlur}
                         onKeyDown={handleInputKeyDown}
                         className={`markdown-db-cell-content editing ${className || ""}`}

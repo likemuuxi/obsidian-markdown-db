@@ -15,6 +15,7 @@ import { ImportModal } from "./modals/ImportModal";
 import { GithubSyncService } from "./services/github";
 import { NotionSyncService } from "./services/notion";
 import { cleanDbFormat } from "./commands/cleanDbFormat";
+import { createFolderDatabase, isFolderNotesPluginEnabled } from "./commands/createFolderDatabase";
 
 export default class MarkdownDBPlugin extends Plugin {
     settings: MarkdownDBSettings;
@@ -160,6 +161,17 @@ export default class MarkdownDBPlugin extends Plugin {
                             });
                         });
                 });
+
+                // Folder database (folder note): only when right-clicking a folder
+                // and the Folder Note plugin (folder-notes) is enabled
+                if (file instanceof TFolder && isFolderNotesPluginEnabled(this.app)) {
+                    menu.addItem((item) => {
+                        item
+                            .setTitle(t("commands.newFolderDb"))
+                            .setIcon("database")
+                            .onClick(() => createFolderDatabase(this.app, file));
+                    });
+                }
             })
         );
 
